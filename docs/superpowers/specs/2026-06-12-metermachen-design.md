@@ -121,6 +121,7 @@ backend/
 | PATCH, DELETE | `/api/activities/{id}` | Besitzer | nur eigene Einträge |
 | GET | `/api/comparison/{year}` | eingeloggt | Aggregat für alle drei Ansichten |
 | GET | `/api/categories`, `/api/seasons` | eingeloggt | Stammdaten lesen |
+| PATCH | `/api/users/me` | eingeloggt | eigenes Profil: Anzeigename, Avatar-Emoji, Passwort |
 | POST, PATCH | `/api/categories…`, `/api/seasons…`, `/api/users` | Admin | Stammdaten/User pflegen |
 
 **`/api/comparison/{year}`** liefert in einer Antwort: Season-Infos (Ziel, Meilensteine, Kartenbild) und pro User Gesamt-skalierte-km, Rang, Kategorie-Aufschlüsselung, chronologische Segmentliste (Race-Bahnen) und kumulative Zeitreihe (Jahresverlauf). Eine Query, kein Caching nötig.
@@ -179,7 +180,7 @@ Implementierung testgetrieben (TDD).
 
 - **Multi-Stage-Dockerfile:** Stage 1 baut React (`npm run build`), Stage 2 (Python/uv) serviert Build + API.
 - **docker-compose.yml:** ein Service, Volume `/data` (SQLite + Kartenbilder), Env: `ADMIN_USER`, `ADMIN_PASSWORD`, `SECRET_KEY`.
-- **Erster Start:** Tabellen anlegen, Admin-User anlegen, Default-Kategorien einspielen, Season für das aktuelle Jahr mit Platzhalter-Ziel anlegen.
+- **Erster Start:** Tabellen anlegen, Admin-User anlegen, Default-Kategorien einspielen, Season für das aktuelle Jahr anlegen (Platzhalter-Ziel 1000 skalierte km, keine Meilensteine — beides stellt der Admin im UI ein).
 - **Backup:** `/data` kopieren. HTTPS macht der Reverse-Proxy des Servers (außerhalb des Scopes).
 
 ## 9. Strava-Vorbereitung (kein Code in V1)
