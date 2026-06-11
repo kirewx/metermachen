@@ -12,3 +12,6 @@ dist/
 # Daten
 /data/
 *.db
+
+# Worktrees
+.worktrees/
