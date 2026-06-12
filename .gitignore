@@ -11,7 +11,11 @@ dist/
 
 # Daten
 /data/
+/backend/data/
 *.db
+
+# Secrets
+.env
 
 # Worktrees
 .worktrees/
