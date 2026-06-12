@@ -3,9 +3,9 @@ import { Route, Routes } from 'react-router-dom'
 import { api } from './api/client'
 import Layout from './components/ui/Layout'
 import Login from './pages/Login'
+import MeineAktivitaeten from './pages/MeineAktivitaeten'
 
 const Vergleich = () => <p>Vergleich 🚧</p>
-const MeineAktivitaeten = () => <p>Aktivitäten 🚧</p>
 const Admin = () => <p>Admin 🚧</p>
 
 export default function App() {
