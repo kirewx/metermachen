@@ -29,7 +29,7 @@ def patch_category(
     cat = session.get(Category, category_id)
     if cat is None:
         raise HTTPException(status_code=404)
-    for key, value in data.model_dump(exclude_unset=True).items():
+    for key, value in data.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(cat, key, value)
     session.add(cat)
     session.commit()

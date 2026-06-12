@@ -49,3 +49,24 @@ def test_create_season_as_admin(client, session):
     r = client.post("/api/seasons", json={"year": 2027, "goal_km": 1200})
     assert r.status_code == 201
     assert r.json()["year"] == 2027
+
+
+def test_create_duplicate_season_year_conflict(client, session):
+    make_user(session, username="chef", is_admin=True)
+    make_season(session)
+    login(client, username="chef")
+    r = client.post("/api/seasons", json={"year": 2026, "goal_km": 500})
+    assert r.status_code == 409
+
+
+def test_patch_season_empty_milestones_clears(client, session):
+    make_user(session, username="chef", is_admin=True)
+    season = make_season(session)
+    login(client, username="chef")
+    client.patch(
+        f"/api/seasons/{season.id}",
+        json={"milestones": [{"km": 100, "label": "x", "emoji": "🚩"}]},
+    )
+    r = client.patch(f"/api/seasons/{season.id}", json={"milestones": []})
+    assert r.status_code == 200
+    assert r.json()["milestones"] == []

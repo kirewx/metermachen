@@ -40,3 +40,12 @@ def test_create_and_patch_category_as_admin(client, session):
     assert r.status_code == 200
     assert r.json()["factor"] == 3.0
     assert r.json()["is_active"] is False
+
+
+def test_patch_category_ignores_explicit_null(client, session):
+    make_user(session, username="chef", is_admin=True)
+    cat = make_category(session)
+    login(client, username="chef")
+    r = client.patch(f"/api/categories/{cat.id}", json={"icon_emoji": None})
+    assert r.status_code == 200
+    assert r.json()["icon_emoji"] == "🏃"
