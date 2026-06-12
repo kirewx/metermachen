@@ -43,7 +43,7 @@ def migrate(target=engine) -> None:
                     text("UPDATE category SET icon = :i WHERE id = :id"),
                     {"i": _icon_for(val, "medaille"), "id": id_},
                 )
-        if "default_km" not in cat_cols and "default_km" not in _columns(conn, "category"):
+        if "default_km" not in cat_cols:
             conn.execute(
                 text("ALTER TABLE category ADD COLUMN default_km FLOAT NOT NULL DEFAULT 10.0")
             )
