@@ -13,8 +13,8 @@
   --t-ink-soft: #33606f;
   --t-ink-mute: #7a99a6;
   --t-danger: #dc2626;
-  --t-glow: 0 0 0 0 transparent;
-  --t-glow-strong: 0 0 0 0 transparent;
+  --t-glow: 0 0 0 transparent;
+  --t-glow-strong: 0 0 0 transparent;
 }
 
 .dark {
