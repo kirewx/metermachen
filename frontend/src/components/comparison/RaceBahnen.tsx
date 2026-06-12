@@ -14,7 +14,7 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
             style={{ left: pct(m.km) }}
           >
             <span className="absolute -top-1 -translate-x-1/2 text-xs whitespace-nowrap text-gray-500">
-              {m.emoji} {m.km}
+              {m.km}
             </span>
           </div>
         ))}
@@ -29,7 +29,7 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
         {data.users.map((u) => (
           <div key={u.user_id}>
             <p className="mb-1 text-sm font-semibold">
-              {u.rank === 1 ? '👑 ' : ''}{u.avatar_emoji} {u.display_name} ·{' '}
+              {u.rank === 1 ? '★ ' : ''}{u.avatar.startsWith('icon:') ? '' : u.avatar} {u.display_name} ·{' '}
               {Math.round(u.total_scaled_km)} km
             </p>
             <div className="flex h-5 overflow-hidden rounded-full bg-gray-100">

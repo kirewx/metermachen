@@ -5,8 +5,8 @@ import type { Category } from '../../api/client'
 import ActivityForm from './ActivityForm'
 
 const categories: Category[] = [
-  { id: 1, name: 'Joggen', factor: 4, color: '#e74c3c', icon_emoji: '🏃', is_active: true },
-  { id: 2, name: 'Alt', factor: 2, color: '#000000', icon_emoji: '🦖', is_active: false },
+  { id: 1, name: 'Joggen', factor: 4, color: '#e74c3c', icon: 'laufen', default_km: 5, is_active: true },
+  { id: 2, name: 'Alt', factor: 2, color: '#000000', icon: 'medaille', default_km: 10, is_active: false },
 ]
 
 describe('ActivityForm', () => {

@@ -62,7 +62,7 @@ export default function WanderKarte({ data }: { data: Comparison }) {
         return (
           <g key={m.km}>
             <circle cx={p.x} cy={p.y} r="14" fill="#fff" stroke="#cdab72" strokeWidth="3" />
-            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize="14">{m.emoji}</text>
+            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize="14">▲</text>
             <text x={p.x} y={p.y + 32} textAnchor="middle" fontSize="11" fill="#666">
               {m.label} · {m.km} km
             </text>
@@ -86,7 +86,7 @@ export default function WanderKarte({ data }: { data: Comparison }) {
             onClick={() => setSelected(u.user_id === selected ? null : u.user_id)}
           >
             <circle cx={p.x} cy={p.y} r="15" fill="#fff" stroke="#888" strokeWidth="2" />
-            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize="15">{u.avatar_emoji}</text>
+            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize="15">{u.avatar.startsWith('icon:') ? u.display_name[0] : u.avatar}</text>
             <rect x={p.x - 52} y={badgeY - 13} width="104" height="18" rx="9" fill="#ffffffdd" />
             <text x={p.x} y={badgeY} textAnchor="middle" fontSize="11" fontWeight="600">
               {u.rank === 1 ? '👑 ' : ''}{u.display_name} · {Math.round(u.total_scaled_km)}
@@ -98,14 +98,14 @@ export default function WanderKarte({ data }: { data: Comparison }) {
       {selectedUser && (
         <div className="rounded-xl bg-white p-3 shadow">
           <p className="font-semibold">
-            {selectedUser.avatar_emoji} {selectedUser.display_name} —{' '}
+            {selectedUser.display_name} —{' '}
             {Math.round(selectedUser.total_scaled_km)} von {data.goal_km} km
           </p>
           <ul className="mt-1 flex flex-wrap gap-3 text-sm">
             {selectedUser.by_category.map((b) => (
               <li key={b.category_id} className="flex items-center gap-1">
                 <span className="inline-block h-3 w-3 rounded-full" style={{ background: b.color }} />
-                {b.icon_emoji} {b.name}: {Math.round(b.scaled_km)} km
+                {b.name}: {Math.round(b.scaled_km)} km
               </li>
             ))}
           </ul>

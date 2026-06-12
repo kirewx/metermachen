@@ -42,7 +42,7 @@ export default function JahresVerlauf({ data }: { data: Comparison }) {
               y={m.km}
               stroke="#999"
               strokeDasharray="5 4"
-              label={{ value: `${m.emoji} ${m.label}`, fontSize: 11, position: 'right' }}
+              label={{ value: m.label, fontSize: 11, position: 'right' }}
             />
           ))}
           <ReferenceLine y={data.goal_km} stroke="#e0b84e" label={{ value: '🏁 Ziel', fontSize: 11 }} />

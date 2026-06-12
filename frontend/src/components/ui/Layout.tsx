@@ -18,7 +18,7 @@ export default function Layout({ me }: { me: Me }) {
         <NavLink to="/" end className={link}>Vergleich</NavLink>
         <NavLink to="/aktivitaeten" className={link}>Meine Aktivitäten</NavLink>
         {me.is_admin && <NavLink to="/admin" className={link}>Admin</NavLink>}
-        <span className="ml-auto text-sm">{me.avatar_emoji} {me.display_name}</span>
+        <span className="ml-auto text-sm">{me.avatar.startsWith('icon:') ? me.display_name : `${me.avatar} ${me.display_name}`}</span>
         <button onClick={logout} className="text-sm text-gray-500 hover:underline">
           Logout
         </button>

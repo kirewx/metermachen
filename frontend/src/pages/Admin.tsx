@@ -21,12 +21,12 @@ function Kategorien() {
       api.patchCategory(id, b),
     onSuccess: refresh,
   })
-  const [neu, setNeu] = useState({ name: '', factor: '1', color: '#888888', icon_emoji: '🏅' })
+  const [neu, setNeu] = useState({ name: '', factor: '1', color: '#888888', icon: 'medaille', default_km: 10 })
   const create = useMutation({
     mutationFn: () =>
       api.createCategory({ ...neu, factor: parseFloat(neu.factor) }),
     onSuccess: () => {
-      setNeu({ name: '', factor: '1', color: '#888888', icon_emoji: '🏅' })
+      setNeu({ name: '', factor: '1', color: '#888888', icon: 'medaille', default_km: 10 })
       refresh()
     },
   })
@@ -38,7 +38,7 @@ function Kategorien() {
         <tbody>
           {categories.map((c) => (
             <tr key={c.id} className={`border-b ${c.is_active ? '' : 'opacity-40'}`}>
-              <td className="py-1">{c.icon_emoji} {c.name}</td>
+              <td className="py-1">{c.icon} {c.name}</td>
               <td>
                 <input
                   type="number"
@@ -68,8 +68,8 @@ function Kategorien() {
           onChange={(e) => setNeu({ ...neu, name: e.target.value })} />
         <input className="w-16 rounded border p-1 text-sm" placeholder="Faktor" value={neu.factor}
           onChange={(e) => setNeu({ ...neu, factor: e.target.value })} />
-        <input className="w-14 rounded border p-1 text-sm" value={neu.icon_emoji}
-          onChange={(e) => setNeu({ ...neu, icon_emoji: e.target.value })} />
+        <input className="w-14 rounded border p-1 text-sm" value={neu.icon}
+          onChange={(e) => setNeu({ ...neu, icon: e.target.value })} />
         <input type="color" className="h-8 w-10" value={neu.color}
           onChange={(e) => setNeu({ ...neu, color: e.target.value })} />
         <button
@@ -116,15 +116,15 @@ function Jahr() {
             onChange={(e) => setMilestones(ms.map((x, j) => j === i ? { ...x, km: Number(e.target.value) } : x))} />
           <input className="flex-1 rounded border p-1" value={m.label}
             onChange={(e) => setMilestones(ms.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
-          <input className="w-14 rounded border p-1" value={m.emoji}
-            onChange={(e) => setMilestones(ms.map((x, j) => j === i ? { ...x, emoji: e.target.value } : x))} />
+          <input className="w-14 rounded border p-1" value={m.icon}
+            onChange={(e) => setMilestones(ms.map((x, j) => j === i ? { ...x, icon: e.target.value } : x))} />
           <button className="text-red-600" onClick={() => setMilestones(ms.filter((_, j) => j !== i))}>✕</button>
         </div>
       ))}
       <div className="mt-2 flex gap-2">
         <button
           className="rounded border px-3 py-1 text-sm"
-          onClick={() => setMilestones([...ms, { km: 0, label: '', emoji: '🚩' }])}
+          onClick={() => setMilestones([...ms, { km: 0, label: '', icon: 'fahne' }])}
         >
           + Meilenstein
         </button>
@@ -158,13 +158,13 @@ function Jahr() {
 }
 
 function NeuerUser() {
-  const [form, setForm] = useState({ username: '', password: '', display_name: '', avatar_emoji: '🏃' })
+  const [form, setForm] = useState({ username: '', password: '', display_name: '', avatar: 'icon:laufen' })
   const [message, setMessage] = useState('')
   const create = useMutation({
     mutationFn: () => api.createUser(form),
     onSuccess: (u) => {
       setMessage(`✓ ${u.display_name} angelegt`)
-      setForm({ username: '', password: '', display_name: '', avatar_emoji: '🏃' })
+      setForm({ username: '', password: '', display_name: '', avatar: 'icon:laufen' })
     },
     onError: (e) => setMessage(e.message),
   })
@@ -178,8 +178,8 @@ function NeuerUser() {
           onChange={(e) => setForm({ ...form, display_name: e.target.value })} />
         <input className="rounded border p-1 text-sm" placeholder="Passwort" value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        <input className="w-14 rounded border p-1 text-sm" value={form.avatar_emoji}
-          onChange={(e) => setForm({ ...form, avatar_emoji: e.target.value })} />
+        <input className="w-14 rounded border p-1 text-sm" value={form.avatar}
+          onChange={(e) => setForm({ ...form, avatar: e.target.value })} />
         <button
           className="rounded bg-emerald-600 px-3 py-1 text-sm text-white"
           disabled={!form.username || form.password.length < 4 || !form.display_name}

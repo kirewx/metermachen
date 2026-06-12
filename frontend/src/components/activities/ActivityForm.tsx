@@ -39,7 +39,7 @@ export default function ActivityForm({ categories, onSubmit, initial }: Props) {
         >
           {active.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.icon_emoji} {c.name} ({c.factor}x)
+              {c.name} ({c.factor}x)
             </option>
           ))}
         </select>

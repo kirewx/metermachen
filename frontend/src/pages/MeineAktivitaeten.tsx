@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, type Activity, type ActivityInput } from '../api/client'
 import ActivityForm from '../components/activities/ActivityForm'
+import Icon from '../components/ui/Icon'
 
 export default function MeineAktivitaeten() {
   const year = new Date().getFullYear()
@@ -53,7 +54,7 @@ export default function MeineAktivitaeten() {
           const cat = catById.get(a.category_id)
           return (
             <li key={a.id} className="flex items-center gap-3 rounded-xl bg-white p-3 shadow">
-              <span className="text-xl">{cat?.icon_emoji}</span>
+              {cat && <Icon name={cat.icon} className="text-accent" />}
               <div className="flex-1">
                 <p className="font-medium">
                   {a.date} · {a.distance_km} km {cat?.name} → <b>{a.scaled_km} km</b>
