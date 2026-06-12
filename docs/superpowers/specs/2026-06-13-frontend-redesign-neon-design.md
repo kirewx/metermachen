@@ -86,13 +86,14 @@ Verhalten:
   die zuletzt benutzte Kategorie (`localStorage`), sonst die erste.
 - km-Wert startet beim `default_km` der gewählten Kategorie (Fallback 10);
   Kategorie-Wechsel setzt den Wert auf deren Standard zurück.
-- +/− ändert in 1-km-Schritten, Minimum 1; gedrückt halten wiederholt (Press-and-hold).
+- +/− ändert in 1-km-Schritten, Minimum 1; gedrückt halten wiederholt (Press-and-hold,
+  Polish in Plan 2).
 - Unter der Zahl live: „= X km gewertet" (Wert × Faktor, 1 Nachkommastelle) und das
   Datum („heute, 13. Juni" bzw. gewähltes Datum).
 - „Details"-Toggle klappt auf: Datum (Default heute), Dauer (min), Notiz, freie
   km-Eingabe (Dezimalwerte erlaubt, überschreibt den Stepper-Wert).
 - Speichern: legt Eintrag an, Wert springt auf Kategorie-Standard zurück, kurzer
-  Glow-Puls auf der Karte als Bestätigung; Fehler als Toast.
+  Glow-Puls auf der Karte als Bestätigung (Polish in Plan 2); Fehler als Toast.
 - Bearbeiten eines Eintrags öffnet dieselbe Karte im Hero-Kontext mit aufgeklappten
   Details und den Eintragswerten (ersetzt die bisherige Formular-Wiederverwendung).
 
@@ -162,7 +163,8 @@ Erfolg); alle Mutations-Fehler laufen darüber. Lösch-Bestätigungen als `Modal
    Nav/Layout (Bottom-Bar, Theme-Toggle, Profil-Modal), Backend-Felder + Migration,
    SchnellwahlCard, Seiten Login/Meine Aktivitäten/Admin, Toast/Modal.
 2. **Visualisierungen:** RaceBahnen, WanderKarte, Jahresverlauf im neuen Look
-   (nutzt Palette/Bausteine aus Plan 1), Vergleichsseite mit kompakter Schnellwahl.
+   (nutzt Palette/Bausteine aus Plan 1), Vergleichsseite mit kompakter, einklappbarer
+   Schnellwahl sowie Schnellwahl-Polish (Press-and-hold, Glow-Puls).
 
 ## Nicht-Ziele
 
