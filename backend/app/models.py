@@ -13,7 +13,7 @@ class User(SQLModel, table=True):
     username: str = Field(unique=True, index=True)
     password_hash: str
     display_name: str
-    avatar_emoji: str = "🏃"
+    avatar: str = "icon:laufen"
     is_admin: bool = False
     created_at: datetime = Field(default_factory=utcnow)
 
@@ -23,7 +23,8 @@ class Category(SQLModel, table=True):
     name: str
     factor: float
     color: str
-    icon_emoji: str
+    icon: str = "medaille"
+    default_km: float = 10.0
     is_active: bool = True
 
 
@@ -45,5 +46,5 @@ class Season(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     year: int = Field(unique=True)
     goal_km: float
-    milestones_json: str = "[]"  # JSON-Liste [{"km":..,"label":..,"emoji":..}]
+    milestones_json: str = "[]"  # JSON-Liste [{"km":..,"label":..,"icon":..}]
     map_image: str | None = None
