@@ -17,7 +17,7 @@ def make_session():
 def test_roundtrip_all_tables():
     with make_session() as s:
         user = User(username="erik", password_hash="x", display_name="Erik")
-        cat = Category(name="Joggen", factor=4.0, color="#e74c3c", icon_emoji="🏃")
+        cat = Category(name="Joggen", factor=4.0, color="#e74c3c", icon="laufen")
         s.add(user)
         s.add(cat)
         s.commit()
@@ -38,6 +38,6 @@ def test_roundtrip_all_tables():
         assert act.updated_at is None
         season = s.exec(select(Season)).one()
         assert season.milestones_json == "[]"
-        assert user.avatar_emoji == "🏃"
+        assert user.avatar == "icon:laufen"
         assert user.is_admin is False
         assert cat.is_active is True

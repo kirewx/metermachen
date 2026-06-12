@@ -9,21 +9,23 @@ from .models import Season
 class Milestone(BaseModel):
     km: float
     label: str
-    emoji: str = "🚩"
+    icon: str = "fahne"
 
 
 class CategoryCreate(BaseModel):
     name: str = Field(min_length=1)
     factor: float = Field(gt=0)
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
-    icon_emoji: str = "🏅"
+    icon: str = "medaille"
+    default_km: float = Field(default=10.0, gt=0)
 
 
 class CategoryPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     factor: float | None = Field(default=None, gt=0)
     color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
-    icon_emoji: str | None = None
+    icon: str | None = None
+    default_km: float | None = Field(default=None, gt=0)
     is_active: bool | None = None
 
 
@@ -101,7 +103,7 @@ class CategoryShare(BaseModel):
     category_id: int
     name: str
     color: str
-    icon_emoji: str
+    icon: str
     scaled_km: float
 
 
@@ -120,7 +122,7 @@ class CumulativePoint(BaseModel):
 class ComparisonUser(BaseModel):
     user_id: int
     display_name: str
-    avatar_emoji: str
+    avatar: str
     rank: int
     total_scaled_km: float
     by_category: list[CategoryShare]

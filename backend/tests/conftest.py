@@ -54,7 +54,7 @@ def login(client, username="erik", password="pw123"):
 
 def make_category(session, name="Joggen", factor=4.0, **kw) -> Category:
     cat = Category(
-        name=name, factor=factor, color="#e74c3c", icon_emoji="🏃", **kw
+        name=name, factor=factor, color="#e74c3c", icon="laufen", **kw
     )
     session.add(cat)
     session.commit()

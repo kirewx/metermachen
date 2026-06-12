@@ -37,10 +37,10 @@ def test_patch_own_profile(client, session):
     login(client)
     r = client.patch(
         "/api/users/me",
-        json={"display_name": "Erik W.", "avatar_emoji": "🚴", "password": "neu789"},
+        json={"display_name": "Erik W.", "avatar": "🚴", "password": "neu789"},
     )
     assert r.status_code == 200
     assert r.json()["display_name"] == "Erik W."
-    assert r.json()["avatar_emoji"] == "🚴"
+    assert r.json()["avatar"] == "🚴"
     client.post("/api/auth/logout")
     login(client, password="neu789")
