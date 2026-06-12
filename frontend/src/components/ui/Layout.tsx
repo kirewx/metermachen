@@ -54,6 +54,7 @@ export default function Layout({ me }: { me: Me }) {
           <Icon name={theme === 'dunkel' ? 'sonne' : 'mond'} size={18} />
         </button>
         <button
+          aria-label="Profil öffnen"
           onClick={() => setProfilOffen(true)}
           className="flex items-center gap-2 text-sm text-ink-soft hover:text-ink"
         >
@@ -84,7 +85,7 @@ export default function Layout({ me }: { me: Me }) {
           </NavLink>
         ))}
       </nav>
-      <ProfilModal me={me} open={profilOffen} onClose={() => setProfilOffen(false)} />
+      {profilOffen && <ProfilModal me={me} open onClose={() => setProfilOffen(false)} />}
     </div>
   )
 }
