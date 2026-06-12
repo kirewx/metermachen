@@ -49,7 +49,7 @@ def migrate(target=engine) -> None:
             )
 
         for id_, raw in conn.execute(text("SELECT id, milestones_json FROM season")).fetchall():
-            milestones = json.loads(raw)
+            milestones = json.loads(raw or "[]")
             if any("emoji" in m for m in milestones):
                 for m in milestones:
                     m["icon"] = _icon_for(m.pop("emoji", ""), "fahne")
