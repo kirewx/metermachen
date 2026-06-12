@@ -1,6 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../api/client'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
+import Icon from '../components/ui/Icon'
+import Input from '../components/ui/Input'
 
 export default function Login() {
   const queryClient = useQueryClient()
@@ -19,26 +23,32 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-emerald-50">
-      <form onSubmit={submit} className="w-80 space-y-4 rounded-2xl bg-white p-8 shadow">
-        <h1 className="text-center text-2xl font-bold">MeterMachen 🏃</h1>
-        <input
-          className="w-full rounded border p-2"
-          placeholder="Benutzername"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          className="w-full rounded border p-2"
-          type="password"
-          placeholder="Passwort"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button className="w-full rounded bg-emerald-600 p-2 font-semibold text-white">
-          Einloggen
-        </button>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full max-w-xs">
+        <Card glow className="space-y-4 p-7 text-center">
+          <h1 className="flex items-center justify-center gap-1 text-2xl font-black tracking-wide text-ink">
+            <Icon name="blitz" size={20} className="text-accent" />
+            METER<span className="text-accent [text-shadow:var(--t-glow)]">MACHEN</span>
+          </h1>
+          <p className="text-xs text-ink-mute">Wer macht die Meter?</p>
+          <Input
+            label="Benutzername"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="text-left"
+          />
+          <Input
+            label="Passwort"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="text-left"
+          />
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <Button type="submit" className="w-full">
+            Los geht's
+          </Button>
+        </Card>
       </form>
     </div>
   )
