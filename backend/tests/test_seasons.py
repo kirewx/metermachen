@@ -70,3 +70,33 @@ def test_patch_season_empty_milestones_clears(client, session):
     r = client.patch(f"/api/seasons/{season.id}", json={"milestones": []})
     assert r.status_code == 200
     assert r.json()["milestones"] == []
+
+
+def test_upload_map_image(client, session, tmp_path, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    make_user(session, username="chef", is_admin=True)
+    season = make_season(session)
+    login(client, username="chef")
+    r = client.post(
+        f"/api/seasons/{season.id}/map-image",
+        files={"file": ("karte.png", b"\x89PNG fake", "image/png")},
+    )
+    assert r.status_code == 200
+    assert r.json()["map_image"] == "/media/maps/2026.png"
+    assert (tmp_path / "maps" / "2026.png").read_bytes() == b"\x89PNG fake"
+
+
+def test_upload_rejects_non_image(client, session, tmp_path, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    make_user(session, username="chef", is_admin=True)
+    season = make_season(session)
+    login(client, username="chef")
+    r = client.post(
+        f"/api/seasons/{season.id}/map-image",
+        files={"file": ("doc.txt", b"hallo", "text/plain")},
+    )
+    assert r.status_code == 422

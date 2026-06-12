@@ -1,8 +1,12 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import date
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import config
 from .db import engine, init_db
@@ -36,3 +40,27 @@ app.include_router(users.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+class SPAStaticFiles(StaticFiles):
+    """Liefert index.html für alle unbekannten Pfade (Client-Side-Routing)."""
+
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
+
+def mount_static(app: FastAPI) -> None:
+    media_dir = config.DATA_DIR / "maps"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/media/maps", StaticFiles(directory=media_dir), name="media")
+    dist = Path(os.environ.get("FRONTEND_DIST", "../frontend/dist"))
+    if dist.is_dir():
+        app.mount("/", SPAStaticFiles(directory=dist, html=True), name="spa")
+
+
+mount_static(app)
