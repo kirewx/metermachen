@@ -100,3 +100,17 @@ def test_upload_rejects_non_image(client, session, tmp_path, monkeypatch):
         files={"file": ("doc.txt", b"hallo", "text/plain")},
     )
     assert r.status_code == 422
+
+
+def test_upload_map_image_admin_only(client, session, tmp_path, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    make_user(session)
+    season = make_season(session)
+    login(client)
+    r = client.post(
+        f"/api/seasons/{season.id}/map-image",
+        files={"file": ("karte.png", b"\x89PNG fake", "image/png")},
+    )
+    assert r.status_code == 403
