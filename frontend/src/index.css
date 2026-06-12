@@ -1,1 +1,51 @@
 @import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Heller Modus */
+  --t-surface: #f4f7f9;
+  --t-card: #ffffff;
+  --t-line: #cfe1e8;
+  --t-accent: #0891b2;
+  --t-accent-ink: #ffffff;
+  --t-ink: #0b1c24;
+  --t-ink-soft: #33606f;
+  --t-ink-mute: #7a99a6;
+  --t-danger: #dc2626;
+  --t-glow: 0 0 0 0 transparent;
+  --t-glow-strong: 0 0 0 0 transparent;
+}
+
+.dark {
+  /* Neon Night */
+  --t-surface: #050508;
+  --t-card: #0a0f12;
+  --t-line: rgba(0, 229, 255, 0.3);
+  --t-accent: #00e5ff;
+  --t-accent-ink: #001014;
+  --t-ink: #f2fbfd;
+  --t-ink-soft: #bfeef7;
+  --t-ink-mute: #5a8a96;
+  --t-danger: #ff5470;
+  --t-glow: 0 0 14px rgba(0, 229, 255, 0.35);
+  --t-glow-strong: 0 0 18px rgba(0, 229, 255, 0.6);
+}
+
+@theme inline {
+  --color-surface: var(--t-surface);
+  --color-card: var(--t-card);
+  --color-line: var(--t-line);
+  --color-accent: var(--t-accent);
+  --color-accent-ink: var(--t-accent-ink);
+  --color-ink: var(--t-ink);
+  --color-ink-soft: var(--t-ink-soft);
+  --color-ink-mute: var(--t-ink-mute);
+  --color-danger: var(--t-danger);
+  --shadow-glow: var(--t-glow);
+  --shadow-glow-strong: var(--t-glow-strong);
+}
+
+body {
+  @apply bg-surface text-ink;
+}
