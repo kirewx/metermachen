@@ -1,5 +1,5 @@
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from . import config
@@ -18,7 +18,7 @@ def hash_password(password: str) -> str:
 def verify_password(password_hash: str, password: str) -> bool:
     try:
         return _ph.verify(password_hash, password)
-    except VerifyMismatchError:
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
 
 
@@ -28,6 +28,7 @@ def create_session_token(user_id: int) -> str:
 
 def read_session_token(token: str) -> int | None:
     try:
-        return _serializer.loads(token, max_age=SESSION_MAX_AGE)
+        value = _serializer.loads(token, max_age=SESSION_MAX_AGE)
     except (BadSignature, SignatureExpired):
         return None
+    return value if isinstance(value, int) else None

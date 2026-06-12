@@ -8,6 +8,8 @@ from ..models import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+_DUMMY_HASH = auth.hash_password("dummy-timing-constant")
+
 
 class LoginIn(BaseModel):
     username: str
@@ -25,7 +27,8 @@ class MeOut(BaseModel):
 @router.post("/login", response_model=MeOut)
 def login(data: LoginIn, response: Response, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == data.username)).first()
-    if user is None or not auth.verify_password(user.password_hash, data.password):
+    password_hash = user.password_hash if user is not None else _DUMMY_HASH
+    if user is None or not auth.verify_password(password_hash, data.password):
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch")
     response.set_cookie(
         auth.SESSION_COOKIE,
