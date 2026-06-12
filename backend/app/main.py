@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from . import config
 from .db import engine, init_db
-from .routers import activities, auth_router, categories, seasons, users
+from .routers import activities, auth_router, categories, comparison, seasons, users
 from .seed import seed_all
 
 
@@ -28,6 +28,7 @@ app = FastAPI(title="MeterMachen", lifespan=lifespan)
 app.include_router(auth_router.router)
 app.include_router(activities.router)
 app.include_router(categories.router)
+app.include_router(comparison.router)
 app.include_router(seasons.router)
 app.include_router(users.router)
 

@@ -95,3 +95,42 @@ class ActivityOut(BaseModel):
     note: str | None
     scaled_km: float
     edited: bool
+
+
+class CategoryShare(BaseModel):
+    category_id: int
+    name: str
+    color: str
+    icon_emoji: str
+    scaled_km: float
+
+
+class Segment(BaseModel):
+    date: date_type
+    category_id: int
+    color: str
+    scaled_km: float
+
+
+class CumulativePoint(BaseModel):
+    date: date_type
+    scaled_km: float
+
+
+class ComparisonUser(BaseModel):
+    user_id: int
+    display_name: str
+    avatar_emoji: str
+    rank: int
+    total_scaled_km: float
+    by_category: list[CategoryShare]
+    segments: list[Segment]
+    cumulative: list[CumulativePoint]
+
+
+class ComparisonOut(BaseModel):
+    year: int
+    goal_km: float
+    milestones: list[Milestone]
+    map_image: str | None
+    users: list[ComparisonUser]
