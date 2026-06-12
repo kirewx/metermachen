@@ -47,13 +47,16 @@ def test_patch_sets_edited_flag_and_rescales(client, session):
 
 def test_cannot_touch_foreign_activities(client, session):
     make_user(session)
-    other = make_user(session, username="lisa")
+    make_user(session, username="lisa")
     cat = make_category(session)
     login(client)
     act_id = create_activity(client, cat.id).json()["id"]
     client.post("/api/auth/logout")
     login(client, username="lisa")
-    assert client.patch(f"/api/activities/{act_id}", json={"distance_km": 1}).status_code == 404
+    assert (
+        client.patch(f"/api/activities/{act_id}", json={"distance_km": 1}).status_code
+        == 404
+    )
     assert client.delete(f"/api/activities/{act_id}").status_code == 404
     assert client.get("/api/activities", params={"year": 2026}).json() == []
 

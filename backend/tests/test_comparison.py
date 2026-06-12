@@ -16,9 +16,9 @@ def setup_data(session):
     rad = make_category(session, name="Radfahren", factor=1.0)
     session.add(Season(year=2026, goal_km=1000.0))
     session.commit()
-    add_activity(session, erik, jog, date(2026, 1, 10), 5)    # 20 skaliert
-    add_activity(session, erik, rad, date(2026, 2, 1), 30)    # 30 skaliert
-    add_activity(session, lisa, jog, date(2026, 1, 15), 10)   # 40 skaliert
+    add_activity(session, erik, jog, date(2026, 1, 10), 5)  # 20 skaliert
+    add_activity(session, erik, rad, date(2026, 2, 1), 30)  # 30 skaliert
+    add_activity(session, lisa, jog, date(2026, 1, 15), 10)  # 40 skaliert
     add_activity(session, erik, jog, date(2025, 12, 31), 99)  # falsches Jahr
     return erik, lisa
 

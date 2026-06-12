@@ -26,7 +26,9 @@ def seed_all(session: Session, admin_user: str, admin_password: str, year: int) 
         )
     if session.exec(select(Category)).first() is None:
         for name, factor, color, emoji in DEFAULT_CATEGORIES:
-            session.add(Category(name=name, factor=factor, color=color, icon_emoji=emoji))
+            session.add(
+                Category(name=name, factor=factor, color=color, icon_emoji=emoji)
+            )
     if session.exec(select(Season).where(Season.year == year)).first() is None:
         session.add(Season(year=year, goal_km=1000.0))
     session.commit()

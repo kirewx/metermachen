@@ -17,7 +17,9 @@ from ..schemas import (
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
 
 
-@router.get("/{year}", response_model=ComparisonOut, dependencies=[Depends(get_current_user)])
+@router.get(
+    "/{year}", response_model=ComparisonOut, dependencies=[Depends(get_current_user)]
+)
 def comparison(year: int, session: Session = Depends(get_session)):
     season = session.exec(select(Season).where(Season.year == year)).first()
     if season is None:

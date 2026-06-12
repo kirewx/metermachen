@@ -11,7 +11,13 @@ def test_seed_creates_admin_categories_season(session):
     assert admin.is_admin is True
     cats = session.exec(select(Category)).all()
     assert {c.name for c in cats} == {
-        "Joggen", "Laufen", "Spazieren", "Wandern", "Schwimmen", "Radfahren", "Tanzen"
+        "Joggen",
+        "Laufen",
+        "Spazieren",
+        "Wandern",
+        "Schwimmen",
+        "Radfahren",
+        "Tanzen",
     }
     assert {c.name: c.factor for c in cats}["Joggen"] == 4.0
     assert {c.name: c.factor for c in cats}["Radfahren"] == 1.0
