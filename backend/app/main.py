@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from . import config
 from .db import engine, init_db
-from .routers import auth_router
+from .routers import auth_router, categories, seasons
 from .seed import seed_all
 
 
@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MeterMachen", lifespan=lifespan)
 app.include_router(auth_router.router)
+app.include_router(categories.router)
+app.include_router(seasons.router)
 
 
 @app.get("/api/health")
