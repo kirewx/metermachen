@@ -23,6 +23,13 @@ def _columns(conn, table: str) -> list[str]:
     return [row[1] for row in conn.execute(text(f'PRAGMA table_info("{table}")'))]
 
 
+def _table_exists(conn, table: str) -> bool:
+    result = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name=:t"), {"t": table}
+    ).fetchone()
+    return result is not None
+
+
 def _icon_for(value: str, fallback: str) -> str:
     if value in ICON_KEYS:
         return value
@@ -47,7 +54,13 @@ def migrate(target=engine) -> None:
             conn.execute(
                 text("ALTER TABLE category ADD COLUMN default_km FLOAT NOT NULL DEFAULT 10.0")
             )
+        if "strava_sport_types" not in _columns(conn, "category"):
+            conn.execute(text(
+                "ALTER TABLE category ADD COLUMN strava_sport_types TEXT NOT NULL DEFAULT '[]'"
+            ))
 
+        if not _table_exists(conn, "season"):
+            return
         for id_, raw in conn.execute(text("SELECT id, milestones_json FROM season")).fetchall():
             milestones = json.loads(raw or "[]")
             if any("emoji" in m for m in milestones):
