@@ -77,6 +77,21 @@ export type StravaStatus = {
   athlete_id?: number | null
   backfill?: StravaBackfill
 }
+export type Invite = {
+  id: number
+  token: string
+  url: string
+  display_name: string | null
+  is_admin: boolean
+  expires_at: string
+  used_at: string | null
+}
+export type InvitePublic = {
+  valid: boolean
+  display_name?: string | null
+  expired?: boolean
+  used?: boolean
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, {
@@ -125,4 +140,13 @@ export const api = {
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
   stravaStatus: () => request<StravaStatus>('/api/strava/status'),
   disconnectStrava: () => request<void>('/api/strava/disconnect', { method: 'DELETE' }),
+  createInvite: (b: { display_name?: string | null; is_admin?: boolean }) =>
+    request<Invite>('/api/invites', post(b)),
+  listInvites: () => request<Invite[]>('/api/invites'),
+  deleteInvite: (id: number) => request<void>(`/api/invites/${id}`, { method: 'DELETE' }),
+  getInvite: (token: string) => request<InvitePublic>(`/api/invites/${token}`),
+  acceptInvite: (
+    token: string,
+    b: { username: string; password: string; display_name: string; avatar: string },
+  ) => request<Me>(`/api/invites/${token}/accept`, post(b)),
 }
