@@ -75,3 +75,33 @@ def test_default_km_muss_positiv_sein(client, session):
         json={"name": "Kaputt", "factor": 1.0, "color": "#123456", "default_km": 0},
     )
     assert r.status_code == 422
+
+
+def test_create_category_with_strava_sport_types(client, session):
+    make_user(session, is_admin=True)
+    login(client)
+    r = client.post("/api/categories", json={
+        "name": "Laufen", "factor": 4.0, "color": "#e74c3c", "icon": "laufen",
+        "default_km": 5.0, "strava_sport_types": ["Run", "TrailRun"],
+    })
+    assert r.status_code == 201, r.text
+    assert r.json()["strava_sport_types"] == ["Run", "TrailRun"]
+
+
+def test_list_categories_returns_sport_types_as_list(client, session):
+    make_user(session, is_admin=True)
+    make_category(session, name="Rad", factor=1.0, strava_sport_types='["Ride"]')
+    login(client)
+    r = client.get("/api/categories")
+    assert r.status_code == 200
+    rad = next(c for c in r.json() if c["name"] == "Rad")
+    assert rad["strava_sport_types"] == ["Ride"]
+
+
+def test_patch_category_updates_sport_types(client, session):
+    make_user(session, is_admin=True)
+    cat = make_category(session)
+    login(client)
+    r = client.patch(f"/api/categories/{cat.id}", json={"strava_sport_types": ["Run"]})
+    assert r.status_code == 200
+    assert r.json()["strava_sport_types"] == ["Run"]

@@ -3,7 +3,7 @@ from datetime import date as date_type
 
 from pydantic import BaseModel, Field, field_validator
 
-from .models import Season
+from .models import Category, Season
 
 
 class Milestone(BaseModel):
@@ -18,6 +18,7 @@ class CategoryCreate(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
     icon: str = "medaille"
     default_km: float = Field(default=10.0, gt=0)
+    strava_sport_types: list[str] = []
 
 
 class CategoryPatch(BaseModel):
@@ -27,6 +28,31 @@ class CategoryPatch(BaseModel):
     icon: str | None = None
     default_km: float | None = Field(default=None, gt=0)
     is_active: bool | None = None
+    strava_sport_types: list[str] | None = None
+
+
+class CategoryOut(BaseModel):
+    id: int
+    name: str
+    factor: float
+    color: str
+    icon: str
+    default_km: float
+    is_active: bool
+    strava_sport_types: list[str]
+
+    @classmethod
+    def from_category(cls, cat: Category) -> "CategoryOut":
+        return cls(
+            id=cat.id,
+            name=cat.name,
+            factor=cat.factor,
+            color=cat.color,
+            icon=cat.icon,
+            default_km=cat.default_km,
+            is_active=cat.is_active,
+            strava_sport_types=json.loads(cat.strava_sport_types or "[]"),
+        )
 
 
 class SeasonCreate(BaseModel):
