@@ -159,6 +159,31 @@ def test_handle_webhook_event_ignores_non_create(session, monkeypatch):
     assert session.exec(select(Activity)).all() == []
 
 
+def test_import_activity_inserts_and_is_idempotent(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {"id": 999, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+            "start_date_local": "2026-03-01T07:00:00Z", "name": "Lauf"}
+    assert strava.import_activity(session, conn, data) is True
+    assert strava.import_activity(session, conn, data) is False  # Dublette
+    acts = session.exec(select(Activity)).all()
+    assert len(acts) == 1
+    assert acts[0].external_id == "999"
+    assert acts[0].distance_km == 5.0
+    assert acts[0].duration_min == 30
+    assert acts[0].source == "strava"
+
+
+def test_import_activity_skips_unmapped_and_zero(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    assert strava.import_activity(session, conn,
+        {"id": 1, "sport_type": "Swim", "distance": 2000.0}) is False  # ungemappt
+    assert strava.import_activity(session, conn,
+        {"id": 2, "sport_type": "Run", "distance": 0}) is False  # distanz 0
+    assert session.exec(select(Activity)).all() == []
+
+
 def _enable_strava(monkeypatch):
     monkeypatch.setattr(config, "STRAVA_CLIENT_ID", "cid")
     monkeypatch.setattr(config, "STRAVA_CLIENT_SECRET", "sec")

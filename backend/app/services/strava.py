@@ -94,17 +94,10 @@ def _parse_date(value: str | None) -> date_type:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
 
 
-def handle_webhook_event(session: Session, payload: dict) -> None:
-    """Importiert genau neue Strava-Aktivitäten (aspect 'create'). Idempotent über external_id."""
-    if payload.get("object_type") != "activity" or payload.get("aspect_type") != "create":
-        return
-    owner_id = payload.get("owner_id")
-    activity_id = payload.get("object_id")
-    conn = session.exec(
-        select(StravaConnection).where(StravaConnection.athlete_id == owner_id)
-    ).first()
-    if conn is None:
-        return
+def import_activity(session: Session, conn: StravaConnection, data: dict) -> bool:
+    """Importiert eine Strava-Aktivität (Summary oder Detail) idempotent.
+    Gibt True zurück, wenn neu angelegt; False bei Skip/Dublette."""
+    activity_id = data.get("id")
     existing = session.exec(
         select(Activity).where(
             Activity.user_id == conn.user_id,
@@ -113,15 +106,13 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
         )
     ).first()
     if existing is not None:
-        return
-    token = valid_access_token(session, conn)
-    data = fetch_activity(token, activity_id)
+        return False
     cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
     if cat is None:
-        return
+        return False
     distance_km = round((data.get("distance") or 0) / 1000, 2)
     if distance_km <= 0:
-        return
+        return False
     duration_min = round((data.get("moving_time") or 0) / 60) or None
     act = Activity(
         user_id=conn.user_id,
@@ -135,3 +126,21 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
     )
     session.add(act)
     session.commit()
+    return True
+
+
+def handle_webhook_event(session: Session, payload: dict) -> None:
+    """Importiert genau neue Strava-Aktivitäten (aspect 'create'). Idempotent über external_id."""
+    if payload.get("object_type") != "activity" or payload.get("aspect_type") != "create":
+        return
+    owner_id = payload.get("owner_id")
+    activity_id = payload.get("object_id")
+    conn = session.exec(
+        select(StravaConnection).where(StravaConnection.athlete_id == owner_id)
+    ).first()
+    if conn is None:
+        return
+    token = valid_access_token(session, conn)
+    data = fetch_activity(token, activity_id)
+    data.setdefault("id", activity_id)
+    import_activity(session, conn, data)
