@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import AvatarWahl from '../components/ui/AvatarWahl'
@@ -23,8 +23,12 @@ export default function Einladung() {
   const [avatar, setAvatar] = useState('icon:laufen')
   const [error, setError] = useState('')
 
-  // Anzeigename aus Einladung vorbelegen, sobald geladen.
-  if (invite?.valid && invite.display_name && !displayName) setDisplayName(invite.display_name)
+  // Anzeigename aus Einladung vorbelegen, sobald die Einladungsdaten geladen
+  // sind. Abhängig nur von den Einladungsdaten, damit ein bewusst geleertes
+  // Feld nicht bei jedem Render wieder gefüllt wird.
+  useEffect(() => {
+    if (invite?.valid && invite.display_name) setDisplayName(invite.display_name)
+  }, [invite?.valid, invite?.display_name])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
