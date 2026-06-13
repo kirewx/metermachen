@@ -76,6 +76,11 @@ export default function MeineAktivitaeten() {
                   {a.distance_km} km {cat?.name}{' '}
                   <span className="text-accent">→ {a.scaled_km} km</span>
                   {a.edited && <span className="ml-2 text-xs font-normal text-ink-mute">(bearbeitet)</span>}
+                  {a.source === 'strava' && (
+                    <span className="ml-2 rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+                      Strava
+                    </span>
+                  )}
                 </p>
                 <p className="truncate text-xs text-ink-mute">
                   {a.date}
