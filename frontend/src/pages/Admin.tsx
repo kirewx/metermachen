@@ -314,9 +314,22 @@ function Einladungen() {
   })
   const widerrufen = useMutation({
     mutationFn: (id: number) => api.deleteInvite(id),
-    onSuccess: refresh,
+    onSuccess: (_data, id) => {
+      // Falls die widerrufene Einladung gerade im QR-Panel steht, ausblenden.
+      setNeu((aktuell) => (aktuell?.id === id ? null : aktuell))
+      refresh()
+    },
     onError: (e) => toast(e.message),
   })
+
+  function kopieren(url: string) {
+    // navigator.clipboard fehlt auf unsicheren Ursprüngen (HTTP) — nur bei
+    // echtem Erfolg den OK-Toast zeigen, sonst Fehlermeldung.
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => toast('Link kopiert', 'ok'))
+      .catch(() => toast('Kopieren fehlgeschlagen')) ?? toast('Kopieren nicht möglich')
+  }
 
   return (
     <section>
@@ -353,10 +366,7 @@ function Einladungen() {
             <Button
               variant="ghost"
               className="mt-2"
-              onClick={() => {
-                navigator.clipboard.writeText(volleUrl(neu))
-                toast('Link kopiert', 'ok')
-              }}
+              onClick={() => kopieren(volleUrl(neu))}
             >
               Link kopieren
             </Button>
