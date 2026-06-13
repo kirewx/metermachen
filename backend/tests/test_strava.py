@@ -392,3 +392,43 @@ def test_backfill_noop_without_connection(session, monkeypatch, bind_engine):
                         lambda tok, after: called.__setitem__("list", True) or [])
     strava.backfill_current_year(user_id=4242)  # kein User/keine Connection
     assert called["list"] is False
+
+
+def test_callback_triggers_backfill_on_fresh_connect(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    from app.routers import strava_router
+    user = make_user(session)
+    login(client)
+    state = strava_router._state_serializer.dumps(user.id)
+    monkeypatch.setattr(strava_router.strava, "exchange_code", lambda code: {
+        "access_token": "AT", "refresh_token": "RT", "expires_at": 8888888888,
+        "athlete": {"id": 77},
+    })
+    triggered = {"user_id": None}
+    monkeypatch.setattr(strava_router.strava, "backfill_current_year",
+                        lambda uid: triggered.__setitem__("user_id", uid))
+    r = client.get("/api/strava/callback", params={"code": "xyz", "state": state},
+                   follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert triggered["user_id"] == user.id
+
+
+def test_callback_no_backfill_on_existing_connection(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    from app.routers import strava_router
+    user = make_user(session)
+    session.add(StravaConnection(user_id=user.id, athlete_id=77,
+                                 access_token="old", refresh_token="old", expires_at=1))
+    session.commit()
+    login(client)
+    state = strava_router._state_serializer.dumps(user.id)
+    monkeypatch.setattr(strava_router.strava, "exchange_code", lambda code: {
+        "access_token": "AT", "refresh_token": "RT", "expires_at": 8888888888,
+        "athlete": {"id": 77},
+    })
+    triggered = {"called": False}
+    monkeypatch.setattr(strava_router.strava, "backfill_current_year",
+                        lambda uid: triggered.__setitem__("called", True))
+    client.get("/api/strava/callback", params={"code": "xyz", "state": state},
+               follow_redirects=False)
+    assert triggered["called"] is False
