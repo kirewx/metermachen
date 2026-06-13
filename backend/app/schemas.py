@@ -123,6 +123,7 @@ class ActivityOut(BaseModel):
     note: str | None
     scaled_km: float
     edited: bool
+    source: str
 
 
 class CategoryShare(BaseModel):
