@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import AvatarWahl from '../components/ui/AvatarWahl'
@@ -18,17 +18,14 @@ export default function Einladung() {
   })
 
   const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  // null = noch nicht bearbeitet → Vorbelegung aus der Einladung anzeigen.
+  // Sobald getippt (auch leer), gewinnt die Eingabe — kein Effekt nötig.
+  const [displayNameEdit, setDisplayNameEdit] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [avatar, setAvatar] = useState('icon:laufen')
   const [error, setError] = useState('')
 
-  // Anzeigename aus Einladung vorbelegen, sobald die Einladungsdaten geladen
-  // sind. Abhängig nur von den Einladungsdaten, damit ein bewusst geleertes
-  // Feld nicht bei jedem Render wieder gefüllt wird.
-  useEffect(() => {
-    if (invite?.valid && invite.display_name) setDisplayName(invite.display_name)
-  }, [invite?.valid, invite?.display_name])
+  const displayName = displayNameEdit ?? (invite?.valid ? (invite.display_name ?? '') : '')
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -59,7 +56,7 @@ export default function Einladung() {
               <Input
                 label="Anzeigename"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => setDisplayNameEdit(e.target.value)}
               />
               <Input
                 label="Passwort (min. 4 Zeichen)"

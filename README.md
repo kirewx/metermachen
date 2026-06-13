@@ -11,7 +11,15 @@ Alternativ `.env.example` nach `.env` kopieren und ausfüllen — docker compose
 liest die Datei automatisch.
 
 App: http://localhost:8000 — Login mit `admin` / `<passwort>`.
-Backup: den Ordner `./data` kopieren (SQLite-DB + Kartenbilder).
+Backup: den Ordner `./data` kopieren (SQLite-DB).
+
+## Mitglieder
+
+Neue Mitglieder werden nicht direkt angelegt, sondern eingeladen: im
+Admin-Bereich unter „Mitglied einladen" einen Einladungslink (mit QR-Code)
+erzeugen und teilen. Über den Link legt das Mitglied selbst Benutzername,
+Passwort und Avatar an und ist danach direkt eingeloggt. Jeder Link ist
+einmalig nutzbar und 7 Tage gültig; offene Einladungen lassen sich widerrufen.
 
 ## Entwicklung
 

@@ -25,7 +25,8 @@ export default function MeineAktivitaeten() {
   const toggle = (catId: number) =>
     setOffen((s) => {
       const next = new Set(s)
-      next.has(catId) ? next.delete(catId) : next.add(catId)
+      if (next.has(catId)) next.delete(catId)
+      else next.add(catId)
       return next
     })
   const gruppen = [...catById.values()]

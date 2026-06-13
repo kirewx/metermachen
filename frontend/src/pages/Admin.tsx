@@ -325,10 +325,14 @@ function Einladungen() {
   function kopieren(url: string) {
     // navigator.clipboard fehlt auf unsicheren Ursprüngen (HTTP) — nur bei
     // echtem Erfolg den OK-Toast zeigen, sonst Fehlermeldung.
+    if (!navigator.clipboard) {
+      toast('Kopieren nicht möglich')
+      return
+    }
     navigator.clipboard
-      ?.writeText(url)
+      .writeText(url)
       .then(() => toast('Link kopiert', 'ok'))
-      .catch(() => toast('Kopieren fehlgeschlagen')) ?? toast('Kopieren nicht möglich')
+      .catch(() => toast('Kopieren fehlgeschlagen'))
   }
 
   return (
