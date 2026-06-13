@@ -20,7 +20,9 @@ export default function SchnellwahlLeiste() {
     onError: (e) => toast(e.message),
   })
 
-  if (!aktiv) {
+  // Solange keine Kategorien geladen sind, bleibt nur der Trigger sichtbar —
+  // sonst gäbe es im offenen Zustand keine Karte und damit kein "Abbrechen".
+  if (!aktiv || categories.length === 0) {
     return (
       <button
         type="button"
@@ -39,14 +41,12 @@ export default function SchnellwahlLeiste() {
         <Icon name="blitz" size={12} />
         Schnellwahl
       </div>
-      {categories.length > 0 && (
-        <SchnellwahlCard
-          variant="kompakt"
-          categories={categories}
-          onSubmit={(input) => save.mutateAsync(input)}
-          onCancel={() => setAktiv(false)}
-        />
-      )}
+      <SchnellwahlCard
+        variant="kompakt"
+        categories={categories}
+        onSubmit={(input) => save.mutateAsync(input)}
+        onCancel={() => setAktiv(false)}
+      />
     </div>
   )
 }

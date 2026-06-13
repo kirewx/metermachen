@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { api } from '../../api/client'
 import SchnellwahlLeiste from './SchnellwahlLeiste'
 
 vi.mock('../../api/client', () => ({
@@ -55,6 +56,14 @@ describe('SchnellwahlLeiste', () => {
     await screen.findByTestId('km-wert')
     await userEvent.click(screen.getByRole('button', { name: /Eintragen/ }))
     await waitFor(() => expect(screen.queryByTestId('km-wert')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /Eintrag hinzufügen/ })).toBeInTheDocument()
+  })
+
+  it('ohne geladene Kategorien bleibt der Trigger sichtbar (keine Sackgasse)', async () => {
+    vi.mocked(api.categories).mockResolvedValueOnce([])
+    renderLeiste()
+    await userEvent.click(screen.getByRole('button', { name: /Eintrag hinzufügen/ }))
+    expect(screen.queryByTestId('km-wert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Eintrag hinzufügen/ })).toBeInTheDocument()
   })
 })
