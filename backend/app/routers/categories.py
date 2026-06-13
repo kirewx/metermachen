@@ -13,7 +13,9 @@ def list_categories(session: Session = Depends(get_session)):
     return session.exec(select(Category).order_by(Category.id)).all()
 
 
-@router.post("", response_model=Category, status_code=201, dependencies=[Depends(require_admin)])
+@router.post(
+    "", response_model=Category, status_code=201, dependencies=[Depends(require_admin)]
+)
 def create_category(data: CategoryCreate, session: Session = Depends(get_session)):
     cat = Category(**data.model_dump())
     session.add(cat)
@@ -22,7 +24,9 @@ def create_category(data: CategoryCreate, session: Session = Depends(get_session
     return cat
 
 
-@router.patch("/{category_id}", response_model=Category, dependencies=[Depends(require_admin)])
+@router.patch(
+    "/{category_id}", response_model=Category, dependencies=[Depends(require_admin)]
+)
 def patch_category(
     category_id: int, data: CategoryPatch, session: Session = Depends(get_session)
 ):

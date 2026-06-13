@@ -19,6 +19,7 @@ Backup: den Ordner `./data` kopieren (SQLite-DB + Kartenbilder).
     cd frontend && npm install && npm run dev                       # UI  :5173
 
 Tests: `cd backend && uv run pytest` · `cd frontend && npm test`
+Lint/Format: `uvx pre-commit install` (einmalig), läuft dann bei jedem Commit (Ruff + Basis-Checks).
 
 ## Doku
 

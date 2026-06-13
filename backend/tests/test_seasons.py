@@ -24,7 +24,10 @@ def test_patch_season_admin_only(client, session):
     make_user(session)
     season = make_season(session)
     login(client)
-    assert client.patch(f"/api/seasons/{season.id}", json={"goal_km": 2000}).status_code == 403
+    assert (
+        client.patch(f"/api/seasons/{season.id}", json={"goal_km": 2000}).status_code
+        == 403
+    )
 
 
 def test_patch_season_goal_and_milestones(client, session):

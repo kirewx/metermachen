@@ -24,7 +24,9 @@ class ProfilePatch(BaseModel):
     password: str | None = Field(default=None, min_length=4)
 
 
-@router.post("", response_model=MeOut, status_code=201, dependencies=[Depends(require_admin)])
+@router.post(
+    "", response_model=MeOut, status_code=201, dependencies=[Depends(require_admin)]
+)
 def create_user(data: UserCreate, session: Session = Depends(get_session)):
     if session.exec(select(User).where(User.username == data.username)).first():
         raise HTTPException(status_code=409, detail="Benutzername vergeben")

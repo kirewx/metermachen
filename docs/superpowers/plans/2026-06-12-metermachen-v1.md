@@ -3211,9 +3211,3 @@ git commit -m "feat: docker deployment (single container, sqlite volume)"
 - E2E-Tests (Playwright)
 - Mini-Games / Sonderfelder auf der Karte
 - HTTPS (macht der Reverse-Proxy des Servers)
-
-
-
-
-
-
