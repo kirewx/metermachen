@@ -12,7 +12,7 @@ export default function App() {
     queryKey: ['me'],
     queryFn: () => api.me().catch(() => null),
   })
-  if (isLoading) return <p className="p-8">Lade…</p>
+  if (isLoading) return <p className="p-8 text-ink-mute">Lade…</p>
   if (!me) return <Login />
   return (
     <Routes>

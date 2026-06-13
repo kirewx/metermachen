@@ -7,6 +7,9 @@ für den Freundeskreis. FastAPI + React, SQLite, ein Container.
 
     SECRET_KEY=<zufälliger-string> ADMIN_PASSWORD=<passwort> docker compose up -d --build
 
+Alternativ `.env.example` nach `.env` kopieren und ausfüllen — docker compose
+liest die Datei automatisch.
+
 App: http://localhost:8000 — Login mit `admin` / `<passwort>`.
 Backup: den Ordner `./data` kopieren (SQLite-DB + Kartenbilder).
 

@@ -20,7 +20,7 @@ class MeOut(BaseModel):
     id: int
     username: str
     display_name: str
-    avatar_emoji: str
+    avatar: str
     is_admin: bool
 
 

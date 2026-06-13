@@ -38,12 +38,12 @@ def test_patch_season_goal_and_milestones(client, session):
         f"/api/seasons/{season.id}",
         json={
             "goal_km": 1500,
-            "milestones": [{"km": 500, "label": "Brücke", "emoji": "🌉"}],
+            "milestones": [{"km": 500, "label": "Brücke", "icon": "fahne"}],
         },
     )
     assert r.status_code == 200
     assert r.json()["goal_km"] == 1500
-    assert r.json()["milestones"] == [{"km": 500, "label": "Brücke", "emoji": "🌉"}]
+    assert r.json()["milestones"] == [{"km": 500, "label": "Brücke", "icon": "fahne"}]
 
 
 def test_create_season_as_admin(client, session):
@@ -68,7 +68,7 @@ def test_patch_season_empty_milestones_clears(client, session):
     login(client, username="chef")
     client.patch(
         f"/api/seasons/{season.id}",
-        json={"milestones": [{"km": 100, "label": "x", "emoji": "🚩"}]},
+        json={"milestones": [{"km": 100, "label": "x", "icon": "fahne"}]},
     )
     r = client.patch(f"/api/seasons/{season.id}", json={"milestones": []})
     assert r.status_code == 200
