@@ -51,7 +51,7 @@ export default function MeineAktivitaeten() {
         key={editing?.id ?? 'neu'}
         categories={categories}
         initial={editing ?? undefined}
-        onSubmit={save.mutate}
+        onSubmit={(input) => save.mutateAsync(input)}
         onCancel={editing ? () => setEditing(null) : undefined}
       />
       <div className="flex items-baseline justify-between">

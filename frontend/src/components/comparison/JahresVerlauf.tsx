@@ -1,6 +1,5 @@
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ReferenceLine,
@@ -9,9 +8,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import type { Props as LabelProps } from 'recharts/types/component/Label'
+import type { DotItemDotProps } from 'recharts/types/util/types'
 import type { Comparison } from '../../api/client'
-
-const COLORS = ['#e74c3c', '#3498db', '#27ae60', '#9b59b6', '#e67e22', '#16a085', '#d35400']
+import Card from '../ui/Card'
+import { userColor } from './userColor'
 
 export default function JahresVerlauf({ data }: { data: Comparison }) {
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
@@ -26,38 +27,94 @@ export default function JahresVerlauf({ data }: { data: Comparison }) {
   const rows = [...byDate.values()].sort((a, b) =>
     String(a.date).localeCompare(String(b.date)),
   )
+  const ids = data.users.map((u) => u.user_id)
+  // Letzter Datenpunkt je Person — dort sitzen Endpunkt-Dot und Namens-Label.
+  const lastIndex = new Map<string, number>()
+  for (const u of data.users) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i][u.display_name] !== undefined) {
+        lastIndex.set(u.display_name, i)
+        break
+      }
+    }
+  }
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow">
+    <Card>
       <ResponsiveContainer width="100%" height={380}>
-        <LineChart data={rows}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" fontSize={11} />
-          <YAxis fontSize={11} unit=" km" />
-          <Tooltip />
-          <Legend />
+        <LineChart data={rows} margin={{ top: 8, right: 90, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="var(--t-line)" strokeOpacity={0.25} vertical={false} />
+          <XAxis
+            dataKey="date"
+            fontSize={11}
+            stroke="var(--t-ink-mute)"
+            tickLine={false}
+            axisLine={{ stroke: 'var(--t-line)' }}
+          />
+          <YAxis fontSize={11} unit=" km" stroke="var(--t-ink-mute)" tickLine={false} axisLine={false} />
+          <Tooltip
+            contentStyle={{
+              background: 'var(--t-card)',
+              border: '1px solid var(--t-line)',
+              borderRadius: 12,
+              color: 'var(--t-ink)',
+            }}
+            labelStyle={{ color: 'var(--t-ink-mute)' }}
+          />
           {data.milestones.map((m) => (
             <ReferenceLine
               key={m.km}
               y={m.km}
-              stroke="#999"
+              stroke="var(--t-ink-mute)"
+              strokeOpacity={0.5}
               strokeDasharray="5 4"
-              label={{ value: m.label, fontSize: 11, position: 'right' }}
+              label={{ value: m.label, fontSize: 11, position: 'right', fill: 'var(--t-ink-mute)' }}
             />
           ))}
-          <ReferenceLine y={data.goal_km} stroke="#e0b84e" label={{ value: '🏁 Ziel', fontSize: 11 }} />
-          {data.users.map((u, i) => (
-            <Line
-              key={u.user_id}
-              dataKey={u.display_name}
-              stroke={COLORS[i % COLORS.length]}
-              strokeWidth={2.5}
-              dot={false}
-              connectNulls
-            />
-          ))}
+          <ReferenceLine
+            y={data.goal_km}
+            stroke="var(--t-accent)"
+            label={{ value: 'Ziel', fontSize: 11, fill: 'var(--t-accent)' }}
+          />
+          {data.users.map((u) => {
+            const farbe = userColor(u.user_id, ids)
+            const letzte = lastIndex.get(u.display_name)
+            return (
+              <Line
+                key={u.user_id}
+                dataKey={u.display_name}
+                stroke={farbe}
+                strokeWidth={2.5}
+                connectNulls
+                style={{ filter: `drop-shadow(0 0 4px ${farbe})` }}
+                dot={(p: DotItemDotProps) =>
+                  p.index === letzte ? (
+                    <circle key={`dot-${p.index}`} cx={p.cx} cy={p.cy} r={4} fill={farbe} />
+                  ) : (
+                    <g key={`dot-empty-${p.index}`} />
+                  )
+                }
+                label={(p: LabelProps) =>
+                  p.index === letzte ? (
+                    <text
+                      key={`label-${p.index}`}
+                      x={(typeof p.x === 'number' ? p.x : 0) + 8}
+                      y={(typeof p.y === 'number' ? p.y : 0) + 4}
+                      fontSize={11}
+                      fontWeight={700}
+                      fill={farbe}
+                    >
+                      {u.display_name}
+                    </text>
+                  ) : (
+                    <g key={`label-empty-${p.index}`} />
+                  )
+                }
+              />
+            )
+          })}
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </Card>
   )
 }

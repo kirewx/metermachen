@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Category } from '../../api/client'
@@ -97,5 +97,36 @@ describe('SchnellwahlCard', () => {
     expect(screen.getByTestId('km-wert')).toHaveTextContent('33')
     expect(screen.getByLabelText('Datum')).toHaveValue('2026-02-02')
     expect(screen.getByLabelText('Notiz')).toHaveValue('Tour')
+  })
+
+  it('freie km: Zwischenzustände und Komma funktionieren', async () => {
+    const onSubmit = vi.fn()
+    render(<SchnellwahlCard categories={categories} onSubmit={onSubmit} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }))
+    const frei = screen.getByLabelText('km (frei)')
+    await userEvent.clear(frei)
+    await userEvent.type(frei, '7,')
+    expect(frei).toHaveValue('7,')
+    await userEvent.type(frei, '5')
+    await userEvent.click(screen.getByRole('button', { name: /Eintragen/ }))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ distance_km: 7.5 }))
+  })
+
+  it('nach Erfolg: Wert springt auf Standard zurück und Karte pulsiert', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const { container } = render(<SchnellwahlCard categories={categories} onSubmit={onSubmit} />)
+    await userEvent.click(screen.getByRole('button', { name: '1 km mehr' }))
+    await userEvent.click(screen.getByRole('button', { name: /Eintragen/ }))
+    await waitFor(() => expect(container.querySelector('.glow-puls')).not.toBeNull())
+    expect(screen.getByTestId('km-wert')).toHaveTextContent('5')
+  })
+
+  it('bei Fehler bleiben die Eingaben erhalten', async () => {
+    const onSubmit = vi.fn().mockRejectedValue(new Error('kaputt'))
+    render(<SchnellwahlCard categories={categories} onSubmit={onSubmit} />)
+    await userEvent.click(screen.getByRole('button', { name: '1 km mehr' }))
+    await userEvent.click(screen.getByRole('button', { name: /Eintragen/ }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(screen.getByTestId('km-wert')).toHaveTextContent('6')
   })
 })
