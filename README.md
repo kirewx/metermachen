@@ -39,6 +39,10 @@ Env-Variablen):
 
 Zum Verwalten: `view` zeigt die aktive Subscription, `delete <id>` löscht sie.
 
+Beim **erstmaligen Verbinden** eines Strava-Accounts werden automatisch alle
+Aktivitäten des laufenden Kalenderjahres im Hintergrund importiert (nur gemappte
+Sport-Typen, idempotent). Der Fortschritt wird im Profil-Modal angezeigt.
+
 Funktioniert mit kostenlosen Strava-Accounts. Mit dem Scope `activity:read_all`
 werden auch private Aktivitäten importiert. Nur neue Aktivitäten werden
 automatisch übernommen; lokale Änderungen in MeterMachen bleiben erhalten
