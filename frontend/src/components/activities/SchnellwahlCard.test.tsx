@@ -5,9 +5,9 @@ import type { Category } from '../../api/client'
 import SchnellwahlCard from './SchnellwahlCard'
 
 const categories: Category[] = [
-  { id: 1, name: 'Joggen', factor: 4, color: '#e74c3c', icon: 'laufen', default_km: 5, is_active: true },
-  { id: 2, name: 'Radfahren', factor: 1, color: '#3498db', icon: 'rad', default_km: 20, is_active: true },
-  { id: 3, name: 'Alt', factor: 2, color: '#000000', icon: 'medaille', default_km: 10, is_active: false },
+  { id: 1, name: 'Joggen', factor: 4, color: '#e74c3c', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: [] },
+  { id: 2, name: 'Radfahren', factor: 1, color: '#3498db', icon: 'rad', default_km: 20, is_active: true, strava_sport_types: [] },
+  { id: 3, name: 'Alt', factor: 2, color: '#000000', icon: 'medaille', default_km: 10, is_active: false, strava_sport_types: [] },
 ]
 
 const heute = () => new Date().toISOString().slice(0, 10)
@@ -89,7 +89,7 @@ describe('SchnellwahlCard', () => {
         categories={categories}
         initial={{
           id: 9, category_id: 2, date: '2026-02-02', distance_km: 33,
-          duration_min: 90, note: 'Tour', scaled_km: 33, edited: false,
+          duration_min: 90, note: 'Tour', scaled_km: 33, edited: false, source: 'manual',
         }}
         onSubmit={vi.fn()}
       />,
