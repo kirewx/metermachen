@@ -178,9 +178,9 @@ def test_import_activity_skips_unmapped_and_zero(session):
     user, conn = _setup_conn(session)
     make_category(session, name="Laufen", strava_sport_types='["Run"]')
     assert strava.import_activity(session, conn,
-        {"id": 1, "sport_type": "Swim", "distance": 2000.0}) is False  # ungemappt
+        {"id": 1, "sport_type": "Swim", "distance": 2000.0, "moving_time": 0}) is False  # ungemappt
     assert strava.import_activity(session, conn,
-        {"id": 2, "sport_type": "Run", "distance": 0}) is False  # distanz 0
+        {"id": 2, "sport_type": "Run", "distance": 0, "moving_time": 0}) is False  # distanz 0
     assert session.exec(select(Activity)).all() == []
 
 
@@ -274,3 +274,19 @@ def test_disconnect_removes_connection(client, session, monkeypatch):
     login(client)
     assert client.delete("/api/strava/disconnect").status_code == 204
     assert session.exec(select(StravaConnection)).all() == []
+
+
+def test_handle_webhook_event_dedup_skips_fetch(session, monkeypatch):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    # Vorab bereits importiert (gleiche external_id wie _payload default object_id=555)
+    session.add(Activity(user_id=user.id, category_id=1, date=__import__("datetime").date(2026, 3, 1),
+                         distance_km=5.0, source="strava", external_id="555"))
+    session.commit()
+    called = {"fetch": False}
+    monkeypatch.setattr(strava, "fetch_activity",
+                        lambda tok, aid: called.__setitem__("fetch", True) or {})
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    strava.handle_webhook_event(session, _payload())
+    assert called["fetch"] is False
+    assert len(session.exec(select(Activity)).all()) == 1

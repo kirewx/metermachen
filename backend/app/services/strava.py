@@ -98,6 +98,8 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     """Importiert eine Strava-Aktivität (Summary oder Detail) idempotent.
     Gibt True zurück, wenn neu angelegt; False bei Skip/Dublette."""
     activity_id = data.get("id")
+    if not activity_id:
+        return False
     existing = session.exec(
         select(Activity).where(
             Activity.user_id == conn.user_id,
@@ -139,6 +141,15 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
         select(StravaConnection).where(StravaConnection.athlete_id == owner_id)
     ).first()
     if conn is None:
+        return
+    already = session.exec(
+        select(Activity).where(
+            Activity.user_id == conn.user_id,
+            Activity.external_id == str(activity_id),
+            Activity.source == "strava",
+        )
+    ).first()
+    if already is not None:
         return
     token = valid_access_token(session, conn)
     data = fetch_activity(token, activity_id)
