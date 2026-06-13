@@ -21,7 +21,6 @@ export type Season = {
   year: number
   goal_km: number
   milestones: Milestone[]
-  map_image: string | null
 }
 export type Activity = {
   id: number
@@ -63,7 +62,6 @@ export type Comparison = {
   year: number
   goal_km: number
   milestones: Milestone[]
-  map_image: string | null
   users: ComparisonUser[]
 }
 export type StravaBackfill = {
@@ -123,11 +121,6 @@ export const api = {
     request<Season>('/api/seasons', post(b)),
   patchSeason: (id: number, b: { goal_km?: number; milestones?: Milestone[] }) =>
     request<Season>(`/api/seasons/${id}`, patch(b)),
-  uploadMapImage: (id: number, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return request<Season>(`/api/seasons/${id}/map-image`, { method: 'POST', body: form })
-  },
   activities: (year: number) => request<Activity[]>(`/api/activities?year=${year}`),
   createActivity: (b: ActivityInput) => request<Activity>('/api/activities', post(b)),
   patchActivity: (id: number, b: Partial<ActivityInput>) =>

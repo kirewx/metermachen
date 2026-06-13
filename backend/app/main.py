@@ -66,9 +66,6 @@ class SPAStaticFiles(StaticFiles):
 
 
 def mount_static(app: FastAPI) -> None:
-    media_dir = config.DATA_DIR / "maps"
-    media_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/media/maps", StaticFiles(directory=media_dir), name="media")
     dist = Path(os.environ.get("FRONTEND_DIST", "../frontend/dist"))
     if dist.is_dir():
         app.mount("/", SPAStaticFiles(directory=dist, html=True), name="spa")

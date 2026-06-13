@@ -61,7 +61,6 @@ class Season(SQLModel, table=True):
     year: int = Field(unique=True)
     goal_km: float
     milestones_json: str = "[]"  # JSON-Liste [{"km":..,"label":..,"icon":..}]
-    map_image: str | None = None
 
 
 class Invite(SQLModel, table=True):

@@ -71,7 +71,6 @@ class SeasonOut(BaseModel):
     year: int
     goal_km: float
     milestones: list[Milestone]
-    map_image: str | None
 
     @classmethod
     def from_season(cls, season: Season) -> "SeasonOut":
@@ -80,7 +79,6 @@ class SeasonOut(BaseModel):
             year=season.year,
             goal_km=season.goal_km,
             milestones=json.loads(season.milestones_json),
-            map_image=season.map_image,
         )
 
 
@@ -161,5 +159,4 @@ class ComparisonOut(BaseModel):
     year: int
     goal_km: float
     milestones: list[Milestone]
-    map_image: str | None
     users: list[ComparisonUser]

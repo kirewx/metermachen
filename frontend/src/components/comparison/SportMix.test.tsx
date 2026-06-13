@@ -7,7 +7,6 @@ const data: Comparison = {
   year: 2026,
   goal_km: 1000,
   milestones: [],
-  map_image: null,
   users: [
     {
       user_id: 1,
