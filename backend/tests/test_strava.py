@@ -40,7 +40,7 @@ def test_category_has_strava_sport_types_default(session):
     assert cat.strava_sport_types == "[]"
 
 
-from tests.conftest import make_user, make_category  # noqa: E402
+from tests.conftest import login, make_category, make_user  # noqa: E402
 
 
 def _setup_conn(session, athlete_id=999, expires_at=9999999999):
@@ -157,3 +157,95 @@ def test_handle_webhook_event_ignores_non_create(session, monkeypatch):
     monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {"sport_type": "Run"})
     strava.handle_webhook_event(session, _payload(aspect="update"))
     assert session.exec(select(Activity)).all() == []
+
+
+def _enable_strava(monkeypatch):
+    monkeypatch.setattr(config, "STRAVA_CLIENT_ID", "cid")
+    monkeypatch.setattr(config, "STRAVA_CLIENT_SECRET", "sec")
+    monkeypatch.setattr(config, "STRAVA_WEBHOOK_VERIFY_TOKEN", "verifytok")
+    monkeypatch.setattr(config, "PUBLIC_BASE_URL", "https://meter.example.com")
+
+
+def test_status_disabled_when_unconfigured(client, session, monkeypatch):
+    monkeypatch.setattr(config, "STRAVA_CLIENT_ID", "")
+    make_user(session)
+    login(client)
+    r = client.get("/api/strava/status")
+    assert r.status_code == 200
+    assert r.json() == {"enabled": False, "connected": False}
+
+
+def test_status_connected(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    session.add(StravaConnection(user_id=user.id, athlete_id=42,
+                                 access_token="a", refresh_token="r", expires_at=999))
+    session.commit()
+    login(client)
+    r = client.get("/api/strava/status")
+    assert r.json() == {"enabled": True, "connected": True, "athlete_id": 42}
+
+
+def test_webhook_verify_echoes_challenge(client, monkeypatch):
+    _enable_strava(monkeypatch)
+    r = client.get("/api/strava/webhook", params={
+        "hub.mode": "subscribe", "hub.verify_token": "verifytok", "hub.challenge": "abc123",
+    })
+    assert r.status_code == 200
+    assert r.json() == {"hub.challenge": "abc123"}
+
+
+def test_webhook_verify_rejects_wrong_token(client, monkeypatch):
+    _enable_strava(monkeypatch)
+    r = client.get("/api/strava/webhook", params={
+        "hub.mode": "subscribe", "hub.verify_token": "falsch", "hub.challenge": "abc123",
+    })
+    assert r.status_code == 403
+
+
+def test_webhook_post_schedules_processing(client, monkeypatch):
+    from app.routers import strava_router
+    seen = {}
+    monkeypatch.setattr(strava_router, "process_event", lambda payload: seen.update(payload))
+    r = client.post("/api/strava/webhook", json={"object_type": "activity", "aspect_type": "create"})
+    assert r.status_code == 200
+    assert seen.get("object_type") == "activity"
+
+
+def test_connect_redirects_to_strava(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    make_user(session)
+    login(client)
+    r = client.get("/api/strava/connect", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"].startswith("https://www.strava.com/oauth/authorize")
+
+
+def test_callback_stores_connection(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    from app.routers import strava_router
+    user = make_user(session)
+    login(client)
+    state = strava_router._state_serializer.dumps(user.id)
+    monkeypatch.setattr(strava_router.strava, "exchange_code", lambda code: {
+        "access_token": "AT", "refresh_token": "RT", "expires_at": 8888888888,
+        "athlete": {"id": 77},
+    })
+    r = client.get("/api/strava/callback", params={"code": "xyz", "state": state},
+                   follow_redirects=False)
+    assert r.status_code in (302, 307)
+    conn = session.exec(select(StravaConnection).where(StravaConnection.user_id == user.id)).first()
+    assert conn is not None
+    assert conn.athlete_id == 77
+    assert conn.access_token == "AT"
+
+
+def test_disconnect_removes_connection(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    session.add(StravaConnection(user_id=user.id, athlete_id=42,
+                                 access_token="a", refresh_token="r", expires_at=999))
+    session.commit()
+    login(client)
+    assert client.delete("/api/strava/disconnect").status_code == 204
+    assert session.exec(select(StravaConnection)).all() == []
