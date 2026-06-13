@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type Me } from '../../api/client'
 import AvatarWahl from './AvatarWahl'
 import Button from './Button'
@@ -16,7 +16,25 @@ export default function ProfilModal({ me, open, onClose }: Props) {
   const [avatar, setAvatar] = useState(me.avatar)
   const [passwort, setPasswort] = useState('')
 
-  const { data: strava } = useQuery({ queryKey: ['strava-status'], queryFn: api.stravaStatus })
+  const { data: strava } = useQuery({
+    queryKey: ['strava-status'],
+    queryFn: api.stravaStatus,
+    refetchInterval: (query) =>
+      query.state.data?.backfill?.state === 'running' ? 1500 : false,
+  })
+
+  const prevBackfill = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const state = strava?.backfill?.state
+    if (prevBackfill.current === 'running' && state === 'done') {
+      const total = strava?.backfill?.total ?? 0
+      if (total > 0) toast(`${total} Aktivitäten importiert`, 'ok')
+      queryClient.invalidateQueries({ queryKey: ['comparison'] })
+      queryClient.invalidateQueries({ queryKey: ['activities'] })
+    }
+    prevBackfill.current = state
+  }, [strava?.backfill?.state, strava?.backfill?.total, queryClient, toast])
+
   const trennen = useMutation({
     mutationFn: () => api.disconnectStrava(),
     onSuccess: () => {
@@ -61,14 +79,21 @@ export default function ProfilModal({ me, open, onClose }: Props) {
           <div className="rounded-xl border border-line p-3">
             <div className="mb-2 text-xs font-semibold text-ink-mute">Strava</div>
             {strava.connected ? (
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={() => trennen.mutate()}
-                disabled={trennen.isPending}
-              >
-                Strava trennen
-              </Button>
+              strava.backfill?.state === 'running' ? (
+                <div className="flex items-center gap-2 text-sm text-ink-mute">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Importiere… {strava.backfill.done} von {strava.backfill.total}
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => trennen.mutate()}
+                  disabled={trennen.isPending}
+                >
+                  Strava trennen
+                </Button>
+              )
             ) : (
               <Button
                 variant="ghost"
