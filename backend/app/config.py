@@ -8,6 +8,20 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "./data"))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")  # leer → DATA_DIR/meter.db
 SKIP_SEED = os.environ.get("METER_SKIP_SEED") == "1"
 
+STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID", "")
+STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET", "")
+STRAVA_WEBHOOK_VERIFY_TOKEN = os.environ.get("STRAVA_WEBHOOK_VERIFY_TOKEN", "")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+
+def strava_enabled() -> bool:
+    return bool(
+        STRAVA_CLIENT_ID
+        and STRAVA_CLIENT_SECRET
+        and STRAVA_WEBHOOK_VERIFY_TOKEN
+        and PUBLIC_BASE_URL
+    )
+
 
 def database_url() -> str:
     if DATABASE_URL:
