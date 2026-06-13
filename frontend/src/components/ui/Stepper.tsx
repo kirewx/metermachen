@@ -38,6 +38,7 @@ export default function Stepper({ value, onChange, min = 1, step = 1, size = 'he
 
   // Maus/Touch laufen über Pointer-Events; Tastatur-Klicks (Enter/Leertaste)
   // erzeugen click-Events mit detail 0 und bekommen einen Einzelschritt.
+  /* eslint-disable react-hooks/refs -- Refs werden nur in Event-Handlern gelesen/geschrieben, nie im Render (False-Positive der Regel beim Latest-Ref-Pattern) */
   const haltbar = (richtung: 1 | -1) => ({
     onPointerDown: () => startHold(richtung),
     onPointerUp: stopHold,
@@ -47,6 +48,7 @@ export default function Stepper({ value, onChange, min = 1, step = 1, size = 'he
       if (e.detail === 0) onChange(Math.max(min, valueRef.current + richtung * step))
     },
   })
+  /* eslint-enable react-hooks/refs */
 
   return (
     <div className={`flex items-center justify-center ${hero ? 'gap-5' : 'gap-2'}`}>
