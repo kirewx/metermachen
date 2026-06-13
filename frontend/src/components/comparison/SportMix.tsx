@@ -30,13 +30,13 @@ export default function SportMix({ data }: { data: Comparison }) {
                     title={`${c.name}: ${Math.round(c.scaled_km)} km`}
                     className="balken-wachsen h-full"
                     style={{
-                      width: gesamt ? `${(c.scaled_km / gesamt) * 100}%` : 0,
+                      width: gesamt > 0 ? `${(c.scaled_km / gesamt) * 100}%` : '0%',
                       background: c.color,
                     }}
                   />
                 ))}
               </div>
-              <span className="w-16 text-right font-mono text-sm font-bold tabular-nums text-ink">
+              <span className="w-24 text-right font-mono text-sm font-bold tabular-nums text-ink">
                 {Math.round(gesamt)}
               </span>
             </div>
