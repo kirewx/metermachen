@@ -209,7 +209,22 @@ def test_status_connected(client, session, monkeypatch):
     session.commit()
     login(client)
     r = client.get("/api/strava/status")
-    assert r.json() == {"enabled": True, "connected": True, "athlete_id": 42}
+    assert r.json() == {
+        "enabled": True, "connected": True, "athlete_id": 42,
+        "backfill": {"state": "idle", "total": 0, "done": 0},
+    }
+
+
+def test_status_reports_running_backfill(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    session.add(StravaConnection(
+        user_id=user.id, athlete_id=42, access_token="a", refresh_token="r",
+        expires_at=999, backfill_state="running", backfill_total=52, backfill_done=10))
+    session.commit()
+    login(client)
+    r = client.get("/api/strava/status")
+    assert r.json()["backfill"] == {"state": "running", "total": 52, "done": 10}
 
 
 def test_webhook_verify_echoes_challenge(client, monkeypatch):

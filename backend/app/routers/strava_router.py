@@ -25,11 +25,18 @@ def status(user: User = Depends(get_current_user), session: Session = Depends(ge
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()
-    return {
+    result = {
         "enabled": True,
         "connected": conn is not None,
         "athlete_id": conn.athlete_id if conn else None,
     }
+    if conn is not None:
+        result["backfill"] = {
+            "state": conn.backfill_state,
+            "total": conn.backfill_total,
+            "done": conn.backfill_done,
+        }
+    return result
 
 
 @router.get("/connect")
