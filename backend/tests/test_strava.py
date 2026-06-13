@@ -257,6 +257,7 @@ def test_callback_stores_connection(client, session, monkeypatch):
         "access_token": "AT", "refresh_token": "RT", "expires_at": 8888888888,
         "athlete": {"id": 77},
     })
+    monkeypatch.setattr(strava_router.strava, "backfill_current_year", lambda uid: None)
     r = client.get("/api/strava/callback", params={"code": "xyz", "state": state},
                    follow_redirects=False)
     assert r.status_code in (302, 307)
