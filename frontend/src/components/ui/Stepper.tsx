@@ -21,6 +21,7 @@ export default function Stepper({ value, onChange, min = 1, step = 1, size = 'he
 
   // Press-and-hold: sofort ein Schritt, nach 400 ms Wiederholung alle 120 ms.
   function startHold(richtung: 1 | -1) {
+    stopRef.current?.() // laufenden Hold zuerst stoppen (z. B. zweiter Finger)
     const tick = () => onChange(Math.max(min, valueRef.current + richtung * step))
     tick()
     let interval = 0

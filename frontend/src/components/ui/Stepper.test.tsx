@@ -36,6 +36,22 @@ describe('Stepper', () => {
     expect(onChange).toHaveBeenCalledTimes(4)
   })
 
+  it('zweiter pointerdown stoppt den laufenden Hold (kein Timer-Leak)', () => {
+    vi.useFakeTimers()
+    const onChange = vi.fn()
+    render(<Stepper value={10} onChange={onChange} />)
+    fireEvent.pointerDown(screen.getByRole('button', { name: '1 km mehr' }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: '1 km weniger' }))
+    expect(onChange).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(400 + 2 * 120)
+    // nur der zweite Hold tickt weiter: 2 Sofort-Schritte + 2 Wiederholungen
+    expect(onChange).toHaveBeenCalledTimes(4)
+    expect(onChange).toHaveBeenLastCalledWith(9)
+    fireEvent.pointerUp(screen.getByRole('button', { name: '1 km weniger' }))
+    vi.advanceTimersByTime(500)
+    expect(onChange).toHaveBeenCalledTimes(4)
+  })
+
   it('reagiert auf Tastatur-Klicks (click mit detail 0)', () => {
     const onChange = vi.fn()
     render(<Stepper value={10} onChange={onChange} />)
