@@ -14,13 +14,13 @@ class UserCreate(BaseModel):
     username: str = Field(min_length=1)
     password: str = Field(min_length=4)
     display_name: str = Field(min_length=1)
-    avatar_emoji: str = "🏃"
+    avatar: str = "icon:laufen"
     is_admin: bool = False
 
 
 class ProfilePatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1)
-    avatar_emoji: str | None = None
+    avatar: str | None = None
     password: str | None = Field(default=None, min_length=4)
 
 
@@ -32,7 +32,7 @@ def create_user(data: UserCreate, session: Session = Depends(get_session)):
         username=data.username,
         password_hash=auth.hash_password(data.password),
         display_name=data.display_name,
-        avatar_emoji=data.avatar_emoji,
+        avatar=data.avatar,
         is_admin=data.is_admin,
     )
     session.add(user)
@@ -49,8 +49,8 @@ def patch_me(
 ):
     if data.display_name is not None:
         user.display_name = data.display_name
-    if data.avatar_emoji is not None:
-        user.avatar_emoji = data.avatar_emoji
+    if data.avatar is not None:
+        user.avatar = data.avatar
     if data.password is not None:
         user.password_hash = auth.hash_password(data.password)
     session.add(user)

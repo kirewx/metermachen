@@ -53,7 +53,7 @@ def comparison(year: int, session: Session = Depends(get_session)):
                 category_id=c.id,
                 name=c.name,
                 color=c.color,
-                icon_emoji=c.icon_emoji,
+                icon=c.icon,
                 scaled_km=round(km, 2),
             )
             for c, km in (
@@ -64,7 +64,7 @@ def comparison(year: int, session: Session = Depends(get_session)):
             ComparisonUser(
                 user_id=user.id,
                 display_name=user.display_name,
-                avatar_emoji=user.avatar_emoji,
+                avatar=user.avatar,
                 rank=0,
                 total_scaled_km=running,
                 by_category=by_category,

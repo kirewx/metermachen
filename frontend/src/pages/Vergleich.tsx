@@ -1,14 +1,22 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../api/client'
+import SchnellwahlLeiste from '../components/activities/SchnellwahlLeiste'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
 import RaceBahnen from '../components/comparison/RaceBahnen'
 import WanderKarte from '../components/comparison/WanderKarte'
+import Icon from '../components/ui/Icon'
+import Select from '../components/ui/Select'
 
-const TABS = ['Wanderkarte', 'Race-Bahnen', 'Jahresverlauf'] as const
+const ANSICHTEN = [
+  { key: 'karte', label: 'Karte', icon: 'karte' },
+  { key: 'rennen', label: 'Rennen', icon: 'fahne' },
+  { key: 'verlauf', label: 'Verlauf', icon: 'chart' },
+] as const
+type Ansicht = (typeof ANSICHTEN)[number]['key']
 
 export default function Vergleich() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Wanderkarte')
+  const [ansicht, setAnsicht] = useState<Ansicht>('karte')
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const [year, setYear] = useState(new Date().getFullYear())
   const { data, error } = useQuery({
@@ -18,32 +26,39 @@ export default function Vergleich() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {TABS.map((t) => (
+      <SchnellwahlLeiste />
+      <div className="flex flex-wrap items-end gap-2">
+        {ANSICHTEN.map((a) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1 text-sm ${
-              tab === t ? 'bg-emerald-600 text-white' : 'bg-white shadow'
+            key={a.key}
+            onClick={() => setAnsicht(a.key)}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-1 text-sm transition ${
+              ansicht === a.key
+                ? 'border border-accent font-bold text-accent shadow-glow'
+                : 'border border-line text-ink-mute hover:text-ink'
             }`}
           >
-            {t}
+            <Icon name={a.icon} size={14} />
+            {a.label}
           </button>
         ))}
-        <select
-          className="ml-auto rounded border bg-white p-1 text-sm"
+        <Select
+          label="Jahr"
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
+          className="ml-auto w-24"
         >
           {seasons.map((s) => (
-            <option key={s.id} value={s.year}>{s.year}</option>
+            <option key={s.id} value={s.year}>
+              {s.year}
+            </option>
           ))}
-        </select>
+        </Select>
       </div>
-      {error && <p className="text-red-600">{error.message}</p>}
-      {data && tab === 'Wanderkarte' && <WanderKarte data={data} />}
-      {data && tab === 'Race-Bahnen' && <RaceBahnen data={data} />}
-      {data && tab === 'Jahresverlauf' && <JahresVerlauf data={data} />}
+      {error && <p className="text-sm text-danger">{error.message}</p>}
+      {data && ansicht === 'karte' && <WanderKarte data={data} />}
+      {data && ansicht === 'rennen' && <RaceBahnen data={data} />}
+      {data && ansicht === 'verlauf' && <JahresVerlauf data={data} />}
     </div>
   )
 }

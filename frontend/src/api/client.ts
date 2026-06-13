@@ -2,7 +2,7 @@ export type Me = {
   id: number
   username: string
   display_name: string
-  avatar_emoji: string
+  avatar: string
   is_admin: boolean
 }
 export type Category = {
@@ -10,10 +10,11 @@ export type Category = {
   name: string
   factor: number
   color: string
-  icon_emoji: string
+  icon: string
+  default_km: number
   is_active: boolean
 }
-export type Milestone = { km: number; label: string; emoji: string }
+export type Milestone = { km: number; label: string; icon: string }
 export type Season = {
   id: number
   year: number
@@ -42,14 +43,14 @@ export type CategoryShare = {
   category_id: number
   name: string
   color: string
-  icon_emoji: string
+  icon: string
   scaled_km: number
 }
 export type Segment = { date: string; category_id: number; color: string; scaled_km: number }
 export type ComparisonUser = {
   user_id: number
   display_name: string
-  avatar_emoji: string
+  avatar: string
   rank: number
   total_scaled_km: number
   by_category: CategoryShare[]
@@ -104,9 +105,9 @@ export const api = {
   patchActivity: (id: number, b: Partial<ActivityInput>) =>
     request<Activity>(`/api/activities/${id}`, patch(b)),
   deleteActivity: (id: number) => request<void>(`/api/activities/${id}`, { method: 'DELETE' }),
-  createUser: (b: { username: string; password: string; display_name: string; avatar_emoji?: string }) =>
+  createUser: (b: { username: string; password: string; display_name: string; avatar?: string }) =>
     request<Me>('/api/users', post(b)),
-  patchMe: (b: { display_name?: string; avatar_emoji?: string; password?: string }) =>
+  patchMe: (b: { display_name?: string; avatar?: string; password?: string }) =>
     request<Me>('/api/users/me', patch(b)),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
 }
