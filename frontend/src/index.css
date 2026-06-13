@@ -49,3 +49,27 @@
 body {
   @apply bg-surface text-ink;
 }
+
+@keyframes glow-puls {
+  0% {
+    box-shadow: var(--t-glow);
+  }
+  35% {
+    box-shadow: 0 0 26px var(--t-accent);
+  }
+  100% {
+    box-shadow: var(--t-glow);
+  }
+}
+.glow-puls {
+  animation: glow-puls 0.7s ease-out;
+}
+
+@keyframes balken-wachsen {
+  from {
+    width: 0;
+  }
+}
+.balken-wachsen {
+  animation: balken-wachsen 0.8s ease-out;
+}

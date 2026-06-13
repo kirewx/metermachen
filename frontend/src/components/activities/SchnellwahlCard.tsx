@@ -13,7 +13,7 @@ type Props = {
   categories: Category[]
   variant?: 'hero' | 'kompakt'
   initial?: Activity
-  onSubmit: (input: ActivityInput) => void
+  onSubmit: (input: ActivityInput) => void | Promise<unknown>
   onCancel?: () => void
 }
 
@@ -31,43 +31,59 @@ export default function SchnellwahlCard({
       (aktive.some((c) => c.id === gemerkt) ? gemerkt : (aktive[0]?.id ?? 0)),
   )
   const kategorie = aktive.find((c) => c.id === categoryId)
-  const [km, setKm] = useState(initial?.distance_km ?? kategorie?.default_km ?? 10)
+  // String-State, damit Zwischenzustände wie "7," beim Tippen erhalten bleiben.
+  const [kmText, setKmText] = useState(String(initial?.distance_km ?? kategorie?.default_km ?? 10))
   const [details, setDetails] = useState(Boolean(initial))
   const [date, setDate] = useState(initial?.date ?? heute())
   const [duration, setDuration] = useState(initial?.duration_min ? String(initial.duration_min) : '')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [pulsiert, setPulsiert] = useState(false)
+
+  const km = parseFloat(kmText.replace(',', '.'))
 
   function wechselKategorie(id: number) {
     setCategoryId(id)
     localStorage.setItem('schnellwahl-kategorie', String(id))
-    if (!initial) setKm(aktive.find((c) => c.id === id)?.default_km ?? 10)
+    if (!initial) setKmText(String(aktive.find((c) => c.id === id)?.default_km ?? 10))
   }
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!categoryId || !Number.isFinite(km) || km <= 0 || !date) return
-    onSubmit({
-      category_id: categoryId,
-      date,
-      distance_km: km,
-      duration_min: duration ? parseInt(duration, 10) : null,
-      note: note || null,
-    })
-    if (!initial) {
-      setKm(kategorie?.default_km ?? 10)
-      setDetails(false)
-      setDate(heute())
-      setDuration('')
-      setNote('')
-    }
+    Promise.resolve(
+      onSubmit({
+        category_id: categoryId,
+        date,
+        distance_km: km,
+        duration_min: duration ? parseInt(duration, 10) : null,
+        note: note || null,
+      }),
+    )
+      .then(() => {
+        setPulsiert(true)
+        window.setTimeout(() => setPulsiert(false), 700)
+        if (!initial) {
+          setKmText(String(kategorie?.default_km ?? 10))
+          setDetails(false)
+          setDate(heute())
+          setDuration('')
+          setNote('')
+        }
+      })
+      .catch(() => {
+        /* Fehler-Toast zeigt der Aufrufer; Eingaben bleiben erhalten */
+      })
   }
 
-  const gewertet = kategorie ? (km * kategorie.factor).toFixed(1) : '0.0'
+  const gewertet = kategorie && Number.isFinite(km) ? (km * kategorie.factor).toFixed(1) : '0.0'
   const datumText = date === heute() ? 'heute' : date
 
   return (
     <form onSubmit={submit}>
-      <Card glow className={variant === 'hero' ? 'mx-auto max-w-md p-6 text-center' : 'p-3'}>
+      <Card
+        glow
+        className={`${variant === 'hero' ? 'mx-auto max-w-md p-6 text-center' : 'p-3'} ${pulsiert ? 'glow-puls' : ''}`}
+      >
         <div className={variant === 'hero' ? 'space-y-4' : 'flex flex-wrap items-end gap-3'}>
           <Select
             label="Kategorie"
@@ -81,7 +97,11 @@ export default function SchnellwahlCard({
               </option>
             ))}
           </Select>
-          <Stepper value={km} onChange={setKm} size={variant === 'hero' ? 'hero' : 'kompakt'} />
+          <Stepper
+            value={Number.isFinite(km) ? km : 0}
+            onChange={(v) => setKmText(String(v))}
+            size={variant === 'hero' ? 'hero' : 'kompakt'}
+          />
           {variant === 'hero' && (
             <p className="text-xs text-ink-mute">
               = {gewertet} km gewertet · {datumText}
@@ -111,11 +131,10 @@ export default function SchnellwahlCard({
             <Input label="Datum" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             <Input
               label="km (frei)"
-              type="number"
-              step="0.1"
-              min="0.1"
-              value={km}
-              onChange={(e) => setKm(parseFloat(e.target.value) || 0)}
+              type="text"
+              inputMode="decimal"
+              value={kmText}
+              onChange={(e) => setKmText(e.target.value)}
             />
             <Input
               label="Dauer (min)"
