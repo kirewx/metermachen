@@ -66,10 +66,16 @@ export type Comparison = {
   map_image: string | null
   users: ComparisonUser[]
 }
+export type StravaBackfill = {
+  state: 'idle' | 'running' | 'done' | 'error'
+  total: number
+  done: number
+}
 export type StravaStatus = {
   enabled: boolean
   connected: boolean
   athlete_id?: number | null
+  backfill?: StravaBackfill
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
