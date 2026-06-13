@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, type Milestone, type Season } from '../api/client'
-import AvatarWahl from '../components/ui/AvatarWahl'
+import { QRCodeSVG } from 'qrcode.react'
+import { api, type Invite, type Milestone, type Season } from '../api/client'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
 import Icon from '../components/ui/Icon'
 import IconPicker from '../components/ui/IconPicker'
 import Input from '../components/ui/Input'
@@ -25,7 +24,7 @@ export default function Admin() {
       <Kategorien />
       <StravaMapping />
       <Jahr />
-      <NeuerUser />
+      <Einladungen />
     </div>
   )
 }
@@ -288,49 +287,112 @@ function Jahr() {
   )
 }
 
-function NeuerUser() {
+function Einladungen() {
+  const queryClient = useQueryClient()
   const toast = useToast()
-  const leer = { username: '', password: '', display_name: '', avatar: 'icon:laufen' }
-  const [form, setForm] = useState(leer)
-  const create = useMutation({
-    mutationFn: () => api.createUser(form),
-    onSuccess: (u) => {
-      toast(`${u.display_name} angelegt`, 'ok')
-      setForm(leer)
+  const [displayName, setDisplayName] = useState('')
+  const [istAdmin, setIstAdmin] = useState(false)
+  const [neu, setNeu] = useState<Invite | null>(null)
+  const { data: invites = [] } = useQuery({ queryKey: ['invites'], queryFn: api.listInvites })
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['invites'] })
+
+  // Vollständige URL: das Backend liefert ggf. nur einen relativen Pfad,
+  // wenn PUBLIC_BASE_URL nicht gesetzt ist.
+  const volleUrl = (invite: Invite) =>
+    invite.url.startsWith('http') ? invite.url : window.location.origin + invite.url
+
+  const erstellen = useMutation({
+    mutationFn: () =>
+      api.createInvite({ display_name: displayName || null, is_admin: istAdmin }),
+    onSuccess: (invite) => {
+      setNeu(invite)
+      setDisplayName('')
+      setIstAdmin(false)
+      refresh()
     },
     onError: (e) => toast(e.message),
   })
+  const widerrufen = useMutation({
+    mutationFn: (id: number) => api.deleteInvite(id),
+    onSuccess: refresh,
+    onError: (e) => toast(e.message),
+  })
+
   return (
-    <Card>
-      <SectionTitle>Neues Mitglied</SectionTitle>
-      <div className="flex flex-wrap gap-2">
+    <section>
+      <SectionTitle>Mitglied einladen</SectionTitle>
+      <div className="flex flex-wrap items-end gap-2">
         <Input
-          label="Benutzername"
-          value={form.username}
-          onChange={(e) => setForm({ ...form, username: e.target.value })}
+          label="Anzeigename (optional)"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
         />
-        <Input
-          label="Anzeigename"
-          value={form.display_name}
-          onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-        />
-        <Input
-          label="Passwort"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
+        <label className="flex items-center gap-2 pb-2 text-xs font-semibold text-ink-mute">
+          <input
+            type="checkbox"
+            checked={istAdmin}
+            onChange={(e) => setIstAdmin(e.target.checked)}
+          />
+          Admin
+        </label>
+        <Button onClick={() => erstellen.mutate()} disabled={erstellen.isPending}>
+          Einladung erstellen
+        </Button>
       </div>
-      <div className="mt-3">
-        <div className="mb-1 text-xs font-semibold text-ink-mute">Avatar</div>
-        <AvatarWahl value={form.avatar} onChange={(avatar) => setForm({ ...form, avatar })} />
-      </div>
-      <Button
-        className="mt-3"
-        disabled={!form.username || form.password.length < 4 || !form.display_name}
-        onClick={() => create.mutate()}
-      >
-        Anlegen
-      </Button>
-    </Card>
+
+      {neu && (
+        <div className="mt-4 flex flex-col items-center gap-3 border border-line p-4 sm:flex-row sm:items-start">
+          <div className="rounded-lg bg-white p-2">
+            <QRCodeSVG value={volleUrl(neu)} size={120} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 font-mono text-xs uppercase tracking-wider text-ink-tech">
+              Einladungslink
+            </p>
+            <p className="break-all text-sm text-ink">{volleUrl(neu)}</p>
+            <Button
+              variant="ghost"
+              className="mt-2"
+              onClick={() => {
+                navigator.clipboard.writeText(volleUrl(neu))
+                toast('Link kopiert', 'ok')
+              }}
+            >
+              Link kopieren
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {invites.length > 0 && (
+        <ul className="mt-4">
+          {invites.map((i) => {
+            const status = i.used_at
+              ? 'genutzt'
+              : new Date(i.expires_at) < new Date()
+                ? 'abgelaufen'
+                : 'offen'
+            return (
+              <li
+                key={i.id}
+                className="flex items-center gap-3 border-b border-line/30 py-2 text-sm"
+              >
+                <span className="flex-1 text-ink">{i.display_name || '—'}</span>
+                <span className="font-mono text-xs uppercase tracking-wider text-ink-tech">
+                  {status}
+                </span>
+                <button
+                  aria-label="Einladung widerrufen"
+                  className="text-ink-mute hover:text-danger"
+                  onClick={() => widerrufen.mutate(i.id)}
+                >
+                  <Icon name="papierkorb" size={16} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
