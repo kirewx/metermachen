@@ -25,11 +25,18 @@ def status(user: User = Depends(get_current_user), session: Session = Depends(ge
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()
-    return {
+    result = {
         "enabled": True,
         "connected": conn is not None,
         "athlete_id": conn.athlete_id if conn else None,
     }
+    if conn is not None:
+        result["backfill"] = {
+            "state": conn.backfill_state,
+            "total": conn.backfill_total,
+            "done": conn.backfill_done,
+        }
+    return result
 
 
 @router.get("/connect")
@@ -41,6 +48,7 @@ def connect(user: User = Depends(get_current_user)):
 
 @router.get("/callback")
 def callback(
+    background_tasks: BackgroundTasks,
     code: str | None = None,
     state: str | None = None,
     user: User = Depends(get_current_user),
@@ -59,6 +67,7 @@ def callback(
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()
+    is_new = conn is None
     if conn is None:
         conn = StravaConnection(
             user_id=user.id, athlete_id=0, access_token="", refresh_token="", expires_at=0
@@ -67,6 +76,8 @@ def callback(
     strava.apply_tokens(conn, data)
     session.add(conn)
     session.commit()
+    if is_new:
+        background_tasks.add_task(strava.backfill_current_year, user.id)
     return RedirectResponse("/?strava=connected")
 
 

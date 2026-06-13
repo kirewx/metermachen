@@ -42,22 +42,23 @@ def migrate(target=engine) -> None:
         if "avatar_emoji" in _columns(conn, "user"):
             conn.execute(text('ALTER TABLE "user" RENAME COLUMN avatar_emoji TO avatar'))
 
-        cat_cols = _columns(conn, "category")
-        if "icon_emoji" in cat_cols:
-            conn.execute(text("ALTER TABLE category RENAME COLUMN icon_emoji TO icon"))
-            for id_, val in conn.execute(text("SELECT id, icon FROM category")).fetchall():
+        if _table_exists(conn, "category"):
+            cat_cols = _columns(conn, "category")
+            if "icon_emoji" in cat_cols:
+                conn.execute(text("ALTER TABLE category RENAME COLUMN icon_emoji TO icon"))
+                for id_, val in conn.execute(text("SELECT id, icon FROM category")).fetchall():
+                    conn.execute(
+                        text("UPDATE category SET icon = :i WHERE id = :id"),
+                        {"i": _icon_for(val, "medaille"), "id": id_},
+                    )
+            if "default_km" not in cat_cols:
                 conn.execute(
-                    text("UPDATE category SET icon = :i WHERE id = :id"),
-                    {"i": _icon_for(val, "medaille"), "id": id_},
+                    text("ALTER TABLE category ADD COLUMN default_km FLOAT NOT NULL DEFAULT 10.0")
                 )
-        if "default_km" not in cat_cols:
-            conn.execute(
-                text("ALTER TABLE category ADD COLUMN default_km FLOAT NOT NULL DEFAULT 10.0")
-            )
-        if "strava_sport_types" not in _columns(conn, "category"):
-            conn.execute(text(
-                "ALTER TABLE category ADD COLUMN strava_sport_types TEXT NOT NULL DEFAULT '[]'"
-            ))
+            if "strava_sport_types" not in cat_cols:
+                conn.execute(text(
+                    "ALTER TABLE category ADD COLUMN strava_sport_types TEXT NOT NULL DEFAULT '[]'"
+                ))
 
         if _table_exists(conn, "season"):
             for id_, raw in conn.execute(text("SELECT id, milestones_json FROM season")).fetchall():
@@ -69,6 +70,21 @@ def migrate(target=engine) -> None:
                         text("UPDATE season SET milestones_json = :m WHERE id = :id"),
                         {"m": json.dumps(milestones), "id": id_},
                     )
+
+        if _table_exists(conn, "stravaconnection"):
+            sc_cols = _columns(conn, "stravaconnection")
+            if "backfill_state" not in sc_cols:
+                conn.execute(text(
+                    "ALTER TABLE stravaconnection ADD COLUMN backfill_state TEXT NOT NULL DEFAULT 'idle'"
+                ))
+            if "backfill_total" not in sc_cols:
+                conn.execute(text(
+                    "ALTER TABLE stravaconnection ADD COLUMN backfill_total INTEGER NOT NULL DEFAULT 0"
+                ))
+            if "backfill_done" not in sc_cols:
+                conn.execute(text(
+                    "ALTER TABLE stravaconnection ADD COLUMN backfill_done INTEGER NOT NULL DEFAULT 0"
+                ))
 
 
 def init_db() -> None:

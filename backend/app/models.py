@@ -37,6 +37,9 @@ class StravaConnection(SQLModel, table=True):
     refresh_token: str
     expires_at: int  # Unix-Epoch-Sekunden (Strava-Format), keine Zeitzonen-Fallen
     created_at: datetime = Field(default_factory=utcnow)
+    backfill_state: str = "idle"  # "idle" | "running" | "done" | "error"
+    backfill_total: int = 0
+    backfill_done: int = 0
 
 
 class Activity(SQLModel, table=True):

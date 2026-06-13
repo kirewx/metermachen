@@ -96,3 +96,34 @@ def test_migrate_adds_strava_sport_types_column(tmp_path):
         assert "strava_sport_types" in cols
         val = conn.execute(text("SELECT strava_sport_types FROM category WHERE id = 1")).scalar()
         assert val == "[]"
+
+
+def test_migrate_adds_backfill_columns(tmp_path):
+    from sqlalchemy import text
+    from sqlmodel import create_engine
+
+    from app import db
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE stravaconnection (id INTEGER PRIMARY KEY, user_id INTEGER, "
+            "athlete_id INTEGER, access_token VARCHAR, refresh_token VARCHAR, "
+            "expires_at INTEGER, created_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO stravaconnection (id, user_id, athlete_id, access_token, "
+            "refresh_token, expires_at) VALUES (1, 1, 99, 'a', 'r', 123)"
+        ))
+
+    db.migrate(engine)
+
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text('PRAGMA table_info("stravaconnection")'))]
+        assert "backfill_state" in cols
+        assert "backfill_total" in cols
+        assert "backfill_done" in cols
+        row = conn.execute(text(
+            "SELECT backfill_state, backfill_total, backfill_done FROM stravaconnection WHERE id = 1"
+        )).first()
+        assert row == ("idle", 0, 0)
