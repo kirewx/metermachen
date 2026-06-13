@@ -1,0 +1,137 @@
+import json
+import time
+from datetime import date as date_type
+from datetime import datetime
+from urllib.parse import urlencode
+
+import httpx
+from sqlmodel import Session, select
+
+from .. import config
+from ..models import Activity, Category, StravaConnection
+
+AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
+TOKEN_URL = "https://www.strava.com/oauth/token"
+API_BASE = "https://www.strava.com/api/v3"
+SCOPE = "activity:read_all"
+_TIMEOUT = 10
+
+
+def authorize_url(state: str) -> str:
+    params = {
+        "client_id": config.STRAVA_CLIENT_ID,
+        "redirect_uri": f"{config.PUBLIC_BASE_URL}/api/strava/callback",
+        "response_type": "code",
+        "scope": SCOPE,
+        "approval_prompt": "auto",
+        "state": state,
+    }
+    return f"{AUTHORIZE_URL}?{urlencode(params)}"
+
+
+def exchange_code(code: str) -> dict:
+    r = httpx.post(TOKEN_URL, data={
+        "client_id": config.STRAVA_CLIENT_ID,
+        "client_secret": config.STRAVA_CLIENT_SECRET,
+        "code": code,
+        "grant_type": "authorization_code",
+    }, timeout=_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def refresh_tokens(refresh_token: str) -> dict:
+    r = httpx.post(TOKEN_URL, data={
+        "client_id": config.STRAVA_CLIENT_ID,
+        "client_secret": config.STRAVA_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }, timeout=_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def fetch_activity(access_token: str, activity_id: int) -> dict:
+    r = httpx.get(
+        f"{API_BASE}/activities/{activity_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def apply_tokens(conn: StravaConnection, data: dict) -> None:
+    conn.access_token = data["access_token"]
+    conn.refresh_token = data["refresh_token"]
+    conn.expires_at = int(data["expires_at"])
+
+
+def valid_access_token(session: Session, conn: StravaConnection) -> str:
+    if conn.expires_at > int(time.time()) + 60:
+        return conn.access_token
+    data = refresh_tokens(conn.refresh_token)
+    apply_tokens(conn, data)
+    session.add(conn)
+    session.commit()
+    session.refresh(conn)
+    return conn.access_token
+
+
+def category_for_sport(session: Session, sport_type: str | None) -> Category | None:
+    if not sport_type:
+        return None
+    cats = session.exec(select(Category).where(Category.is_active)).all()
+    for cat in cats:
+        if sport_type in json.loads(cat.strava_sport_types or "[]"):
+            return cat
+    return None
+
+
+def _parse_date(value: str | None) -> date_type:
+    if not value:
+        return date_type.today()
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+
+
+def handle_webhook_event(session: Session, payload: dict) -> None:
+    """Importiert genau neue Strava-Aktivitäten (aspect 'create'). Idempotent über external_id."""
+    if payload.get("object_type") != "activity" or payload.get("aspect_type") != "create":
+        return
+    owner_id = payload.get("owner_id")
+    activity_id = payload.get("object_id")
+    conn = session.exec(
+        select(StravaConnection).where(StravaConnection.athlete_id == owner_id)
+    ).first()
+    if conn is None:
+        return
+    existing = session.exec(
+        select(Activity).where(
+            Activity.user_id == conn.user_id,
+            Activity.external_id == str(activity_id),
+            Activity.source == "strava",
+        )
+    ).first()
+    if existing is not None:
+        return
+    token = valid_access_token(session, conn)
+    data = fetch_activity(token, activity_id)
+    cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
+    if cat is None:
+        return
+    distance_km = round((data.get("distance") or 0) / 1000, 2)
+    if distance_km <= 0:
+        return
+    duration_min = round((data.get("moving_time") or 0) / 60) or None
+    act = Activity(
+        user_id=conn.user_id,
+        category_id=cat.id,
+        date=_parse_date(data.get("start_date_local") or data.get("start_date")),
+        distance_km=distance_km,
+        duration_min=duration_min,
+        note=data.get("name"),
+        source="strava",
+        external_id=str(activity_id),
+    )
+    session.add(act)
+    session.commit()

@@ -1,7 +1,8 @@
 from sqlmodel import select
 
 from app import config
-from app.models import Category, StravaConnection
+from app.models import Activity, Category, StravaConnection
+from app.services import strava
 
 
 def test_strava_enabled_false_when_unconfigured(monkeypatch):
@@ -37,3 +38,122 @@ def test_category_has_strava_sport_types_default(session):
     session.commit()
     session.refresh(cat)
     assert cat.strava_sport_types == "[]"
+
+
+from tests.conftest import make_user, make_category  # noqa: E402
+
+
+def _setup_conn(session, athlete_id=999, expires_at=9999999999):
+    user = make_user(session)
+    conn = StravaConnection(
+        user_id=user.id, athlete_id=athlete_id,
+        access_token="tok", refresh_token="ref", expires_at=expires_at,
+    )
+    session.add(conn)
+    session.commit()
+    session.refresh(conn)
+    return user, conn
+
+
+def _payload(athlete_id=999, object_id=555, aspect="create"):
+    return {"object_type": "activity", "aspect_type": aspect,
+            "owner_id": athlete_id, "object_id": object_id}
+
+
+def test_category_for_sport_matches_active_only(session):
+    make_category(session, name="Laufen", strava_sport_types='["Run","TrailRun"]')
+    make_category(session, name="Inaktiv", strava_sport_types='["Ride"]', is_active=False)
+    assert strava.category_for_sport(session, "Run").name == "Laufen"
+    assert strava.category_for_sport(session, "TrailRun").name == "Laufen"
+    assert strava.category_for_sport(session, "Ride") is None
+    assert strava.category_for_sport(session, "Swim") is None
+
+
+def test_valid_access_token_refreshes_when_expired(session, monkeypatch):
+    _user, conn = _setup_conn(session, expires_at=0)
+    monkeypatch.setattr(strava, "refresh_tokens", lambda rt: {
+        "access_token": "neu", "refresh_token": "neu-ref", "expires_at": 8888888888,
+    })
+    token = strava.valid_access_token(session, conn)
+    assert token == "neu"
+    assert conn.refresh_token == "neu-ref"
+    assert conn.expires_at == 8888888888
+
+
+def test_valid_access_token_keeps_valid_token(session, monkeypatch):
+    _user, conn = _setup_conn(session, expires_at=9999999999)
+    monkeypatch.setattr(strava, "refresh_tokens", lambda rt: (_ for _ in ()).throw(AssertionError("darf nicht refreshen")))
+    assert strava.valid_access_token(session, conn) == "tok"
+
+
+def test_handle_webhook_event_imports_activity(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload())
+    acts = session.exec(select(Activity)).all()
+    assert len(acts) == 1
+    assert acts[0].source == "strava"
+    assert acts[0].external_id == "555"
+    assert acts[0].distance_km == 5.0
+    assert acts[0].duration_min == 30
+    assert acts[0].note == "Morgenlauf"
+    assert acts[0].date.isoformat() == "2026-03-01"
+
+
+def test_handle_webhook_event_dedup(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload())
+    strava.handle_webhook_event(session, _payload())
+    assert len(session.exec(select(Activity)).all()) == 1
+
+
+def test_handle_webhook_event_skips_unmapped_sport(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Swim", "distance": 2000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Schwimmen",
+    })
+    strava.handle_webhook_event(session, _payload())
+    assert session.exec(select(Activity)).all() == []
+
+
+def test_handle_webhook_event_skips_zero_distance(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Kraft", strava_sport_types='["WeightTraining"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "WeightTraining", "distance": 0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Gym",
+    })
+    strava.handle_webhook_event(session, _payload())
+    assert session.exec(select(Activity)).all() == []
+
+
+def test_handle_webhook_event_unknown_owner(session, monkeypatch):
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    called = {"fetch": False}
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: called.__setitem__("fetch", True))
+    strava.handle_webhook_event(session, _payload(athlete_id=12345))
+    assert called["fetch"] is False
+    assert session.exec(select(Activity)).all() == []
+
+
+def test_handle_webhook_event_ignores_non_create(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {"sport_type": "Run"})
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+    assert session.exec(select(Activity)).all() == []
