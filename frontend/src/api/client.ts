@@ -21,7 +21,6 @@ export type Season = {
   year: number
   goal_km: number
   milestones: Milestone[]
-  map_image: string | null
 }
 export type Activity = {
   id: number
@@ -63,7 +62,6 @@ export type Comparison = {
   year: number
   goal_km: number
   milestones: Milestone[]
-  map_image: string | null
   users: ComparisonUser[]
 }
 export type StravaBackfill = {
@@ -76,6 +74,21 @@ export type StravaStatus = {
   connected: boolean
   athlete_id?: number | null
   backfill?: StravaBackfill
+}
+export type Invite = {
+  id: number
+  token: string
+  url: string
+  display_name: string | null
+  is_admin: boolean
+  expires_at: string
+  used_at: string | null
+}
+export type InvitePublic = {
+  valid: boolean
+  display_name?: string | null
+  expired?: boolean
+  used?: boolean
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -108,11 +121,6 @@ export const api = {
     request<Season>('/api/seasons', post(b)),
   patchSeason: (id: number, b: { goal_km?: number; milestones?: Milestone[] }) =>
     request<Season>(`/api/seasons/${id}`, patch(b)),
-  uploadMapImage: (id: number, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return request<Season>(`/api/seasons/${id}/map-image`, { method: 'POST', body: form })
-  },
   activities: (year: number) => request<Activity[]>(`/api/activities?year=${year}`),
   createActivity: (b: ActivityInput) => request<Activity>('/api/activities', post(b)),
   patchActivity: (id: number, b: Partial<ActivityInput>) =>
@@ -125,4 +133,13 @@ export const api = {
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
   stravaStatus: () => request<StravaStatus>('/api/strava/status'),
   disconnectStrava: () => request<void>('/api/strava/disconnect', { method: 'DELETE' }),
+  createInvite: (b: { display_name?: string | null; is_admin?: boolean }) =>
+    request<Invite>('/api/invites', post(b)),
+  listInvites: () => request<Invite[]>('/api/invites'),
+  deleteInvite: (id: number) => request<void>(`/api/invites/${id}`, { method: 'DELETE' }),
+  getInvite: (token: string) => request<InvitePublic>(`/api/invites/${token}`),
+  acceptInvite: (
+    token: string,
+    b: { username: string; password: string; display_name: string; avatar: string },
+  ) => request<Me>(`/api/invites/${token}/accept`, post(b)),
 }

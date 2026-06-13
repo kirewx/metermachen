@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import MeineAktivitaeten from './MeineAktivitaeten'
 
@@ -27,9 +27,19 @@ function renderPage() {
 }
 
 describe('MeineAktivitaeten', () => {
+  it('gruppiert nach Kategorie, default eingeklappt, klappt auf Klick auf', async () => {
+    renderPage()
+    expect(await screen.findByText('Laufen')).toBeInTheDocument()
+    expect(screen.getByText(/2 Einträge/)).toBeInTheDocument()
+    expect(screen.getByText('32 km')).toBeInTheDocument()
+    expect(screen.queryByText('Strava')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Laufen'))
+    expect(await screen.findByText('Strava')).toBeInTheDocument()
+  })
+
   it('zeigt genau ein Strava-Badge (nur für die Strava-Aktivität)', async () => {
     renderPage()
-    await screen.findAllByText(/Laufen/)
+    fireEvent.click(await screen.findByText('Laufen'))
     const badges = screen.getAllByText('Strava')
     expect(badges).toHaveLength(1)
   })

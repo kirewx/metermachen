@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Spline+Sans+Mono:wght@400;500;700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -15,6 +16,7 @@
   --t-danger: #dc2626;
   --t-glow: 0 0 0 transparent;
   --t-glow-strong: 0 0 0 transparent;
+  --t-ink-tech: #5a7e8a;
 }
 
 .dark {
@@ -30,6 +32,7 @@
   --t-danger: #ff5470;
   --t-glow: 0 0 14px rgba(0, 229, 255, 0.35);
   --t-glow-strong: 0 0 18px rgba(0, 229, 255, 0.6);
+  --t-ink-tech: #3d6470;
 }
 
 @theme inline {
@@ -44,10 +47,15 @@
   --color-danger: var(--t-danger);
   --shadow-glow: var(--t-glow);
   --shadow-glow-strong: var(--t-glow-strong);
+  --color-ink-tech: var(--t-ink-tech);
+  --font-display: 'Rajdhani', system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+  --font-body: 'Hanken Grotesk', system-ui, sans-serif;
 }
 
 body {
   @apply bg-surface text-ink;
+  font-family: var(--font-body);
 }
 
 @keyframes glow-puls {
@@ -72,4 +80,24 @@ body {
 }
 .balken-wachsen {
   animation: balken-wachsen 0.8s ease-out;
+}
+
+/* Dezentes HUD-Grid als Flächen-Textur */
+.hud-grid {
+  background-image:
+    linear-gradient(var(--t-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--t-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: center;
+  opacity: 0.06;
+}
+
+@keyframes reihe-rein {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+.reihe-rein {
+  animation: reihe-rein 0.45s ease-out both;
 }

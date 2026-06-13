@@ -61,4 +61,15 @@ class Season(SQLModel, table=True):
     year: int = Field(unique=True)
     goal_km: float
     milestones_json: str = "[]"  # JSON-Liste [{"km":..,"label":..,"icon":..}]
-    map_image: str | None = None
+
+
+class Invite(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    token: str = Field(unique=True, index=True)
+    created_by: int = Field(foreign_key="user.id")
+    display_name: str | None = None
+    is_admin: bool = False
+    created_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime
+    used_at: datetime | None = None
+    used_by_user_id: int | None = Field(default=None, foreign_key="user.id")

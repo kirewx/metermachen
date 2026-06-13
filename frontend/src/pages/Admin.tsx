@@ -1,18 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, type Milestone, type Season } from '../api/client'
-import AvatarWahl from '../components/ui/AvatarWahl'
+import { QRCodeSVG } from 'qrcode.react'
+import { api, type Invite, type Milestone, type Season } from '../api/client'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
 import Icon from '../components/ui/Icon'
 import IconPicker from '../components/ui/IconPicker'
 import Input from '../components/ui/Input'
 import { MEILENSTEIN_ICONS, SPORT_ICONS } from '../components/ui/icons'
+import SectionTitle from '../components/ui/SectionTitle'
+import Select from '../components/ui/Select'
 import { useToast } from '../components/ui/Toast'
-
-const H = ({ children }: { children: React.ReactNode }) => (
-  <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">{children}</h2>
-)
 
 const STRAVA_SPORT_TYPES = [
   'Run', 'TrailRun', 'Walk', 'Hike', 'Ride', 'MountainBikeRide', 'GravelRide',
@@ -23,10 +20,11 @@ const STRAVA_SPORT_TYPES = [
 
 export default function Admin() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Kategorien />
+      <StravaMapping />
       <Jahr />
-      <NeuerUser />
+      <Einladungen />
     </div>
   )
 }
@@ -62,13 +60,13 @@ function Kategorien() {
   })
 
   return (
-    <Card>
-      <H>Kategorien & Faktoren</H>
+    <section>
+      <SectionTitle>Kategorien &amp; Faktoren</SectionTitle>
       <div className="space-y-2">
         {categories.map((c) => (
           <div
             key={c.id}
-            className={`flex flex-wrap items-center gap-3 rounded-xl border border-line p-2 ${
+            className={`flex flex-wrap items-center gap-3 border-b border-line/30 py-2 ${
               c.is_active ? '' : 'opacity-40'
             }`}
           >
@@ -104,39 +102,10 @@ function Kategorien() {
             >
               {c.is_active ? 'Deaktivieren' : 'Aktivieren'}
             </Button>
-            <div className="w-full">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-mute">
-                Strava-Sportarten
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {STRAVA_SPORT_TYPES.map((sport) => {
-                  const aktiv = c.strava_sport_types.includes(sport)
-                  return (
-                    <button
-                      key={sport}
-                      type="button"
-                      onClick={() => {
-                        const next = aktiv
-                          ? c.strava_sport_types.filter((s) => s !== sport)
-                          : [...c.strava_sport_types, sport]
-                        patch.mutate({ id: c.id, strava_sport_types: next })
-                      }}
-                      className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
-                        aktiv
-                          ? 'border-accent bg-accent/10 text-accent'
-                          : 'border-line text-ink-mute hover:border-accent'
-                      }`}
-                    >
-                      {sport}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
           </div>
         ))}
       </div>
-      <div className="mt-4 space-y-3 rounded-xl border border-dashed border-line p-3">
+      <div className="mt-4 space-y-3 border-t border-dashed border-line pt-3">
         <div className="flex flex-wrap gap-2">
           <Input label="Name" value={neu.name} onChange={(e) => setNeu({ ...neu, name: e.target.value })} />
           <Input
@@ -172,7 +141,67 @@ function Kategorien() {
           Kategorie anlegen
         </Button>
       </div>
-    </Card>
+    </section>
+  )
+}
+
+function StravaMapping() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
+  const patch = useMutation({
+    mutationFn: ({ id, types }: { id: number; types: string[] }) =>
+      api.patchCategory(id, { strava_sport_types: types }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    onError: (e) => toast(e.message),
+  })
+
+  const aktuelleKat = (sport: string) =>
+    categories.find((c) => c.strava_sport_types.includes(sport))?.id ?? 0
+
+  function zuweisen(sport: string, zielId: number) {
+    const alt = categories.find((c) => c.strava_sport_types.includes(sport))
+    if (alt && alt.id !== zielId) {
+      patch.mutate({ id: alt.id, types: alt.strava_sport_types.filter((s) => s !== sport) })
+    }
+    if (zielId) {
+      const ziel = categories.find((c) => c.id === zielId)
+      if (ziel && !ziel.strava_sport_types.includes(sport)) {
+        patch.mutate({ id: ziel.id, types: [...ziel.strava_sport_types, sport] })
+      }
+    }
+  }
+
+  if (!categories.length) return null
+
+  return (
+    <section>
+      <SectionTitle>Strava-Zuordnung</SectionTitle>
+      <p className="mb-3 text-xs text-ink-mute">
+        Jede Strava-Sportart zählt zu höchstens einer Kategorie.
+      </p>
+      <div>
+        {STRAVA_SPORT_TYPES.map((sport) => (
+          <div key={sport} className="flex items-center justify-between border-b border-line/30 py-2">
+            <span className="font-mono text-sm text-ink">{sport}</span>
+            <Select
+              label=""
+              aria-label={`Zuordnung ${sport}`}
+              value={aktuelleKat(sport)}
+              onChange={(e) => zuweisen(sport, Number(e.target.value))}
+              className="w-44"
+            >
+              <option value={0}>— ignorieren</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -191,8 +220,8 @@ function Jahr() {
   const ms = milestones ?? season.milestones
 
   return (
-    <Card>
-      <H>Jahr {season.year}</H>
+    <section>
+      <SectionTitle>Jahr {season.year}</SectionTitle>
       <Input
         label="Ziel (gewertete km)"
         type="number"
@@ -254,64 +283,130 @@ function Jahr() {
           Speichern
         </Button>
       </div>
-      <h3 className="mt-4 mb-1 text-xs font-semibold text-ink-mute">Kartenbild (Aquarell)</h3>
-      <input
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="text-sm text-ink-mute"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) api.uploadMapImage(season.id, file).then(refresh).catch((err) => toast(err.message))
-        }}
-      />
-      {season.map_image && <p className="mt-1 text-xs text-ink-mute">Aktuell: {season.map_image}</p>}
-    </Card>
+    </section>
   )
 }
 
-function NeuerUser() {
+function Einladungen() {
+  const queryClient = useQueryClient()
   const toast = useToast()
-  const leer = { username: '', password: '', display_name: '', avatar: 'icon:laufen' }
-  const [form, setForm] = useState(leer)
-  const create = useMutation({
-    mutationFn: () => api.createUser(form),
-    onSuccess: (u) => {
-      toast(`${u.display_name} angelegt`, 'ok')
-      setForm(leer)
+  const [displayName, setDisplayName] = useState('')
+  const [istAdmin, setIstAdmin] = useState(false)
+  const [neu, setNeu] = useState<Invite | null>(null)
+  const { data: invites = [] } = useQuery({ queryKey: ['invites'], queryFn: api.listInvites })
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['invites'] })
+
+  // Vollständige URL: das Backend liefert ggf. nur einen relativen Pfad,
+  // wenn PUBLIC_BASE_URL nicht gesetzt ist.
+  const volleUrl = (invite: Invite) =>
+    invite.url.startsWith('http') ? invite.url : window.location.origin + invite.url
+
+  const erstellen = useMutation({
+    mutationFn: () =>
+      api.createInvite({ display_name: displayName || null, is_admin: istAdmin }),
+    onSuccess: (invite) => {
+      setNeu(invite)
+      setDisplayName('')
+      setIstAdmin(false)
+      refresh()
     },
     onError: (e) => toast(e.message),
   })
+  const widerrufen = useMutation({
+    mutationFn: (id: number) => api.deleteInvite(id),
+    onSuccess: (_data, id) => {
+      // Falls die widerrufene Einladung gerade im QR-Panel steht, ausblenden.
+      setNeu((aktuell) => (aktuell?.id === id ? null : aktuell))
+      refresh()
+    },
+    onError: (e) => toast(e.message),
+  })
+
+  function kopieren(url: string) {
+    // navigator.clipboard fehlt auf unsicheren Ursprüngen (HTTP) — nur bei
+    // echtem Erfolg den OK-Toast zeigen, sonst Fehlermeldung.
+    if (!navigator.clipboard) {
+      toast('Kopieren nicht möglich')
+      return
+    }
+    navigator.clipboard
+      .writeText(url)
+      .then(() => toast('Link kopiert', 'ok'))
+      .catch(() => toast('Kopieren fehlgeschlagen'))
+  }
+
   return (
-    <Card>
-      <H>Neues Mitglied</H>
-      <div className="flex flex-wrap gap-2">
+    <section>
+      <SectionTitle>Mitglied einladen</SectionTitle>
+      <div className="flex flex-wrap items-end gap-2">
         <Input
-          label="Benutzername"
-          value={form.username}
-          onChange={(e) => setForm({ ...form, username: e.target.value })}
+          label="Anzeigename (optional)"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
         />
-        <Input
-          label="Anzeigename"
-          value={form.display_name}
-          onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-        />
-        <Input
-          label="Passwort"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
+        <label className="flex items-center gap-2 pb-2 text-xs font-semibold text-ink-mute">
+          <input
+            type="checkbox"
+            checked={istAdmin}
+            onChange={(e) => setIstAdmin(e.target.checked)}
+          />
+          Admin
+        </label>
+        <Button onClick={() => erstellen.mutate()} disabled={erstellen.isPending}>
+          Einladung erstellen
+        </Button>
       </div>
-      <div className="mt-3">
-        <div className="mb-1 text-xs font-semibold text-ink-mute">Avatar</div>
-        <AvatarWahl value={form.avatar} onChange={(avatar) => setForm({ ...form, avatar })} />
-      </div>
-      <Button
-        className="mt-3"
-        disabled={!form.username || form.password.length < 4 || !form.display_name}
-        onClick={() => create.mutate()}
-      >
-        Anlegen
-      </Button>
-    </Card>
+
+      {neu && (
+        <div className="mt-4 flex flex-col items-center gap-3 border border-line p-4 sm:flex-row sm:items-start">
+          <div className="rounded-lg bg-white p-2">
+            <QRCodeSVG value={volleUrl(neu)} size={120} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 font-mono text-xs uppercase tracking-wider text-ink-tech">
+              Einladungslink
+            </p>
+            <p className="break-all text-sm text-ink">{volleUrl(neu)}</p>
+            <Button
+              variant="ghost"
+              className="mt-2"
+              onClick={() => kopieren(volleUrl(neu))}
+            >
+              Link kopieren
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {invites.length > 0 && (
+        <ul className="mt-4">
+          {invites.map((i) => {
+            const status = i.used_at
+              ? 'genutzt'
+              : new Date(i.expires_at) < new Date()
+                ? 'abgelaufen'
+                : 'offen'
+            return (
+              <li
+                key={i.id}
+                className="flex items-center gap-3 border-b border-line/30 py-2 text-sm"
+              >
+                <span className="flex-1 text-ink">{i.display_name || '—'}</span>
+                <span className="font-mono text-xs uppercase tracking-wider text-ink-tech">
+                  {status}
+                </span>
+                <button
+                  aria-label="Einladung widerrufen"
+                  className="text-ink-mute hover:text-danger"
+                  onClick={() => widerrufen.mutate(i.id)}
+                >
+                  <Icon name="papierkorb" size={16} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }

@@ -76,34 +76,39 @@ export default function ProfilModal({ me, open, onClose }: Props) {
           onChange={(e) => setPasswort(e.target.value)}
         />
         {strava?.enabled && (
-          <div className="rounded-xl border border-line p-3">
-            <div className="mb-2 text-xs font-semibold text-ink-mute">Strava</div>
+          <div className="flex items-center justify-between border-t border-line/40 pt-3">
+            <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-ink-tech">
+              Strava
+              {strava.connected && strava.backfill?.state !== 'running' && (
+                <span className="text-accent">✓ Verbunden</span>
+              )}
+            </span>
             {strava.connected ? (
               strava.backfill?.state === 'running' ? (
-                <div className="flex items-center gap-2 text-sm text-ink-mute">
+                <span className="flex items-center gap-2 text-sm text-ink-mute">
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   Importiere… {strava.backfill.done} von {strava.backfill.total}
-                </div>
+                </span>
               ) : (
-                <Button
-                  variant="ghost"
-                  className="w-full"
+                <button
+                  type="button"
                   onClick={() => trennen.mutate()}
                   disabled={trennen.isPending}
+                  className="text-sm text-ink-mute hover:text-danger"
                 >
                   Strava trennen
-                </Button>
+                </button>
               )
             ) : (
-              <Button
-                variant="ghost"
-                className="w-full"
+              <button
+                type="button"
                 onClick={() => {
                   window.location.href = '/api/strava/connect'
                 }}
+                className="text-sm text-accent hover:underline"
               >
                 Mit Strava verbinden
-              </Button>
+              </button>
             )}
           </div>
         )}

@@ -10,7 +10,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import config
 from .db import engine, init_db
-from .routers import activities, auth_router, categories, comparison, seasons, strava_router, users
+from .routers import (
+    activities,
+    auth_router,
+    categories,
+    comparison,
+    invites,
+    seasons,
+    strava_router,
+    users,
+)
 from .seed import seed_all
 
 
@@ -33,6 +42,7 @@ app.include_router(auth_router.router)
 app.include_router(activities.router)
 app.include_router(categories.router)
 app.include_router(comparison.router)
+app.include_router(invites.router)
 app.include_router(seasons.router)
 app.include_router(strava_router.router)
 app.include_router(users.router)
@@ -56,9 +66,6 @@ class SPAStaticFiles(StaticFiles):
 
 
 def mount_static(app: FastAPI) -> None:
-    media_dir = config.DATA_DIR / "maps"
-    media_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/media/maps", StaticFiles(directory=media_dir), name="media")
     dist = Path(os.environ.get("FRONTEND_DIST", "../frontend/dist"))
     if dist.is_dir():
         app.mount("/", SPAStaticFiles(directory=dist, html=True), name="spa")

@@ -4,19 +4,19 @@ import { api } from '../api/client'
 import SchnellwahlLeiste from '../components/activities/SchnellwahlLeiste'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
 import RaceBahnen from '../components/comparison/RaceBahnen'
-import WanderKarte from '../components/comparison/WanderKarte'
+import SportMix from '../components/comparison/SportMix'
 import Icon from '../components/ui/Icon'
 import Select from '../components/ui/Select'
 
 const ANSICHTEN = [
-  { key: 'karte', label: 'Karte', icon: 'karte' },
   { key: 'rennen', label: 'Rennen', icon: 'fahne' },
   { key: 'verlauf', label: 'Verlauf', icon: 'chart' },
+  { key: 'sportmix', label: 'Sport-Mix', icon: 'medaille' },
 ] as const
 type Ansicht = (typeof ANSICHTEN)[number]['key']
 
 export default function Vergleich() {
-  const [ansicht, setAnsicht] = useState<Ansicht>('karte')
+  const [ansicht, setAnsicht] = useState<Ansicht>('rennen')
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const [year, setYear] = useState(new Date().getFullYear())
   const { data, error } = useQuery({
@@ -56,9 +56,9 @@ export default function Vergleich() {
         </Select>
       </div>
       {error && <p className="text-sm text-danger">{error.message}</p>}
-      {data && ansicht === 'karte' && <WanderKarte data={data} />}
       {data && ansicht === 'rennen' && <RaceBahnen data={data} />}
       {data && ansicht === 'verlauf' && <JahresVerlauf data={data} />}
+      {data && ansicht === 'sportmix' && <SportMix data={data} />}
     </div>
   )
 }

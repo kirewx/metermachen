@@ -21,6 +21,22 @@ export default function MeineAktivitaeten() {
   })
   const catById = new Map(categories.map((c) => [c.id, c]))
   const gesamt = activities.reduce((s, a) => s + a.scaled_km, 0)
+  const [offen, setOffen] = useState<Set<number>>(new Set())
+  const toggle = (catId: number) =>
+    setOffen((s) => {
+      const next = new Set(s)
+      if (next.has(catId)) next.delete(catId)
+      else next.add(catId)
+      return next
+    })
+  const gruppen = [...catById.values()]
+    .map((cat) => {
+      const eintraege = activities.filter((a) => a.category_id === cat.id)
+      const summe = eintraege.reduce((s, a) => s + a.scaled_km, 0)
+      return { cat, eintraege, summe }
+    })
+    .filter((g) => g.eintraege.length > 0)
+    .sort((a, b) => b.summe - a.summe)
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['activities'] })
@@ -62,51 +78,77 @@ export default function MeineAktivitaeten() {
           {Math.round(gesamt)} km gewertet
         </span>
       </div>
-      <ul className="space-y-2">
-        {activities.map((a) => {
-          const cat = catById.get(a.category_id)
+      <div className="space-y-1">
+        {gruppen.map(({ cat, eintraege, summe }) => {
+          const auf = offen.has(cat.id)
           return (
-            <li
-              key={a.id}
-              className="flex items-center gap-3 rounded-2xl border border-line bg-card p-3"
-            >
-              {cat && <Icon name={cat.icon} size={22} className="shrink-0 text-accent" />}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-ink">
-                  {a.distance_km} km {cat?.name}{' '}
-                  <span className="text-accent">→ {a.scaled_km} km</span>
-                  {a.edited && <span className="ml-2 text-xs font-normal text-ink-mute">(bearbeitet)</span>}
-                  {a.source === 'strava' && (
-                    <span className="ml-2 rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
-                      Strava
-                    </span>
-                  )}
-                </p>
-                <p className="truncate text-xs text-ink-mute">
-                  {a.date}
-                  {a.duration_min ? ` · ${a.duration_min} min` : ''}
-                  {a.note ? ` · ${a.note}` : ''}
-                </p>
-              </div>
+            <div key={cat.id} className="border-b border-line/30 last:border-0">
               <button
-                aria-label="Bearbeiten"
-                className="text-ink-mute hover:text-accent"
-                onClick={() => setEditing(a)}
+                type="button"
+                onClick={() => toggle(cat.id)}
+                className="flex w-full items-center gap-3 py-2.5 text-left"
               >
-                <Icon name="stift" size={16} />
+                <Icon
+                  name="chevron"
+                  size={14}
+                  className={`text-ink-mute transition ${auf ? 'rotate-180' : ''}`}
+                />
+                <Icon name={cat.icon} size={20} className="shrink-0 text-accent" />
+                <span className="flex-1 text-sm font-bold text-ink">{cat.name}</span>
+                <span className="text-xs text-ink-mute">{eintraege.length} Einträge</span>
+                <span className="w-20 text-right font-mono text-sm font-bold tabular-nums text-accent">
+                  {Math.round(summe)} km
+                </span>
               </button>
-              <button
-                aria-label="Löschen"
-                className="text-ink-mute hover:text-danger"
-                onClick={() => setLoeschId(a.id)}
-              >
-                <Icon name="papierkorb" size={16} />
-              </button>
-            </li>
+              {auf && (
+                <ul className="space-y-1 pb-2 pl-8">
+                  {eintraege.map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-center gap-3 border-t border-line/20 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-ink">
+                          <span className="font-mono tabular-nums">{a.distance_km}</span> km
+                          <span className="text-accent"> → {a.scaled_km} km</span>
+                          {a.edited && (
+                            <span className="ml-2 text-xs text-ink-mute">(bearbeitet)</span>
+                          )}
+                          {a.source === 'strava' && (
+                            <span className="ml-2 rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+                              Strava
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate text-xs text-ink-mute">
+                          {a.date}
+                          {a.duration_min ? ` · ${a.duration_min} min` : ''}
+                          {a.note ? ` · ${a.note}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        aria-label="Bearbeiten"
+                        className="text-ink-mute hover:text-accent"
+                        onClick={() => setEditing(a)}
+                      >
+                        <Icon name="stift" size={16} />
+                      </button>
+                      <button
+                        aria-label="Löschen"
+                        className="text-ink-mute hover:text-danger"
+                        onClick={() => setLoeschId(a.id)}
+                      >
+                        <Icon name="papierkorb" size={16} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )
         })}
         {activities.length === 0 && <p className="text-sm text-ink-mute">Noch keine Einträge.</p>}
-      </ul>
+      </div>
       <Modal open={loeschId !== null} onClose={() => setLoeschId(null)} title="Eintrag löschen?">
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setLoeschId(null)}>

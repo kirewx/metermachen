@@ -83,6 +83,5 @@ def comparison(year: int, session: Session = Depends(get_session)):
         year=year,
         goal_km=season.goal_km,
         milestones=json.loads(season.milestones_json),
-        map_image=season.map_image,
         users=result_users,
     )

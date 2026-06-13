@@ -19,3 +19,11 @@ dist/
 
 # Worktrees
 .worktrees/
+
+# Agent-/Skill-Tooling (lokal, nicht versioniert)
+.agents/
+.claude/
+skills-lock.json
+
+# Crash-Dumps (Git Bash unter Windows)
+*.stackdump
