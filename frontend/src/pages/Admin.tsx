@@ -8,11 +8,9 @@ import Icon from '../components/ui/Icon'
 import IconPicker from '../components/ui/IconPicker'
 import Input from '../components/ui/Input'
 import { MEILENSTEIN_ICONS, SPORT_ICONS } from '../components/ui/icons'
+import SectionTitle from '../components/ui/SectionTitle'
+import Select from '../components/ui/Select'
 import { useToast } from '../components/ui/Toast'
-
-const H = ({ children }: { children: React.ReactNode }) => (
-  <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">{children}</h2>
-)
 
 const STRAVA_SPORT_TYPES = [
   'Run', 'TrailRun', 'Walk', 'Hike', 'Ride', 'MountainBikeRide', 'GravelRide',
@@ -23,8 +21,9 @@ const STRAVA_SPORT_TYPES = [
 
 export default function Admin() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Kategorien />
+      <StravaMapping />
       <Jahr />
       <NeuerUser />
     </div>
@@ -62,13 +61,13 @@ function Kategorien() {
   })
 
   return (
-    <Card>
-      <H>Kategorien & Faktoren</H>
+    <section>
+      <SectionTitle>Kategorien &amp; Faktoren</SectionTitle>
       <div className="space-y-2">
         {categories.map((c) => (
           <div
             key={c.id}
-            className={`flex flex-wrap items-center gap-3 rounded-xl border border-line p-2 ${
+            className={`flex flex-wrap items-center gap-3 border-b border-line/30 py-2 ${
               c.is_active ? '' : 'opacity-40'
             }`}
           >
@@ -104,39 +103,10 @@ function Kategorien() {
             >
               {c.is_active ? 'Deaktivieren' : 'Aktivieren'}
             </Button>
-            <div className="w-full">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-mute">
-                Strava-Sportarten
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {STRAVA_SPORT_TYPES.map((sport) => {
-                  const aktiv = c.strava_sport_types.includes(sport)
-                  return (
-                    <button
-                      key={sport}
-                      type="button"
-                      onClick={() => {
-                        const next = aktiv
-                          ? c.strava_sport_types.filter((s) => s !== sport)
-                          : [...c.strava_sport_types, sport]
-                        patch.mutate({ id: c.id, strava_sport_types: next })
-                      }}
-                      className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
-                        aktiv
-                          ? 'border-accent bg-accent/10 text-accent'
-                          : 'border-line text-ink-mute hover:border-accent'
-                      }`}
-                    >
-                      {sport}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
           </div>
         ))}
       </div>
-      <div className="mt-4 space-y-3 rounded-xl border border-dashed border-line p-3">
+      <div className="mt-4 space-y-3 border-t border-dashed border-line pt-3">
         <div className="flex flex-wrap gap-2">
           <Input label="Name" value={neu.name} onChange={(e) => setNeu({ ...neu, name: e.target.value })} />
           <Input
@@ -172,7 +142,67 @@ function Kategorien() {
           Kategorie anlegen
         </Button>
       </div>
-    </Card>
+    </section>
+  )
+}
+
+function StravaMapping() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
+  const patch = useMutation({
+    mutationFn: ({ id, types }: { id: number; types: string[] }) =>
+      api.patchCategory(id, { strava_sport_types: types }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    onError: (e) => toast(e.message),
+  })
+
+  const aktuelleKat = (sport: string) =>
+    categories.find((c) => c.strava_sport_types.includes(sport))?.id ?? 0
+
+  function zuweisen(sport: string, zielId: number) {
+    const alt = categories.find((c) => c.strava_sport_types.includes(sport))
+    if (alt && alt.id !== zielId) {
+      patch.mutate({ id: alt.id, types: alt.strava_sport_types.filter((s) => s !== sport) })
+    }
+    if (zielId) {
+      const ziel = categories.find((c) => c.id === zielId)
+      if (ziel && !ziel.strava_sport_types.includes(sport)) {
+        patch.mutate({ id: ziel.id, types: [...ziel.strava_sport_types, sport] })
+      }
+    }
+  }
+
+  if (!categories.length) return null
+
+  return (
+    <section>
+      <SectionTitle>Strava-Zuordnung</SectionTitle>
+      <p className="mb-3 text-xs text-ink-mute">
+        Jede Strava-Sportart zählt zu höchstens einer Kategorie.
+      </p>
+      <div>
+        {STRAVA_SPORT_TYPES.map((sport) => (
+          <div key={sport} className="flex items-center justify-between border-b border-line/30 py-2">
+            <span className="font-mono text-sm text-ink">{sport}</span>
+            <Select
+              label=""
+              aria-label={`Zuordnung ${sport}`}
+              value={aktuelleKat(sport)}
+              onChange={(e) => zuweisen(sport, Number(e.target.value))}
+              className="w-44"
+            >
+              <option value={0}>— ignorieren</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -191,8 +221,8 @@ function Jahr() {
   const ms = milestones ?? season.milestones
 
   return (
-    <Card>
-      <H>Jahr {season.year}</H>
+    <section>
+      <SectionTitle>Jahr {season.year}</SectionTitle>
       <Input
         label="Ziel (gewertete km)"
         type="number"
@@ -254,18 +284,7 @@ function Jahr() {
           Speichern
         </Button>
       </div>
-      <h3 className="mt-4 mb-1 text-xs font-semibold text-ink-mute">Kartenbild (Aquarell)</h3>
-      <input
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="text-sm text-ink-mute"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) api.uploadMapImage(season.id, file).then(refresh).catch((err) => toast(err.message))
-        }}
-      />
-      {season.map_image && <p className="mt-1 text-xs text-ink-mute">Aktuell: {season.map_image}</p>}
-    </Card>
+    </section>
   )
 }
 
@@ -283,7 +302,7 @@ function NeuerUser() {
   })
   return (
     <Card>
-      <H>Neues Mitglied</H>
+      <SectionTitle>Neues Mitglied</SectionTitle>
       <div className="flex flex-wrap gap-2">
         <Input
           label="Benutzername"
