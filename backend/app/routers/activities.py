@@ -26,6 +26,7 @@ def _to_out(activity: Activity, factor: float) -> ActivityOut:
         note=activity.note,
         scaled_km=round(activity.distance_km * factor, 2),
         edited=activity.updated_at is not None,
+        source=activity.source,
     )
 
 

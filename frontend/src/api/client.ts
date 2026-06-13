@@ -13,6 +13,7 @@ export type Category = {
   icon: string
   default_km: number
   is_active: boolean
+  strava_sport_types: string[]
 }
 export type Milestone = { km: number; label: string; icon: string }
 export type Season = {
@@ -31,6 +32,7 @@ export type Activity = {
   note: string | null
   scaled_km: number
   edited: boolean
+  source: string
 }
 export type ActivityInput = {
   category_id: number
@@ -63,6 +65,11 @@ export type Comparison = {
   milestones: Milestone[]
   map_image: string | null
   users: ComparisonUser[]
+}
+export type StravaStatus = {
+  enabled: boolean
+  connected: boolean
+  athlete_id?: number | null
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -110,4 +117,6 @@ export const api = {
   patchMe: (b: { display_name?: string; avatar?: string; password?: string }) =>
     request<Me>('/api/users/me', patch(b)),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
+  stravaStatus: () => request<StravaStatus>('/api/strava/status'),
+  disconnectStrava: () => request<void>('/api/strava/disconnect', { method: 'DELETE' }),
 }

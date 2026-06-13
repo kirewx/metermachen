@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, type Me } from '../../api/client'
 import AvatarWahl from './AvatarWahl'
@@ -15,6 +15,16 @@ export default function ProfilModal({ me, open, onClose }: Props) {
   const [name, setName] = useState(me.display_name)
   const [avatar, setAvatar] = useState(me.avatar)
   const [passwort, setPasswort] = useState('')
+
+  const { data: strava } = useQuery({ queryKey: ['strava-status'], queryFn: api.stravaStatus })
+  const trennen = useMutation({
+    mutationFn: () => api.disconnectStrava(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['strava-status'] })
+      toast('Strava getrennt', 'ok')
+    },
+    onError: (e) => toast(e.message),
+  })
 
   const save = useMutation({
     mutationFn: () =>
@@ -47,6 +57,31 @@ export default function ProfilModal({ me, open, onClose }: Props) {
           value={passwort}
           onChange={(e) => setPasswort(e.target.value)}
         />
+        {strava?.enabled && (
+          <div className="rounded-xl border border-line p-3">
+            <div className="mb-2 text-xs font-semibold text-ink-mute">Strava</div>
+            {strava.connected ? (
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => trennen.mutate()}
+                disabled={trennen.isPending}
+              >
+                Strava trennen
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  window.location.href = '/api/strava/connect'
+                }}
+              >
+                Mit Strava verbinden
+              </Button>
+            )}
+          </div>
+        )}
         <Button
           className="w-full"
           disabled={!name || (passwort.length > 0 && passwort.length < 4)}

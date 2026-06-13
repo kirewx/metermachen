@@ -14,6 +14,13 @@ const H = ({ children }: { children: React.ReactNode }) => (
   <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">{children}</h2>
 )
 
+const STRAVA_SPORT_TYPES = [
+  'Run', 'TrailRun', 'Walk', 'Hike', 'Ride', 'MountainBikeRide', 'GravelRide',
+  'EBikeRide', 'VirtualRide', 'VirtualRun', 'Swim', 'Rowing', 'Kayaking',
+  'NordicSki', 'AlpineSki', 'BackcountrySki', 'Snowboard', 'IceSkate',
+  'InlineSkate', 'Elliptical', 'StairStepper', 'Workout', 'WeightTraining',
+]
+
 export default function Admin() {
   return (
     <div className="space-y-6">
@@ -30,7 +37,7 @@ function Kategorien() {
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['categories'] })
   const patch = useMutation({
-    mutationFn: ({ id, ...b }: { id: number; factor?: number; default_km?: number; is_active?: boolean }) =>
+    mutationFn: ({ id, ...b }: { id: number; factor?: number; default_km?: number; is_active?: boolean; strava_sport_types?: string[] }) =>
       api.patchCategory(id, b),
     onSuccess: refresh,
     onError: (e) => toast(e.message),
@@ -45,6 +52,7 @@ function Kategorien() {
         color: neu.color,
         icon: neu.icon,
         default_km: parseFloat(neu.default_km),
+        strava_sport_types: [],
       }),
     onSuccess: () => {
       setNeu(leer)
@@ -96,6 +104,35 @@ function Kategorien() {
             >
               {c.is_active ? 'Deaktivieren' : 'Aktivieren'}
             </Button>
+            <div className="w-full">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-mute">
+                Strava-Sportarten
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {STRAVA_SPORT_TYPES.map((sport) => {
+                  const aktiv = c.strava_sport_types.includes(sport)
+                  return (
+                    <button
+                      key={sport}
+                      type="button"
+                      onClick={() => {
+                        const next = aktiv
+                          ? c.strava_sport_types.filter((s) => s !== sport)
+                          : [...c.strava_sport_types, sport]
+                        patch.mutate({ id: c.id, strava_sport_types: next })
+                      }}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                        aktiv
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-line text-ink-mute hover:border-accent'
+                      }`}
+                    >
+                      {sport}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         ))}
       </div>

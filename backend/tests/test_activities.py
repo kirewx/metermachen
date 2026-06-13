@@ -81,3 +81,12 @@ def test_patch_ignores_null_for_required_fields_but_clears_note(client, session)
     assert r.status_code == 200
     assert r.json()["distance_km"] == 5.0
     assert r.json()["note"] is None
+
+
+def test_manual_activity_has_source_manual(client, session):
+    make_user(session)
+    cat = make_category(session, factor=4.0)
+    login(client)
+    r = create_activity(client, cat.id)
+    assert r.status_code == 201
+    assert r.json()["source"] == "manual"

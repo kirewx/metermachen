@@ -72,3 +72,27 @@ def test_migration_ist_idempotent():
     migrate(engine)  # zweiter Lauf darf nichts kaputt machen
     with engine.connect() as conn:
         assert conn.execute(text("SELECT icon FROM category WHERE id = 1")).scalar() == "rad"
+
+
+def test_migrate_adds_strava_sport_types_column(tmp_path):
+    from sqlalchemy import text
+    from sqlmodel import create_engine
+
+    from app import db
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE category (id INTEGER PRIMARY KEY, name VARCHAR, factor FLOAT, "
+            "color VARCHAR, icon VARCHAR, default_km FLOAT, is_active BOOLEAN)"
+        ))
+        conn.execute(text("INSERT INTO category (id, name, factor, color, icon, default_km, is_active) "
+                          "VALUES (1, 'Alt', 2.0, '#000000', 'medaille', 10.0, 1)"))
+
+    db.migrate(engine)
+
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text('PRAGMA table_info("category")'))]
+        assert "strava_sport_types" in cols
+        val = conn.execute(text("SELECT strava_sport_types FROM category WHERE id = 1")).scalar()
+        assert val == "[]"

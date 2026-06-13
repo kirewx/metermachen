@@ -26,6 +26,17 @@ class Category(SQLModel, table=True):
     icon: str = "medaille"
     default_km: float = 10.0
     is_active: bool = True
+    strava_sport_types: str = "[]"  # JSON-Liste gemappter Strava-Sportarten, z.B. ["Run","TrailRun"]
+
+
+class StravaConnection(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True)
+    athlete_id: int = Field(index=True)
+    access_token: str
+    refresh_token: str
+    expires_at: int  # Unix-Epoch-Sekunden (Strava-Format), keine Zeitzonen-Fallen
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class Activity(SQLModel, table=True):
