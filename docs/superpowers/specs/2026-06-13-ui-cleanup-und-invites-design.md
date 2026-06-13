@@ -30,6 +30,54 @@ Punkt 7 braucht Backend + Frontend.
 
 ---
 
+## Visuelle Richtung — „Race Telemetry / HUD"
+
+Gewählte ästhetische Richtung (Variante A): die bestehende „Neon Night"-Identität
+wird zu einem bewussten **Renn-Telemetrie-/HUD-Look** weiterentwickelt. Das passt
+zur Metapher der App (Rennen, Bahnen, P1/P2, Fortschrittsbalken) und macht die
+**Zahl zum Helden**. Diese Richtung gilt für alle überarbeiteten Screens.
+
+**Typografie** (Google Fonts, in `index.css` einbinden, als CSS-Variablen):
+- **Display/Überschriften:** `Rajdhani` (condensed, sportlich), v. a. für
+  Versal-Labels und Sektions-Köpfe.
+- **Zahlen/Telemetrie:** `Spline Sans Mono` (tabular, monospaced) — für **alle**
+  km-Werte, Ränge (`P1`), Stats und technische `//`-Labels. Die km-Zahl ist
+  überall das größte, hellste Element.
+- **Fließtext/Eingaben/Labels:** `Hanken Grotesk` (neutral, gut lesbar bei
+  kleinen Größen).
+- Tailwind: als `--font-display`, `--font-mono`, `--font-body` Tokens hinterlegen.
+
+**Farbe** (bestehende Tokens beibehalten, ergänzen):
+- Dunkel: `surface #050508`, `card/panel #0a0f12`, `accent #00e5ff` (+ Glow),
+  `danger #ff5470`. Neuer Ton **`--t-ink-tech` ≈ `#3d6470`** für `//`-Labels,
+  Ränge ab P2 und inaktive Elemente.
+- Akzentfarbe (Cyan) bleibt der eine scharfe Akzent; Kategorie-Farben bleiben
+  datengetrieben.
+- Heller Modus bleibt erhalten, übernimmt dieselbe Struktur/Typo.
+
+**Motion** (CSS-only, keine neue Animations-Lib):
+- Leaderboard-Reihen beim Laden gestaffelt einblenden (`animation-delay` je Rang).
+- Balken füllen sich (bestehendes `balken-wachsen` beibehalten/feinjustieren).
+- Glow-Puls bei Aktion beibehalten. **Glow ist reserviert** für Führende/aktive
+  Elemente — nicht flächig.
+
+**Textur/Atmosphäre (dezent):**
+- Sehr feines Grid-/Scanline-Overlay auf `surface` (sehr niedrige Opazität),
+  optional radiale Vignette. Hairline-Trennlinien (`border-line`) als
+  HUD-Rahmengefühl. Niemals schwer/laut.
+
+**Wiederkehrende Muster:**
+- Sektions-Köpfe: mono, versal, weit getrackt, mit `//`- oder `·`-Präfix und
+  dünner Unterlinie (ersetzt die heutige `H`-Komponente).
+- Ränge als mono `P1`/`P2`; km-Werte mono + tabular + groß.
+- Buttons: ghost = Hairline-Border; primär = Akzent-Fill mit Glow. Inputs:
+  dunkles Feld, Hairline-Border, Akzent-Glow im Fokus.
+
+Feinheiten je Screen werden in der Implementierung mit der `frontend-design`-Skill
+ausgearbeitet; diese Sektion ist der verbindliche Rahmen.
+
+---
+
 ## 1. Design-Sprache: flacher
 
 **Entscheidung:** Variante B — überwiegend flach.
