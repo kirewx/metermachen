@@ -38,6 +38,7 @@ export default function SchnellwahlCard({
   const [duration, setDuration] = useState(initial?.duration_min ? String(initial.duration_min) : '')
   const [note, setNote] = useState(initial?.note ?? '')
   const [pulsiert, setPulsiert] = useState(false)
+  const [gesperrt, setGesperrt] = useState(false)
 
   const km = parseFloat(kmText.replace(',', '.'))
 
@@ -49,7 +50,9 @@ export default function SchnellwahlCard({
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (gesperrt) return
     if (!categoryId || !Number.isFinite(km) || km <= 0 || !date) return
+    setGesperrt(true)
     Promise.resolve(
       onSubmit({
         category_id: categoryId,
@@ -61,7 +64,10 @@ export default function SchnellwahlCard({
     )
       .then(() => {
         setPulsiert(true)
-        window.setTimeout(() => setPulsiert(false), 700)
+        window.setTimeout(() => {
+          setPulsiert(false)
+          setGesperrt(false)
+        }, 700)
         if (!initial) {
           setKmText(String(kategorie?.default_km ?? 10))
           setDetails(false)
@@ -71,7 +77,8 @@ export default function SchnellwahlCard({
         }
       })
       .catch(() => {
-        /* Fehler-Toast zeigt der Aufrufer; Eingaben bleiben erhalten */
+        // Fehler-Toast zeigt der Aufrufer; Eingaben bleiben erhalten, Button wieder frei
+        setGesperrt(false)
       })
   }
 
@@ -107,7 +114,7 @@ export default function SchnellwahlCard({
               = {gewertet} km gewertet · {datumText}
             </p>
           )}
-          <Button type="submit" className={variant === 'hero' ? 'w-full' : ''}>
+          <Button type="submit" disabled={gesperrt} className={variant === 'hero' ? 'w-full' : ''}>
             <span className="inline-flex items-center gap-1">
               Eintragen <Icon name="blitz" size={14} />
             </span>

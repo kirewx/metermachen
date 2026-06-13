@@ -129,4 +129,18 @@ describe('SchnellwahlCard', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     expect(screen.getByTestId('km-wert')).toHaveTextContent('6')
   })
+
+  it('sperrt den Eintragen-Button während des Speicherns gegen Doppelklick', async () => {
+    let freigeben: () => void = () => {}
+    const onSubmit = vi.fn(
+      () => new Promise<void>((resolve) => { freigeben = resolve }),
+    )
+    render(<SchnellwahlCard categories={categories} onSubmit={onSubmit} />)
+    const btn = screen.getByRole('button', { name: /Eintragen/ })
+    await userEvent.click(btn)
+    expect(btn).toBeDisabled()
+    await userEvent.click(btn)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    freigeben()
+  })
 })
