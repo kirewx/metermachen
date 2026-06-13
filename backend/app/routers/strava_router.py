@@ -74,6 +74,7 @@ def callback(
 def disconnect(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ):
+    _require_enabled()
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()
