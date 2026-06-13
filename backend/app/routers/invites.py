@@ -140,12 +140,12 @@ def accept_invite(
         is_admin=invite.is_admin,
     )
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    session.flush()  # vergibt user.id, ohne schon zu committen
     invite.used_at = utcnow()
     invite.used_by_user_id = user.id
     session.add(invite)
-    session.commit()
+    session.commit()  # User + Invite-Sperre atomar in einem Commit
+    session.refresh(user)
     response.set_cookie(
         auth.SESSION_COOKIE,
         auth.create_session_token(user.id),
