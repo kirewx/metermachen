@@ -2,12 +2,14 @@ import json
 import time
 from datetime import date as date_type
 from datetime import datetime
+from datetime import datetime as _dt
 from urllib.parse import urlencode
 
 import httpx
 from sqlmodel import Session, select
 
 from .. import config
+from ..db import engine
 from ..models import Activity, Category, StravaConnection
 
 AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
@@ -129,6 +131,72 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     session.add(act)
     session.commit()
     return True
+
+
+def fetch_athlete_activities(access_token: str, after: int) -> list[dict]:
+    """Holt Summary-Aktivitäten ab Epoch `after`, paginiert (100/Seite)."""
+    out: list[dict] = []
+    page = 1
+    while True:
+        r = httpx.get(
+            f"{API_BASE}/athlete/activities",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"after": after, "per_page": 100, "page": page},
+            timeout=_TIMEOUT,
+        )
+        r.raise_for_status()
+        batch = r.json()
+        if not batch:
+            break
+        out.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+    return out
+
+
+def _is_importable(session: Session, data: dict) -> bool:
+    if category_for_sport(session, data.get("sport_type") or data.get("type")) is None:
+        return False
+    return (data.get("distance") or 0) > 0
+
+
+def backfill_current_year(user_id: int) -> None:
+    """Importiert alle Aktivitäten des laufenden Kalenderjahres beim ersten Connect.
+    Läuft als BackgroundTask, eigene DB-Session, idempotent, best-effort."""
+    year_start = int(_dt(date_type.today().year, 1, 1).timestamp())
+    with Session(engine) as session:
+        conn = session.exec(
+            select(StravaConnection).where(StravaConnection.user_id == user_id)
+        ).first()
+        if conn is None:
+            return
+        conn.backfill_state = "running"
+        conn.backfill_done = 0
+        conn.backfill_total = 0
+        session.add(conn)
+        session.commit()
+        try:
+            token = valid_access_token(session, conn)
+            activities = fetch_athlete_activities(token, year_start)
+            importable = [a for a in activities if _is_importable(session, a)]
+            conn.backfill_total = len(importable)
+            session.add(conn)
+            session.commit()
+            for data in importable:
+                if session.get(StravaConnection, conn.id) is None:
+                    return
+                if import_activity(session, conn, data):
+                    conn.backfill_done += 1
+                    session.add(conn)
+                    session.commit()
+            conn.backfill_state = "done"
+            session.add(conn)
+            session.commit()
+        except Exception:
+            conn.backfill_state = "error"
+            session.add(conn)
+            session.commit()
 
 
 def handle_webhook_event(session: Session, payload: dict) -> None:

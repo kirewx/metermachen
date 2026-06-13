@@ -1,3 +1,4 @@
+import pytest
 from sqlmodel import select
 
 from app import config
@@ -290,3 +291,77 @@ def test_handle_webhook_event_dedup_skips_fetch(session, monkeypatch):
     strava.handle_webhook_event(session, _payload())
     assert called["fetch"] is False
     assert len(session.exec(select(Activity)).all()) == 1
+
+
+@pytest.fixture
+def bind_engine(session, monkeypatch):
+    bind = session.get_bind()
+    from app import db
+    from app.services import strava as strava_svc
+    monkeypatch.setattr(db, "engine", bind)
+    monkeypatch.setattr(strava_svc, "engine", bind)
+    return bind
+
+
+def test_backfill_imports_mapped_activities_and_tracks_progress(session, monkeypatch, bind_engine):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Joggen", strava_sport_types='["Run"]')
+    make_category(session, name="Radfahren", strava_sport_types='["Ride"]')
+    activities = [
+        {"id": 1, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+         "start_date_local": "2026-02-01T07:00:00Z", "name": "Lauf"},
+        {"id": 2, "sport_type": "Ride", "distance": 20000.0, "moving_time": 3600,
+         "start_date_local": "2026-02-02T07:00:00Z", "name": "Tour"},
+        {"id": 3, "sport_type": "Swim", "distance": 1000.0, "moving_time": 1800,
+         "start_date_local": "2026-02-03T07:00:00Z", "name": "Bad"},  # ungemappt
+    ]
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_athlete_activities", lambda tok, after: activities)
+
+    strava.backfill_current_year(user.id)
+
+    fresh = session.get(StravaConnection, conn.id)
+    session.refresh(fresh)
+    assert fresh.backfill_state == "done"
+    assert fresh.backfill_total == 2   # nur Run + Ride sind importierbar
+    assert fresh.backfill_done == 2
+    acts = session.exec(select(Activity).where(Activity.source == "strava")).all()
+    assert {a.external_id for a in acts} == {"1", "2"}
+
+
+def test_backfill_is_idempotent(session, monkeypatch, bind_engine):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Joggen", strava_sport_types='["Run"]')
+    activities = [{"id": 1, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+                   "start_date_local": "2026-02-01T07:00:00Z", "name": "Lauf"}]
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_athlete_activities", lambda tok, after: activities)
+
+    strava.backfill_current_year(user.id)
+    strava.backfill_current_year(user.id)
+
+    assert len(session.exec(select(Activity).where(Activity.source == "strava")).all()) == 1
+
+
+def test_backfill_sets_error_on_http_failure(session, monkeypatch, bind_engine):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Joggen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    def boom(tok, after):
+        raise RuntimeError("strava down")
+    monkeypatch.setattr(strava, "fetch_athlete_activities", boom)
+
+    strava.backfill_current_year(user.id)
+
+    fresh = session.get(StravaConnection, conn.id)
+    session.refresh(fresh)
+    assert fresh.backfill_state == "error"
+
+
+def test_backfill_noop_without_connection(session, monkeypatch, bind_engine):
+    make_category(session, name="Joggen", strava_sport_types='["Run"]')
+    called = {"list": False}
+    monkeypatch.setattr(strava, "fetch_athlete_activities",
+                        lambda tok, after: called.__setitem__("list", True) or [])
+    strava.backfill_current_year(user_id=4242)  # kein User/keine Connection
+    assert called["list"] is False
