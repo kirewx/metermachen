@@ -1,8 +1,8 @@
 import json
+import logging
 import time
 from datetime import date as date_type
 from datetime import datetime
-from datetime import datetime as _dt
 from urllib.parse import urlencode
 
 import httpx
@@ -164,7 +164,7 @@ def _is_importable(session: Session, data: dict) -> bool:
 def backfill_current_year(user_id: int) -> None:
     """Importiert alle Aktivitäten des laufenden Kalenderjahres beim ersten Connect.
     Läuft als BackgroundTask, eigene DB-Session, idempotent, best-effort."""
-    year_start = int(_dt(date_type.today().year, 1, 1).timestamp())
+    year_start = int(datetime(date_type.today().year, 1, 1).timestamp())
     with Session(engine) as session:
         conn = session.exec(
             select(StravaConnection).where(StravaConnection.user_id == user_id)
@@ -194,9 +194,18 @@ def backfill_current_year(user_id: int) -> None:
             session.add(conn)
             session.commit()
         except Exception:
-            conn.backfill_state = "error"
-            session.add(conn)
-            session.commit()
+            logging.getLogger(__name__).exception(
+                "Strava-Backfill fehlgeschlagen fuer user_id=%s", user_id
+            )
+            try:
+                session.rollback()
+                conn.backfill_state = "error"
+                session.add(conn)
+                session.commit()
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Konnte Backfill-Fehlerstatus nicht speichern fuer user_id=%s", user_id
+                )
 
 
 def handle_webhook_event(session: Session, payload: dict) -> None:

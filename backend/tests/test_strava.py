@@ -358,6 +358,33 @@ def test_backfill_sets_error_on_http_failure(session, monkeypatch, bind_engine):
     assert fresh.backfill_state == "error"
 
 
+def test_backfill_stops_when_connection_removed_midway(session, monkeypatch, bind_engine):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Joggen", strava_sport_types='["Run"]')
+    activities = [
+        {"id": 1, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+         "start_date_local": "2026-02-01T07:00:00Z", "name": "A"},
+        {"id": 2, "sport_type": "Run", "distance": 6000.0, "moving_time": 1800,
+         "start_date_local": "2026-02-02T07:00:00Z", "name": "B"},
+    ]
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_athlete_activities", lambda tok, after: activities)
+    calls = {"n": 0}
+    def fake_import(s, c, data):
+        calls["n"] += 1
+        # Beim ersten Import trennt der Nutzer die Verbindung
+        s.delete(s.get(StravaConnection, c.id))
+        s.commit()
+        return False
+    monkeypatch.setattr(strava, "import_activity", fake_import)
+
+    strava.backfill_current_year(user.id)
+
+    # Nach Wegfall der Connection bricht die Schleife ab -> nur 1 Aufruf
+    assert calls["n"] == 1
+    assert session.exec(select(Activity).where(Activity.source == "strava")).all() == []
+
+
 def test_backfill_noop_without_connection(session, monkeypatch, bind_engine):
     make_category(session, name="Joggen", strava_sport_types='["Run"]')
     called = {"list": False}
