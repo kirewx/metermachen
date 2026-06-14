@@ -1,0 +1,45 @@
+# Produktions-Stack für VPS (z. B. NetCup VPS 500 G12, Standort Nürnberg).
+# Caddy terminiert HTTPS (automatisch via Let's Encrypt) und proxyt auf die App.
+# Die App selbst veröffentlicht KEINEN Port nach außen — nur Caddy ist erreichbar.
+#
+# Start:   docker compose -f docker-compose.prod.yml up -d --build
+# Logs:    docker compose -f docker-compose.prod.yml logs -f
+# Update:  git pull && docker compose -f docker-compose.prod.yml up -d --build
+#
+# Voraussetzung: .env mit allen Werten (siehe .env.prod.example), inkl. DOMAIN.
+
+services:
+  app:
+    build: .
+    expose:
+      - "8000"            # nur im internen Compose-Netz, nicht am Host veröffentlicht
+    volumes:
+      - ./data:/data       # SQLite-DB — DIES ist dein Backup-Ziel
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY setzen}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD setzen}
+      STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID:-}
+      STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET:-}
+      STRAVA_WEBHOOK_VERIFY_TOKEN: ${STRAVA_WEBHOOK_VERIFY_TOKEN:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL setzen, z. B. https://meter.example.com}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # Zertifikate — persistent halten, sonst Rate-Limits bei LE
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN setzen, z. B. meter.example.com}
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

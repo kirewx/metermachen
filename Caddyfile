@@ -1,0 +1,9 @@
+# Caddy liest {$DOMAIN} aus der Container-Umgebung (siehe docker-compose.prod.yml).
+# Automatisches HTTPS via Let's Encrypt — kein manuelles Zertifikat nötig.
+# Voraussetzung: Der A-/AAAA-Record der Domain zeigt auf die Server-IP,
+# und Port 80 + 443 sind am Server offen.
+
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000
+}

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeterMachen · Deployment auf NetCup VPS</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c2330;
+    --border: #2a3240;
+    --text: #e6edf3;
+    --muted: #9aa7b4;
+    --accent: #fc5200;      /* Strava-Orange */
+    --accent-2: #2f81f7;
+    --green: #3fb950;
+    --code-bg: #0a0d12;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--sans); line-height: 1.65; font-size: 16px;
+  }
+  .wrap { display: grid; grid-template-columns: 260px 1fr; max-width: 1180px; margin: 0 auto; gap: 0; }
+
+  /* Sidebar */
+  aside {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    padding: 28px 20px; border-right: 1px solid var(--border); background: var(--panel);
+  }
+  aside .brand { font-weight: 800; font-size: 1.15rem; letter-spacing: .3px; margin-bottom: 4px; }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--muted); font-size: .8rem; margin-bottom: 22px; }
+  aside nav a {
+    display: block; color: var(--muted); text-decoration: none; padding: 7px 10px;
+    border-radius: 8px; font-size: .9rem; margin-bottom: 2px; transition: .15s;
+  }
+  aside nav a:hover { background: var(--panel-2); color: var(--text); }
+  aside nav a.done::after { content: " ✓"; color: var(--green); }
+  .progress-wrap { margin-top: 22px; }
+  .progress-bar { height: 8px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #ff8a4c); transition: width .3s; }
+  .progress-label { font-size: .78rem; color: var(--muted); margin-top: 8px; }
+  .reset-btn {
+    margin-top: 14px; background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 12px; border-radius: 8px; font-size: .78rem; cursor: pointer; transition: .15s;
+  }
+  .reset-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Main */
+  main { padding: 40px 48px 120px; min-width: 0; }
+  header.page-head { margin-bottom: 36px; }
+  header.page-head h1 { font-size: 2rem; margin: 0 0 8px; }
+  header.page-head p { color: var(--muted); margin: 0; }
+  .meta-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .badge {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 11px; border-radius: 99px; font-size: .78rem;
+  }
+  .badge strong { color: var(--text); font-weight: 600; }
+
+  section.step {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px 26px; margin-bottom: 18px; scroll-margin-top: 20px;
+  }
+  section.step h2 {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 1.25rem;
+  }
+  .step-check {
+    appearance: none; -webkit-appearance: none; flex: 0 0 auto;
+    width: 26px; height: 26px; border: 2px solid var(--border); border-radius: 7px;
+    cursor: pointer; position: relative; transition: .15s; background: var(--code-bg);
+  }
+  .step-check:hover { border-color: var(--accent); }
+  .step-check:checked { background: var(--green); border-color: var(--green); }
+  .step-check:checked::after {
+    content: "✓"; color: #04210b; font-weight: 900; font-size: 16px;
+    position: absolute; inset: 0; display: grid; place-items: center;
+  }
+  .step-num {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--accent); color: #fff; font-weight: 800; font-size: .95rem;
+  }
+  section.step.checked { opacity: .62; }
+  section.step.checked h2 .step-title { text-decoration: line-through; text-decoration-color: var(--muted); }
+
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  a.inline { color: var(--accent-2); }
+  h3 { font-size: 1rem; margin: 20px 0 8px; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 5px 0; }
+
+  /* Code blocks */
+  .code {
+    position: relative; background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; margin: 12px 0; overflow: hidden;
+  }
+  .code pre {
+    margin: 0; padding: 16px 54px 16px 18px; overflow-x: auto;
+    font-family: var(--mono); font-size: .86rem; line-height: 1.6; color: #d7e0ea;
+  }
+  .code .copy {
+    position: absolute; top: 8px; right: 8px; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 7px; padding: 5px 10px; font-size: .74rem; cursor: pointer;
+    transition: .15s; font-family: var(--sans);
+  }
+  .code .copy:hover { color: var(--text); border-color: var(--accent); }
+  .code .copy.copied { color: var(--green); border-color: var(--green); }
+  code.inline-code {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-family: var(--mono); font-size: .85em; color: #ffd9c4;
+  }
+
+  .note {
+    border-left: 3px solid var(--accent-2); background: rgba(47,129,247,.08);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: .92rem;
+  }
+  .warn {
+    border-left: 3px solid var(--accent); background: rgba(252,82,0,.08);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: .92rem;
+  }
+  .note strong, .warn strong { color: var(--text); }
+
+  table.tbl { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .9rem; }
+  table.tbl th, table.tbl td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  table.tbl th { background: var(--panel-2); }
+
+  footer { color: var(--muted); font-size: .82rem; text-align: center; padding: 30px; border-top: 1px solid var(--border); }
+
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 28px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside>
+    <div class="brand">Meter<span>Machen</span></div>
+    <div class="sub">Deployment · NetCup VPS + Docker + Caddy</div>
+    <nav id="toc"></nav>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="pfill"></div></div>
+      <div class="progress-label" id="plabel">0 von 0 Schritten erledigt</div>
+      <button class="reset-btn" id="reset">Fortschritt zurücksetzen</button>
+    </div>
+  </aside>
+
+  <main>
+    <header class="page-head">
+      <h1>MeterMachen auf einem NetCup VPS deployen</h1>
+      <p>Schritt für Schritt zur öffentlich erreichbaren App mit automatischem HTTPS und funktionierender Strava-Integration. Hake jeden Schritt ab — dein Fortschritt wird im Browser gespeichert.</p>
+      <div class="meta-badges">
+        <span class="badge"><strong>Ziel:</strong> VPS 500 G12 · Nürnberg</span>
+        <span class="badge"><strong>Stack:</strong> Docker + Caddy</span>
+        <span class="badge"><strong>HTTPS:</strong> Let's Encrypt (automatisch)</span>
+        <span class="badge"><strong>Login danach:</strong> admin / dein Passwort</span>
+      </div>
+    </header>
+
+    <!-- STEP 0 -->
+    <section class="step" id="s0">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">0</span><span class="step-title">Voraussetzungen</span></h2>
+      <ul>
+        <li>NetCup VPS ist bestellt, du hast Root-SSH-Zugang (<code class="inline-code">ssh root@&lt;server-ip&gt;</code>).</li>
+        <li>Eine (Sub-)Domain, z.&nbsp;B. <code class="inline-code">meter.deinedomain.de</code>.</li>
+        <li>Deine Strava-API-Keys liegen bereit (Client ID + Client Secret).</li>
+      </ul>
+    </section>
+
+    <!-- STEP 1 -->
+    <section class="step" id="s1">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">1</span><span class="step-title">DNS setzen</span></h2>
+      <p>Beim Domain-Anbieter einen Record auf die Server-IP legen:</p>
+      <div class="code"><button class="copy">Kopieren</button><pre>A     meter.deinedomain.de   ->   &lt;server-ipv4&gt;
+AAAA  meter.deinedomain.de   ->   &lt;server-ipv6&gt;   (falls IPv6 genutzt wird)</pre></div>
+      <p>Kurz warten, bis es greift — muss die Server-IP zeigen:</p>
+      <div class="code"><button class="copy">Kopieren</button><pre>ping meter.deinedomain.de</pre></div>
+      <div class="warn"><strong>Wichtig:</strong> DNS muss <em>vor</em> dem ersten Start stimmen, sonst kann Caddy kein Let's-Encrypt-Zertifikat ausstellen.</div>
+    </section>
+
+    <!-- STEP 2 -->
+    <section class="step" id="s2">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">2</span><span class="step-title">Server vorbereiten (als root)</span></h2>
+      <div class="code"><button class="copy">Kopieren</button><pre>apt update &amp;&amp; apt -y upgrade
+
+# Docker + Compose-Plugin
+curl -fsSL https://get.docker.com | sh
+docker compose version    # muss eine Version ausgeben
+
+# Firewall: nur SSH + HTTP + HTTPS
+apt -y install ufw
+ufw allow OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable</pre></div>
+      <div class="note"><strong>NetCup-Hinweis:</strong> Es gibt zusätzlich ein Firewall-Feature im SCP (Server Control Panel). Wenn dort eine Firewall aktiv ist, müssen 80/443 auch dort offen sein.</div>
+    </section>
+
+    <!-- STEP 3 -->
+    <section class="step" id="s3">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">3</span><span class="step-title">Code holen</span></h2>
+      <div class="code"><button class="copy">Kopieren</button><pre>cd /opt
+git clone https://github.com/kirewx/metermachen.git
+cd metermachen</pre></div>
+    </section>
+
+    <!-- STEP 4 -->
+    <section class="step" id="s4">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">4</span><span class="step-title">Konfiguration anlegen</span></h2>
+      <div class="code"><button class="copy">Kopieren</button><pre>cp .env.prod.example .env
+nano .env</pre></div>
+      <p>Diese Werte ausfüllen:</p>
+      <div class="code"><button class="copy">Kopieren</button><pre>SECRET_KEY=          # erzeugen: openssl rand -hex 32
+ADMIN_PASSWORD=      # dein Admin-Passwort
+DOMAIN=meter.deinedomain.de
+PUBLIC_BASE_URL=https://meter.deinedomain.de
+
+STRAVA_CLIENT_ID=...
+STRAVA_CLIENT_SECRET=...
+STRAVA_WEBHOOK_VERIFY_TOKEN=   # frei wählbar, z. B. openssl rand -hex 16</pre></div>
+      <p class="muted">Tipp zum Erzeugen von <code class="inline-code">SECRET_KEY</code>:</p>
+      <div class="code"><button class="copy">Kopieren</button><pre>openssl rand -hex 32</pre></div>
+    </section>
+
+    <!-- STEP 5 -->
+    <section class="step" id="s5">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">5</span><span class="step-title">Strava-App konfigurieren</span></h2>
+      <p>Unter <a class="inline" href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a>:</p>
+      <ul>
+        <li><strong>Authorization Callback Domain</strong> = nur der Hostname, also <code class="inline-code">meter.deinedomain.de</code> (ohne <code class="inline-code">https://</code>, ohne Pfad).</li>
+      </ul>
+      <div class="note">Mehr ist app-seitig nicht nötig — die App baut Redirect- und Webhook-URLs selbst aus <code class="inline-code">PUBLIC_BASE_URL</code>.</div>
+    </section>
+
+    <!-- STEP 6 -->
+    <section class="step" id="s6">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">6</span><span class="step-title">Starten</span></h2>
+      <div class="code"><button class="copy">Kopieren</button><pre>docker compose -f docker-compose.prod.yml up -d --build</pre></div>
+      <p>Prüfen:</p>
+      <div class="code"><button class="copy">Kopieren</button><pre>docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f caddy   # Zertifikat-Ausstellung beobachten</pre></div>
+      <p>Dann im Browser: <code class="inline-code">https://meter.deinedomain.de</code> → Login <code class="inline-code">admin</code> / <code class="inline-code">&lt;ADMIN_PASSWORD&gt;</code>.</p>
+    </section>
+
+    <!-- STEP 7 -->
+    <section class="step" id="s7">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">7</span><span class="step-title">Strava-Webhook registrieren (einmalig)</span></h2>
+      <div class="warn"><strong>Reihenfolge beachten:</strong> Das muss <em>nach</em> Schritt 6 passieren — Strava validiert den Callback sofort per GET, die App muss also schon öffentlich per HTTPS laufen.</div>
+      <p>Das Hilfsskript liegt nicht im Image, daher direkt per <code class="inline-code">curl</code>. Vorher einmalig die <code class="inline-code">.env</code>-Werte in die Shell laden:</p>
+      <div class="code"><button class="copy">Kopieren</button><pre>set -a &amp;&amp; . ./.env &amp;&amp; set +a</pre></div>
+      <h3>Anlegen</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>curl -X POST https://www.strava.com/api/v3/push_subscriptions \
+  -F client_id=$STRAVA_CLIENT_ID \
+  -F client_secret=$STRAVA_CLIENT_SECRET \
+  -F callback_url=https://meter.deinedomain.de/api/strava/webhook \
+  -F verify_token=$STRAVA_WEBHOOK_VERIFY_TOKEN</pre></div>
+      <h3>Anzeigen</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>curl -G https://www.strava.com/api/v3/push_subscriptions \
+  -d client_id=$STRAVA_CLIENT_ID -d client_secret=$STRAVA_CLIENT_SECRET</pre></div>
+      <h3>Löschen (id aus der Anzeige)</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>curl -X DELETE "https://www.strava.com/api/v3/push_subscriptions/&lt;id&gt;?client_id=$STRAVA_CLIENT_ID&amp;client_secret=$STRAVA_CLIENT_SECRET"</pre></div>
+      <div class="note"><strong>Erfolg:</strong> Status <code class="inline-code">201</code> mit einer <code class="inline-code">{"id": ...}</code>. Danach werden neue Strava-Aktivitäten automatisch importiert; beim ersten Verbinden eines Accounts läuft zusätzlich der Jahres-Backfill im Hintergrund.</div>
+    </section>
+
+    <!-- STEP 8 -->
+    <section class="step" id="s8">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">8</span><span class="step-title">Betrieb</span></h2>
+      <h3>Update einspielen</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>cd /opt/metermachen
+git pull
+docker compose -f docker-compose.prod.yml up -d --build</pre></div>
+      <h3>Backup (SQLite-DB)</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>tar czf metermachen-backup-$(date +%F).tar.gz data/</pre></div>
+      <p class="muted">Zusätzlich die NetCup-<strong>Snapshots</strong> (Copy-on-Write, im SCP) als Gesamt-System-Sicherung nutzen.</p>
+      <h3>Logs</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>docker compose -f docker-compose.prod.yml logs -f app
+docker compose -f docker-compose.prod.yml logs -f caddy</pre></div>
+      <h3>Stoppen</h3>
+      <div class="code"><button class="copy">Kopieren</button><pre>docker compose -f docker-compose.prod.yml down</pre></div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section class="step" id="s9">
+      <h2><input type="checkbox" class="step-check"><span class="step-num">?</span><span class="step-title">Troubleshooting</span></h2>
+      <table class="tbl">
+        <tr><th>Symptom</th><th>Ursache &amp; Lösung</th></tr>
+        <tr><td>Kein HTTPS / Caddy-Fehler im Log</td><td>DNS zeigt nicht (oder noch nicht) auf den Server, oder Port 80/443 blockiert (ufw + NetCup-SCP-Firewall prüfen). Caddy braucht Port 80 erreichbar für die LE-Validierung.</td></tr>
+        <tr><td>Strava-Einstellung im Profil unsichtbar</td><td>Einer der vier <code class="inline-code">STRAVA_*</code>/<code class="inline-code">PUBLIC_BASE_URL</code>-Werte fehlt. Nach Änderung der <code class="inline-code">.env</code> App neu starten: <code class="inline-code">docker compose -f docker-compose.prod.yml up -d</code>.</td></tr>
+        <tr><td>Webhook-<code class="inline-code">create</code> schlägt fehl</td><td>App war beim <code class="inline-code">curl</code> noch nicht öffentlich erreichbar, oder <code class="inline-code">verify_token</code> weicht von dem in der <code class="inline-code">.env</code> ab.</td></tr>
+        <tr><td>Login schlägt fehl</td><td><code class="inline-code">ADMIN_PASSWORD</code> in der <code class="inline-code">.env</code> prüfen, App neu starten.</td></tr>
+      </table>
+    </section>
+
+    <footer>MeterMachen 🏃🚴🥾 · Deployment-Anleitung · generiert aus <code class="inline-code">docs/DEPLOY-netcup.md</code></footer>
+  </main>
+</div>
+
+<script>
+(function () {
+  var STORAGE_KEY = "metermachen-deploy-progress";
+  var steps = Array.prototype.slice.call(document.querySelectorAll("section.step"));
+  var toc = document.getElementById("toc");
+  var pfill = document.getElementById("pfill");
+  var plabel = document.getElementById("plabel");
+
+  // Build TOC
+  steps.forEach(function (sec) {
+    var title = sec.querySelector(".step-title").textContent;
+    var num = sec.querySelector(".step-num").textContent;
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    a.textContent = (num === "?" ? "" : num + ". ") + title;
+    a.dataset.target = sec.id;
+    toc.appendChild(a);
+  });
+
+  // Load saved state
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch (e) {}
+
+  function tocLink(id) { return toc.querySelector('a[data-target="' + id + '"]'); }
+
+  function updateProgress() {
+    var boxes = steps.map(function (s) { return s.querySelector(".step-check"); });
+    var done = boxes.filter(function (b) { return b.checked; }).length;
+    var total = boxes.length;
+    pfill.style.width = total ? (done / total * 100) + "%" : "0%";
+    plabel.textContent = done + " von " + total + " Schritten erledigt";
+  }
+
+  steps.forEach(function (sec) {
+    var box = sec.querySelector(".step-check");
+    if (saved[sec.id]) { box.checked = true; sec.classList.add("checked"); tocLink(sec.id).classList.add("done"); }
+    box.addEventListener("change", function () {
+      sec.classList.toggle("checked", box.checked);
+      tocLink(sec.id).classList.toggle("done", box.checked);
+      saved[sec.id] = box.checked;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      updateProgress();
+    });
+  });
+  updateProgress();
+
+  // Reset
+  document.getElementById("reset").addEventListener("click", function () {
+    saved = {};
+    localStorage.removeItem(STORAGE_KEY);
+    steps.forEach(function (sec) {
+      sec.querySelector(".step-check").checked = false;
+      sec.classList.remove("checked");
+      tocLink(sec.id).classList.remove("done");
+    });
+    updateProgress();
+  });
+
+  // Copy buttons
+  document.querySelectorAll(".code .copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.parentElement.querySelector("pre").innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        var old = btn.textContent;
+        btn.textContent = "Kopiert ✓"; btn.classList.add("copied");
+        setTimeout(function () { btn.textContent = old; btn.classList.remove("copied"); }, 1500);
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
