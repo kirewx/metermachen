@@ -75,6 +75,25 @@ export type StravaStatus = {
   athlete_id?: number | null
   backfill?: StravaBackfill
 }
+export type AdminUser = {
+  id: number
+  username: string
+  display_name: string
+  avatar: string
+  is_admin: boolean
+  is_active: boolean
+  created_at: string
+}
+export type AchievementPart = { label: string; current_km: number; target_km: number }
+export type Achievement = {
+  key: string
+  title: string
+  description: string
+  icon: string
+  achieved: boolean
+  progress: number
+  parts: AchievementPart[]
+}
 export type Invite = {
   id: number
   token: string
@@ -128,8 +147,13 @@ export const api = {
   deleteActivity: (id: number) => request<void>(`/api/activities/${id}`, { method: 'DELETE' }),
   createUser: (b: { username: string; password: string; display_name: string; avatar?: string }) =>
     request<Me>('/api/users', post(b)),
-  patchMe: (b: { display_name?: string; avatar?: string; password?: string }) =>
+  patchMe: (b: { username?: string; display_name?: string; avatar?: string; password?: string }) =>
     request<Me>('/api/users/me', patch(b)),
+  listUsers: () => request<AdminUser[]>('/api/users'),
+  patchUser: (id: number, b: { is_active?: boolean }) =>
+    request<AdminUser>(`/api/users/${id}`, patch(b)),
+  deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
+  achievements: () => request<Achievement[]>('/api/achievements'),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
   stravaStatus: () => request<StravaStatus>('/api/strava/status'),
   disconnectStrava: () => request<void>('/api/strava/disconnect', { method: 'DELETE' }),

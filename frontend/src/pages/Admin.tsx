@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, type Invite, type Milestone, type Season } from '../api/client'
+import { api, type AdminUser, type Invite, type Milestone, type Season } from '../api/client'
+import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
 import Icon from '../components/ui/Icon'
 import IconPicker from '../components/ui/IconPicker'
 import Input from '../components/ui/Input'
+import Modal from '../components/ui/Modal'
 import { MEILENSTEIN_ICONS, SPORT_ICONS } from '../components/ui/icons'
 import SectionTitle from '../components/ui/SectionTitle'
 import Select from '../components/ui/Select'
@@ -24,6 +26,7 @@ export default function Admin() {
       <Kategorien />
       <StravaMapping />
       <Jahr />
+      <Mitglieder />
       <Einladungen />
     </div>
   )
@@ -283,6 +286,104 @@ function Jahr() {
           Speichern
         </Button>
       </div>
+    </section>
+  )
+}
+
+function Mitglieder() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me })
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers })
+  const [loeschUser, setLoeschUser] = useState<AdminUser | null>(null)
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['users'] })
+    queryClient.invalidateQueries({ queryKey: ['comparison'] })
+  }
+  const umschalten = useMutation({
+    mutationFn: (u: AdminUser) => api.patchUser(u.id, { is_active: !u.is_active }),
+    onSuccess: refresh,
+    onError: (e) => toast(e.message),
+  })
+  const loeschen = useMutation({
+    mutationFn: (id: number) => api.deleteUser(id),
+    onSuccess: () => {
+      setLoeschUser(null)
+      refresh()
+      toast('Account gelöscht', 'ok')
+    },
+    onError: (e) => toast(e.message),
+  })
+
+  return (
+    <section>
+      <SectionTitle>Mitglieder</SectionTitle>
+      <ul>
+        {users.map((u) => (
+          <li
+            key={u.id}
+            className={`flex items-center gap-3 border-b border-line/30 py-2 text-sm ${
+              u.is_active ? '' : 'opacity-40'
+            }`}
+          >
+            <Avatar value={u.avatar} size="sm" />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-bold text-ink">{u.display_name}</span>
+              <span className="ml-2 font-mono text-xs text-ink-mute">@{u.username}</span>
+            </span>
+            {u.is_admin && (
+              <span className="rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+                Admin
+              </span>
+            )}
+            {!u.is_active && (
+              <span className="font-mono text-xs uppercase tracking-wider text-ink-tech">
+                deaktiviert
+              </span>
+            )}
+            {u.id !== me?.id && (
+              <>
+                <Button
+                  variant="ghost"
+                  disabled={umschalten.isPending}
+                  onClick={() => umschalten.mutate(u)}
+                >
+                  {u.is_active ? 'Deaktivieren' : 'Aktivieren'}
+                </Button>
+                <button
+                  aria-label={`Account ${u.username} löschen`}
+                  className="text-ink-mute hover:text-danger"
+                  onClick={() => setLoeschUser(u)}
+                >
+                  <Icon name="papierkorb" size={16} />
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <Modal
+        open={loeschUser !== null}
+        onClose={() => setLoeschUser(null)}
+        title={`${loeschUser?.display_name ?? ''} löschen?`}
+      >
+        <p className="mb-4 text-sm text-ink-mute">
+          Der Account und alle seine Aktivitäten werden endgültig gelöscht. Zum
+          vorübergehenden Ausschließen reicht „Deaktivieren".
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setLoeschUser(null)}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="danger"
+            disabled={loeschen.isPending}
+            onClick={() => loeschUser && loeschen.mutate(loeschUser.id)}
+          >
+            Endgültig löschen
+          </Button>
+        </div>
+      </Modal>
     </section>
   )
 }

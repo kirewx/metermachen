@@ -448,3 +448,38 @@ def test_callback_no_backfill_on_existing_connection(client, session, monkeypatc
     client.get("/api/strava/callback", params={"code": "xyz", "state": state},
                follow_redirects=False)
     assert triggered["called"] is False
+
+
+def test_strava_import_since_parsing(monkeypatch):
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "")
+    assert config.strava_import_since() is None
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "2026-07-11")
+    assert config.strava_import_since().isoformat() == "2026-07-11"
+
+
+def test_import_activity_respects_since_cutoff(session, monkeypatch):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "2026-07-11")
+    alt = {"id": 1, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+           "start_date_local": "2026-07-10T07:00:00Z", "name": "Zu alt"}
+    neu = {"id": 2, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+           "start_date_local": "2026-07-11T07:00:00Z", "name": "Am Stichtag"}
+    assert strava.import_activity(session, conn, alt) is False
+    assert strava.import_activity(session, conn, neu) is True
+    acts = session.exec(select(Activity)).all()
+    assert len(acts) == 1
+    assert acts[0].note == "Am Stichtag"
+
+
+def test_webhook_event_respects_since_cutoff(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "2026-07-11")
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-01-05T07:00:00Z", "name": "Nachtrag von früher",
+    })
+    strava.handle_webhook_event(session, _payload())
+    assert session.exec(select(Activity)).all() == []

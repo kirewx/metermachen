@@ -12,6 +12,7 @@ type Props = { me: Me; open: boolean; onClose: () => void }
 export default function ProfilModal({ me, open, onClose }: Props) {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const [username, setUsername] = useState(me.username)
   const [name, setName] = useState(me.display_name)
   const [avatar, setAvatar] = useState(me.avatar)
   const [passwort, setPasswort] = useState('')
@@ -47,6 +48,7 @@ export default function ProfilModal({ me, open, onClose }: Props) {
   const save = useMutation({
     mutationFn: () =>
       api.patchMe({
+        ...(username !== me.username ? { username } : {}),
         display_name: name,
         avatar,
         ...(passwort ? { password: passwort } : {}),
@@ -64,6 +66,11 @@ export default function ProfilModal({ me, open, onClose }: Props) {
   return (
     <Modal open={open} onClose={onClose} title="Profil">
       <div className="space-y-4">
+        <Input
+          label="Benutzername (Login)"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
         <Input label="Anzeigename" value={name} onChange={(e) => setName(e.target.value)} />
         <div>
           <div className="mb-1 text-xs font-semibold text-ink-mute">Avatar</div>
@@ -114,7 +121,7 @@ export default function ProfilModal({ me, open, onClose }: Props) {
         )}
         <Button
           className="w-full"
-          disabled={!name || (passwort.length > 0 && passwort.length < 4)}
+          disabled={!name || !username || (passwort.length > 0 && passwort.length < 4)}
           onClick={() => save.mutate()}
         >
           Speichern

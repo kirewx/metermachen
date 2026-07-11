@@ -30,6 +30,8 @@ def login(data: LoginIn, response: Response, session: Session = Depends(get_sess
     password_hash = user.password_hash if user is not None else _DUMMY_HASH
     if user is None or not auth.verify_password(password_hash, data.password):
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account ist deaktiviert")
     response.set_cookie(
         auth.SESSION_COOKIE,
         auth.create_session_token(user.id),

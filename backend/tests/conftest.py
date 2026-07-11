@@ -52,9 +52,9 @@ def login(client, username="erik", password="pw123"):
     return r
 
 
-def make_category(session, name="Joggen", factor=4.0, **kw) -> Category:
+def make_category(session, name="Joggen", factor=4.0, icon="laufen", **kw) -> Category:
     cat = Category(
-        name=name, factor=factor, color="#e74c3c", icon="laufen", **kw
+        name=name, factor=factor, color="#e74c3c", icon=icon, **kw
     )
     session.add(cat)
     session.commit()

@@ -117,11 +117,17 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     distance_km = round((data.get("distance") or 0) / 1000, 2)
     if distance_km <= 0:
         return False
+    act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
+    # Stichtag gilt überall — auch für nachträglich bei Strava erfasste alte
+    # Aktivitäten, die per Webhook als "create" hereinkommen.
+    since = config.strava_import_since()
+    if since is not None and act_date < since:
+        return False
     duration_min = round((data.get("moving_time") or 0) / 60) or None
     act = Activity(
         user_id=conn.user_id,
         category_id=cat.id,
-        date=_parse_date(data.get("start_date_local") or data.get("start_date")),
+        date=act_date,
         distance_km=distance_km,
         duration_min=duration_min,
         note=data.get("name"),
@@ -163,8 +169,13 @@ def _is_importable(session: Session, data: dict) -> bool:
 
 def backfill_current_year(user_id: int) -> None:
     """Importiert alle Aktivitäten des laufenden Kalenderjahres beim ersten Connect.
-    Läuft als BackgroundTask, eigene DB-Session, idempotent, best-effort."""
-    year_start = int(datetime(date_type.today().year, 1, 1).timestamp())
+    Läuft als BackgroundTask, eigene DB-Session, idempotent, best-effort.
+    Ein gesetzter STRAVA_IMPORT_SINCE-Stichtag verschiebt den Startpunkt nach hinten."""
+    start_date = date_type(date_type.today().year, 1, 1)
+    since = config.strava_import_since()
+    if since is not None and since > start_date:
+        start_date = since
+    year_start = int(datetime(start_date.year, start_date.month, start_date.day).timestamp())
     with Session(engine) as session:
         conn = session.exec(
             select(StravaConnection).where(StravaConnection.user_id == user_id)

@@ -73,3 +73,13 @@ def test_user_without_activities_is_listed(client, session):
     assert users[2]["display_name"] == "Tom"
     assert users[2]["total_scaled_km"] == 0
     assert users[2]["cumulative"] == []
+
+
+def test_inactive_user_hidden_from_comparison(client, session):
+    erik, lisa = setup_data(session)
+    lisa.is_active = False
+    session.add(lisa)
+    session.commit()
+    login(client)
+    users = client.get("/api/comparison/2026").json()["users"]
+    assert [u["display_name"] for u in users] == ["Erik"]

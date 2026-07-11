@@ -31,3 +31,12 @@ def test_logout_clears_session(client, session):
     login(client)
     client.post("/api/auth/logout")
     assert client.get("/api/auth/me").status_code == 401
+
+
+def test_login_rejected_for_inactive_user(client, session):
+    user = make_user(session)
+    user.is_active = False
+    session.add(user)
+    session.commit()
+    r = client.post("/api/auth/login", json={"username": "erik", "password": "pw123"})
+    assert r.status_code == 403

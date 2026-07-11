@@ -25,7 +25,8 @@ def comparison(year: int, session: Session = Depends(get_session)):
     if season is None:
         raise HTTPException(status_code=404, detail="Kein Jahr konfiguriert")
 
-    users = session.exec(select(User).order_by(User.id)).all()
+    # Deaktivierte Accounts tauchen nicht mehr im Vergleich auf.
+    users = session.exec(select(User).where(User.is_active).order_by(User.id)).all()
     rows = session.exec(
         select(Activity, Category)
         .join(Category, Activity.category_id == Category.id)

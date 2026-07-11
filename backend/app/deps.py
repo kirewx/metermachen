@@ -19,7 +19,7 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Nicht eingeloggt")
     user_id = auth.read_session_token(session_cookie)
     user = session.get(User, user_id) if user_id is not None else None
-    if user is None:
+    if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="Nicht eingeloggt")
     return user
 

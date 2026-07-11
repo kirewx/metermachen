@@ -23,6 +23,7 @@ services:
       STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID:-}
       STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET:-}
       STRAVA_WEBHOOK_VERIFY_TOKEN: ${STRAVA_WEBHOOK_VERIFY_TOKEN:-}
+      STRAVA_IMPORT_SINCE: ${STRAVA_IMPORT_SINCE:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL setzen, z. B. https://meter.example.de}
     labels:
       # Nur Container mit diesem Scope fasst unsere Watchtower-Instanz an.

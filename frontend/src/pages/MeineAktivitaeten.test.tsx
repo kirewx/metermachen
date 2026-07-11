@@ -12,6 +12,22 @@ vi.mock('../api/client', () => ({
       { id: 1, category_id: 1, date: '2026-03-01', distance_km: 5, duration_min: null, note: null, scaled_km: 20, edited: false, source: 'strava' },
       { id: 2, category_id: 1, date: '2026-03-02', distance_km: 3, duration_min: null, note: null, scaled_km: 12, edited: false, source: 'manual' },
     ]),
+    achievements: vi.fn().mockResolvedValue([
+      {
+        key: 'startschuss', title: 'Startschuss', description: 'Deine erste Aktivität ist im Kasten.',
+        icon: 'fahne', achieved: true, progress: 1,
+        parts: [{ label: 'Gesamt', current_km: 0.01, target_km: 0.01 }],
+      },
+      {
+        key: 'ironman', title: 'Ironman', description: '190 km Rad, 42 km Laufen und 4 km Schwimmen — die volle Distanz.',
+        icon: 'pokal', achieved: false, progress: 0.5,
+        parts: [
+          { label: 'Rad', current_km: 95, target_km: 190 },
+          { label: 'Laufen', current_km: 30, target_km: 42 },
+          { label: 'Schwimmen', current_km: 2, target_km: 4 },
+        ],
+      },
+    ]),
   },
 }))
 
@@ -42,5 +58,16 @@ describe('MeineAktivitaeten', () => {
     fireEvent.click(await screen.findByText('Laufen'))
     const badges = screen.getAllByText('Strava')
     expect(badges).toHaveLength(1)
+  })
+})
+
+describe('Achievements', () => {
+  it('zeigt erreichte und offene Achievements mit Fortschritt', async () => {
+    renderPage()
+    expect(await screen.findByText('Startschuss')).toBeInTheDocument()
+    expect(screen.getByText('Ironman')).toBeInTheDocument()
+    // Offenes Achievement zeigt die Teil-Fortschritte, erreichtes nicht.
+    expect(screen.getByText(/Rad: 95\/190 km/)).toBeInTheDocument()
+    expect(screen.queryByText(/Gesamt: 0\/0 km/)).not.toBeInTheDocument()
   })
 })

@@ -15,6 +15,7 @@ class User(SQLModel, table=True):
     display_name: str
     avatar: str = "icon:laufen"
     is_admin: bool = False
+    is_active: bool = True
     created_at: datetime = Field(default_factory=utcnow)
 
 

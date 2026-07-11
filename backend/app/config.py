@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from pathlib import Path
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -11,7 +12,16 @@ SKIP_SEED = os.environ.get("METER_SKIP_SEED") == "1"
 STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID", "")
 STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET", "")
 STRAVA_WEBHOOK_VERIFY_TOKEN = os.environ.get("STRAVA_WEBHOOK_VERIFY_TOKEN", "")
+# Aktivitäten vor diesem Datum (ISO, z. B. 2026-07-11) werden nie importiert —
+# weder beim Backfill noch per Webhook. Leer = kein Stichtag.
+STRAVA_IMPORT_SINCE = os.environ.get("STRAVA_IMPORT_SINCE", "")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+
+def strava_import_since() -> date | None:
+    if not STRAVA_IMPORT_SINCE:
+        return None
+    return date.fromisoformat(STRAVA_IMPORT_SINCE)
 
 
 def strava_enabled() -> bool:

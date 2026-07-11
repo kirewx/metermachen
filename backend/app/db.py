@@ -39,8 +39,13 @@ def _icon_for(value: str, fallback: str) -> str:
 def migrate(target=engine) -> None:
     """Schema-Anpassungen für Bestands-DBs (es gibt kein Alembic)."""
     with target.begin() as conn:
-        if "avatar_emoji" in _columns(conn, "user"):
+        user_cols = _columns(conn, "user")
+        if "avatar_emoji" in user_cols:
             conn.execute(text('ALTER TABLE "user" RENAME COLUMN avatar_emoji TO avatar'))
+        if user_cols and "is_active" not in user_cols:
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1')
+            )
 
         if _table_exists(conn, "category"):
             cat_cols = _columns(conn, "category")
