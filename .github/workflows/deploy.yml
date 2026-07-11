@@ -1,0 +1,55 @@
+name: Build & Publish Image
+
+# Jeder Push auf main baut ein neues Image und schiebt es in die GitHub Container
+# Registry (GHCR). Der Home-Server zieht es von dort — er baut selbst nichts.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Bei GHCR anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags und Labels bestimmen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # github.repository ist "kirewx/metermachen" — GHCR verlangt Kleinschreibung,
+          # was hier ohnehin erfüllt ist.
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Image bauen und pushen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # Nur amd64. Läuft der Home-Server auf einem Raspberry Pi o. Ä.,
+          # hier "linux/amd64,linux/arm64" eintragen (Build dauert dann deutlich länger).
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

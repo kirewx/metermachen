@@ -1,0 +1,59 @@
+# Home-Server-Stack: App + Cloudflare Tunnel + Watchtower (Auto-Update).
+#
+# Unterschied zu docker-compose.prod.yml (VPS):
+#   - Kein Caddy, keine Ports 80/443 am Host  -> kein Konflikt mit Pi-hole,
+#     kein Port-Forwarding im Router, funktioniert auch hinter DS-Lite/CGNAT.
+#   - Die App wird NICHT hier gebaut, sondern als fertiges Image aus GHCR gezogen.
+#   - Watchtower prüft regelmäßig auf ein neues :latest und startet die App neu.
+#
+# Start:   docker compose -f docker-compose.homeserver.yml up -d
+# Logs:    docker compose -f docker-compose.homeserver.yml logs -f
+#
+# Voraussetzung: .env neben dieser Datei (siehe .env.homeserver.example).
+
+services:
+  app:
+    image: ghcr.io/kirewx/metermachen:latest
+    volumes:
+      - ./data:/data # SQLite-DB — DIES ist dein Backup-Ziel
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY setzen}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD setzen}
+      STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID:-}
+      STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET:-}
+      STRAVA_WEBHOOK_VERIFY_TOKEN: ${STRAVA_WEBHOOK_VERIFY_TOKEN:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL setzen, z. B. https://meter.example.de}
+    labels:
+      # Nur Container mit diesem Scope fasst unsere Watchtower-Instanz an.
+      # Ohne das würde sie auch Pi-hole & Co. aktualisieren.
+      com.centurylinklabs.watchtower.scope: metermachen
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # Der Tunnel baut eine AUSGEHENDE Verbindung zu Cloudflare auf.
+    # Konfiguration (welcher Hostname auf welchen Service zeigt) liegt im
+    # Cloudflare-Dashboard, nicht hier — der Token verbindet beides.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Tunnel-Token aus dem Cloudflare-Dashboard setzen}
+    depends_on:
+      - app
+    labels:
+      com.centurylinklabs.watchtower.scope: metermachen
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Login-Daten für die (private) GHCR-Registry, damit Watchtower das
+      # neue Image überhaupt sehen und ziehen darf.
+      - ~/.docker/config.json:/config.json:ro
+    command: --interval 300 --cleanup --scope metermachen
+    labels:
+      # Watchtower selbst braucht das Label ebenfalls, sonst ignoriert
+      # eine scoped Instanz ihre eigenen Container.
+      com.centurylinklabs.watchtower.scope: metermachen
+    restart: unless-stopped
