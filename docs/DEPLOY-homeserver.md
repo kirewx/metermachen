@@ -21,7 +21,7 @@ GitHub Actions ──baut Image──▶ GHCR (ghcr.io/kirewx/metermachen:latest
    Cloudflare ◀──ausgehender Tunnel── Home-Server
         ▲                              ├── app         (kein Port nach außen)
         │                              ├── cloudflared
- https://metermachen.jasperz.de        └── watchtower
+   https://meter.deine-domain.de       └── watchtower
         │
     Besucher
 ```
@@ -48,58 +48,58 @@ Image. Das schont RAM/CPU und gibt dir versionierte Images zum Zurückrollen.
 
 ---
 
-## Schritt 1 — Nur die Subdomain `metermachen.jasperz.de` an Cloudflare delegieren
+## Schritt 1 — Domain zu Cloudflare umziehen
 
 > **Warum überhaupt?** Der Tunnel funktioniert über einen DNS-Eintrag vom Typ
 > `CNAME → <tunnel-id>.cfargotunnel.com`. Diesen Zielnamen kann **nur**
-> Cloudflare auflösen; bei Strato lässt er sich nicht anlegen. Cloudflare muss
-> also für den Namen zuständig sein.
+> Cloudflare auflösen; bei Strato lässt er sich nicht anlegen. Die Alternative,
+> bei der die Domain beim alten Anbieter bleibt ("Partial/CNAME Setup"),
+> ist Business-Plan aufwärts. Also: DNS-Hoheit zu Cloudflare.
 >
-> **Wichtig:** Auf `jasperz.de` liegt noch anderes (E-Mail, Website o. Ä.).
-> Deshalb ziehen wir **nicht** die ganze Domain zu Cloudflare um — das würde
-> alle Strato-DNS-Einträge auf einen Schlag ungültig machen. Stattdessen
-> delegieren wir **nur die eine Subdomain** `metermachen.jasperz.de` an
-> Cloudflare. `jasperz.de` selbst bleibt komplett bei Strato, unangetastet.
-> Blast-Radius = genau diese Subdomain.
+> Die Domain bleibt bei Strato **registriert**. Nur die Nameserver ändern sich.
 
-**1.1 — Subdomain als eigene Zone in Cloudflare anlegen.** Cloudflare Dashboard →
-*Add a site* → dort **`metermachen.jasperz.de`** eintragen (nicht `jasperz.de`!)
-→ Plan *Free*. Cloudflare findet keine bestehenden Records (die Subdomain ist ja
-neu) — das ist in Ordnung, der Tunnel legt seinen Eintrag später selbst an.
+> [!IMPORTANT]
+> Im **Free-Plan** geht ausschließlich der Umzug der **gesamten** Domain
+> ("full setup"). Nur eine einzelne Subdomain an Cloudflare zu delegieren
+> (eine Subdomain als eigene Zone) ist **Enterprise-only**; die CNAME-/Partial-
+> Variante ist Business aufwärts. Der „Add a site"-Assistent akzeptiert deshalb
+> auch nur Root-Domains, keine Subdomains. Liegt auf deiner Domain noch anderes
+> (E-Mail, Website) und willst du das **nicht** zu Cloudflare umziehen, ist
+> dieser Home-Server-Weg für dich nicht der richtige — nimm dann den VPS-Weg
+> ([DEPLOY-netcup.md](DEPLOY-netcup.md)), bei dem ein einzelner A-Record beim
+> bestehenden Anbieter genügt.
 
-Cloudflare zeigt dir am Ende **zwei Nameserver**, z. B.:
+> [!WARNING]
+> Sobald die Nameserver umgestellt sind, gelten **alle** DNS-Einträge bei Strato
+> nicht mehr. Liegt auf der Domain E-Mail (MX-Records) oder eine Website, ist
+> beides sofort tot, wenn die Einträge nicht vorher in Cloudflare stehen.
+> Schritt 1.1 ist deshalb keine Fleißarbeit, sondern der wichtigste Schritt.
 
-```
-xy.ns.cloudflare.com
-zz.ns.cloudflare.com
-```
-
-**1.2 — Delegation bei Strato eintragen.** In der DNS-Verwaltung von
-`jasperz.de` (Strato: Domainverwaltung → Zahnrad → *DNS*) **zwei NS-Records**
-für den Host `metermachen` anlegen, mit genau den beiden Cloudflare-Namen:
-
-```
-metermachen   NS   xy.ns.cloudflare.com
-metermachen   NS   zz.ns.cloudflare.com
-```
-
-Sonst an `jasperz.de` **nichts** ändern — kein Nameserver-Umzug. MX, Website und
-alle anderen Records bleiben, wie sie sind.
-
-> [!NOTE]
-> Falls Stratos DNS-Editor keine NS-Records für eine Subdomain zulässt, ist
-> dieser Weg blockiert. Fallback dann: Mini-VPS als Relay (WireGuard/frp) —
-> melde dich, dann bauen wir das.
-
-**1.3 — Delegation prüfen.** Greift meist nach Minuten, kann laut Doku bis zu
-24 h dauern. Cloudflare schickt eine Mail, sobald die Zone aktiv ist. Von außen:
+**1.1 — Bestehende Einträge sichern.** Bei Strato unter
+Domainverwaltung → Zahnrad → *DNS* alle Records notieren, besonders
+`MX`, `TXT` (SPF/DKIM), `A`, `CNAME`. Zur Kontrolle von außen:
 
 ```bash
-dig +short NS metermachen.jasperz.de
+dig +short deine-domain.de MX
+dig +short deine-domain.de TXT
+dig +short deine-domain.de A
 ```
 
-Sobald hier die beiden `*.ns.cloudflare.com` erscheinen, ist die Subdomain
-delegiert und du kannst weitermachen.
+**1.2 — Domain in Cloudflare anlegen.** Dashboard → *Add a site* → Domain
+eintragen → *Free*. Cloudflare scannt die vorhandenen Records und übernimmt die
+meisten automatisch. **Trotzdem prüfen** und Fehlendes aus 1.1 von Hand
+nachtragen, bevor du weitermachst.
+
+**1.3 — Nameserver bei Strato umstellen.** Cloudflare zeigt dir zwei Nameserver
+(z. B. `xxx.ns.cloudflare.com`). Bei Strato: Domainverwaltung → Zahnrad →
+Tab *DNS* → *Eigene Nameserver* aktivieren → beide eintragen → speichern.
+
+Die Umstellung braucht meist Minuten, laut Registrar-Doku bis zu 24 Stunden.
+Cloudflare schickt eine Mail, sobald die Domain aktiv ist. Prüfen:
+
+```bash
+dig +short NS deine-domain.de
+```
 
 ---
 
@@ -112,8 +112,8 @@ delegiert und du kannst weitermachen.
    er kommt gleich in die `.env`. Die vorgeschlagene Install-Zeile brauchst du
    nicht, das übernimmt Compose.
 4. Tab **Public Hostname** → *Add a public hostname*:
-   - **Subdomain:** *(leer lassen)*
-   - **Domain:** `metermachen.jasperz.de`  ← die ganze Subdomain ist hier die „Domain", weil sie eine eigene Zone ist
+   - **Subdomain:** `meter`
+   - **Domain:** `deine-domain.de`
    - **Type:** `HTTP`
    - **URL:** `app:8000`
 
@@ -122,7 +122,7 @@ delegiert und du kannst weitermachen.
    > `HTTP` ist hier korrekt: die Strecke Besucher→Cloudflare ist HTTPS, die
    > letzten Zentimeter im Docker-Netz brauchen kein zweites Zertifikat.
 
-Den DNS-Eintrag für `metermachen.jasperz.de` legt Cloudflare dabei selbst an.
+Den DNS-Eintrag für `meter.deine-domain.de` legt Cloudflare dabei selbst an.
 
 ---
 
@@ -171,7 +171,7 @@ openssl rand -hex 32          # -> SECRET_KEY
 ```
 
 - `ADMIN_PASSWORD` — frei wählen
-- `PUBLIC_BASE_URL` — `https://metermachen.jasperz.de` (exakt der Hostname aus Schritt 2.4)
+- `PUBLIC_BASE_URL` — `https://meter.deine-domain.de` (exakt der Hostname aus Schritt 2.4)
 - `CLOUDFLARE_TUNNEL_TOKEN` — der Token aus Schritt 2.3
 
 Starten:
@@ -182,7 +182,7 @@ docker compose -f docker-compose.homeserver.yml logs -f
 ```
 
 In den `cloudflared`-Logs sollte `Registered tunnel connection` erscheinen.
-Danach ist `https://metermachen.jasperz.de` von überall erreichbar.
+Danach ist `https://meter.deine-domain.de` von überall erreichbar.
 
 ---
 
@@ -191,7 +191,7 @@ Danach ist `https://metermachen.jasperz.de` von überall erreichbar.
 Nur nötig, wenn du die Strava-Integration nutzt. Unter
 <https://www.strava.com/settings/api>:
 
-- **Authorization Callback Domain:** `metermachen.jasperz.de`
+- **Authorization Callback Domain:** `meter.deine-domain.de`
   (nur der Hostname, ohne `https://`, ohne Pfad)
 
 `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` und einen selbst ausgedachten
