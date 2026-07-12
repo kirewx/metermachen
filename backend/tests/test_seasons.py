@@ -73,3 +73,18 @@ def test_patch_season_empty_milestones_clears(client, session):
     r = client.patch(f"/api/seasons/{season.id}", json={"milestones": []})
     assert r.status_code == 200
     assert r.json()["milestones"] == []
+
+
+def test_season_start_date_roundtrip(client, session):
+    make_user(session, is_admin=True)
+    login(client)
+    r = client.post(
+        "/api/seasons",
+        json={"year": 2031, "goal_km": 1000, "start_date": "2031-07-20"},
+    )
+    assert r.status_code == 201
+    assert r.json()["start_date"] == "2031-07-20"
+    sid = r.json()["id"]
+    r = client.patch(f"/api/seasons/{sid}", json={"start_date": None})
+    assert r.status_code == 200
+    assert r.json()["start_date"] is None

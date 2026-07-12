@@ -34,11 +34,13 @@ class UserAdminOut(BaseModel):
     avatar: str
     is_admin: bool
     is_active: bool
+    km_factor: float
     created_at: datetime
 
 
 class UserAdminPatch(BaseModel):
     is_active: bool | None = None
+    km_factor: float | None = Field(default=None, gt=0)
 
 
 def _username_taken(session: Session, username: str, ignore_id: int | None = None) -> bool:
@@ -108,6 +110,8 @@ def patch_user(
                 status_code=409, detail="Den eigenen Account kannst du nicht deaktivieren"
             )
         user.is_active = data.is_active
+    if data.km_factor is not None:
+        user.km_factor = data.km_factor
     session.add(user)
     session.commit()
     session.refresh(user)

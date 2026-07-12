@@ -59,11 +59,13 @@ class SeasonCreate(BaseModel):
     year: int = Field(ge=2000, le=2100)
     goal_km: float = Field(gt=0)
     milestones: list[Milestone] = []
+    start_date: date_type | None = None
 
 
 class SeasonPatch(BaseModel):
     goal_km: float | None = Field(default=None, gt=0)
     milestones: list[Milestone] | None = None
+    start_date: date_type | None = None  # None + gesetzt = Startdatum löschen
 
 
 class SeasonOut(BaseModel):
@@ -71,6 +73,7 @@ class SeasonOut(BaseModel):
     year: int
     goal_km: float
     milestones: list[Milestone]
+    start_date: date_type | None
 
     @classmethod
     def from_season(cls, season: Season) -> "SeasonOut":
@@ -79,6 +82,7 @@ class SeasonOut(BaseModel):
             year=season.year,
             goal_km=season.goal_km,
             milestones=json.loads(season.milestones_json),
+            start_date=season.start_date,
         )
 
 
@@ -150,6 +154,7 @@ class ComparisonUser(BaseModel):
     avatar: str
     rank: int
     total_scaled_km: float
+    km_factor: float = 1.0
     by_category: list[CategoryShare]
     segments: list[Segment]
     cumulative: list[CumulativePoint]
@@ -160,3 +165,5 @@ class ComparisonOut(BaseModel):
     goal_km: float
     milestones: list[Milestone]
     users: list[ComparisonUser]
+    start_date: date_type | None = None
+    phase: str = "challenge"

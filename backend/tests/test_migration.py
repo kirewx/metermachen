@@ -127,3 +127,41 @@ def test_migrate_adds_backfill_columns(tmp_path):
             "SELECT backfill_state, backfill_total, backfill_done FROM stravaconnection WHERE id = 1"
         )).first()
         assert row == ("idle", 0, 0)
+
+
+def test_migration_adds_season_start_date_and_backfills_2026(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE season (id INTEGER PRIMARY KEY, year INTEGER, "
+            "goal_km FLOAT, milestones_json TEXT)"
+        ))
+        conn.execute(text(
+            "INSERT INTO season (year, goal_km, milestones_json)"
+            " VALUES (2026, 1000, '[]'), (2027, 1000, '[]')"
+        ))
+    migrate(engine)
+    with engine.begin() as conn:
+        rows = dict(conn.execute(
+            text("SELECT year, start_date FROM season ORDER BY year")
+        ).fetchall())
+    assert rows[2026] == "2026-07-20"  # einmaliger Backfill
+    assert rows[2027] is None
+
+
+def test_migration_adds_user_km_factor(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE user (id INTEGER PRIMARY KEY, username VARCHAR, "
+            "password_hash VARCHAR, display_name VARCHAR, avatar VARCHAR, "
+            "is_admin BOOLEAN, is_active BOOLEAN, created_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO user (username, password_hash, display_name, avatar, is_admin, is_active)"
+            " VALUES ('erik', 'x', 'Erik', 'icon:laufen', 1, 1)"
+        ))
+    migrate(engine)
+    with engine.begin() as conn:
+        val = conn.execute(text("SELECT km_factor FROM user")).scalar()
+    assert val == 1.0

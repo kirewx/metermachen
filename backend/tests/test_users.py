@@ -153,3 +153,19 @@ def test_cannot_delete_self(client, session):
     chef = make_user(session, username="chef", is_admin=True)
     login(client, username="chef")
     assert client.delete(f"/api/users/{chef.id}").status_code == 409
+
+
+def test_admin_sets_km_factor(client, session):
+    make_user(session, is_admin=True)
+    lisa = make_user(session, username="lisa")
+    login(client)
+    r = client.patch(f"/api/users/{lisa.id}", json={"km_factor": 3.0})
+    assert r.status_code == 200
+    assert r.json()["km_factor"] == 3.0
+
+
+def test_km_factor_must_be_positive(client, session):
+    make_user(session, is_admin=True)
+    lisa = make_user(session, username="lisa")
+    login(client)
+    assert client.patch(f"/api/users/{lisa.id}", json={"km_factor": 0}).status_code == 422

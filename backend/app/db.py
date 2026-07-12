@@ -46,6 +46,10 @@ def migrate(target=engine) -> None:
             conn.execute(
                 text('ALTER TABLE "user" ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1')
             )
+        if user_cols and "km_factor" not in user_cols:
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN km_factor FLOAT NOT NULL DEFAULT 1.0')
+            )
 
         if _table_exists(conn, "category"):
             cat_cols = _columns(conn, "category")
@@ -66,6 +70,13 @@ def migrate(target=engine) -> None:
                 ))
 
         if _table_exists(conn, "season"):
+            season_cols = _columns(conn, "season")
+            if "start_date" not in season_cols:
+                conn.execute(text("ALTER TABLE season ADD COLUMN start_date DATE"))
+                # Einmaliger Backfill: Challenge 2026 startet am 20.07.
+                conn.execute(text(
+                    "UPDATE season SET start_date = '2026-07-20' WHERE year = 2026"
+                ))
             for id_, raw in conn.execute(text("SELECT id, milestones_json FROM season")).fetchall():
                 milestones = json.loads(raw or "[]")
                 if any("emoji" in m for m in milestones):

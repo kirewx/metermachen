@@ -16,6 +16,7 @@ class User(SQLModel, table=True):
     avatar: str = "icon:laufen"
     is_admin: bool = False
     is_active: bool = True
+    km_factor: float = 1.0  # Admin-Handicap, wirkt nur im Challenge-Ranking
     created_at: datetime = Field(default_factory=utcnow)
 
 
@@ -62,6 +63,7 @@ class Season(SQLModel, table=True):
     year: int = Field(unique=True)
     goal_km: float
     milestones_json: str = "[]"  # JSON-Liste [{"km":..,"label":..,"icon":..}]
+    start_date: date_type | None = None  # Challenge-Start; None = ab 1.1.
 
 
 class Invite(SQLModel, table=True):

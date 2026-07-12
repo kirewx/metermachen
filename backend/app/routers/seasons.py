@@ -28,6 +28,7 @@ def create_season(data: SeasonCreate, session: Session = Depends(get_session)):
         year=data.year,
         goal_km=data.goal_km,
         milestones_json=json.dumps([m.model_dump() for m in data.milestones]),
+        start_date=data.start_date,
     )
     session.add(season)
     session.commit()
@@ -48,6 +49,8 @@ def patch_season(
         season.goal_km = data.goal_km
     if data.milestones is not None:
         season.milestones_json = json.dumps([m.model_dump() for m in data.milestones])
+    if "start_date" in data.model_fields_set:
+        season.start_date = data.start_date
     session.add(season)
     session.commit()
     session.refresh(season)
