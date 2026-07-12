@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sidebets Review — MeterMachen</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --line: #30363d;
+    --ink: #e6edf3; --mute: #8b949e; --accent: #2dd4bf; --warn: #f0883e;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f8fa; --card: #ffffff; --line: #d0d7de;
+            --ink: #1f2328; --mute: #57606a; --accent: #0d9488; --warn: #bc4c00; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 880px; padding: 2rem 1.25rem 4rem;
+         background: var(--bg); color: var(--ink);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 1.7rem; } h1 span { color: var(--accent); }
+  h2 { margin-top: 2.2rem; border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
+  h3 { color: var(--accent); margin-bottom: .3rem; }
+  .card { background: var(--card); border: 1px solid var(--line);
+          border-radius: 12px; padding: 1rem 1.25rem; margin: 1rem 0; }
+  .beispiel { border-left: 3px solid var(--accent); padding: .5rem .9rem;
+              margin: .6rem 0; background: color-mix(in srgb, var(--accent) 6%, transparent);
+              border-radius: 0 8px 8px 0; font-size: .95rem; }
+  .beispiel b { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; vertical-align: top; }
+  th { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  code { background: color-mix(in srgb, var(--mute) 18%, transparent);
+         padding: .1rem .35rem; border-radius: 5px; font-size: .88em; }
+  .warn { border-left: 3px solid var(--warn); padding: .5rem .9rem; margin: .6rem 0;
+          background: color-mix(in srgb, var(--warn) 7%, transparent); border-radius: 0 8px 8px 0; }
+  .mute { color: var(--mute); }
+  div.tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<h1>🎲 Sidebet-System — <span>Review</span></h1>
+<p class="mute">Branch <code>feature/sidebets</code> · Spec: <code>docs/superpowers/specs/2026-07-12-countdown-warmup-sidebets-design.md</code></p>
+
+<h2>Punkte-Ökonomie</h2>
+<div class="card">
+  <ul>
+    <li><b>Start:</b> Jeder bekommt einmalig <b>100 Punkte</b> (automatisch beim ersten Kontakt mit dem Punktesystem).</li>
+    <li><b>Einkommen:</b> <b>+1 Punkt je 5 gewertete km</b> ab Challenge-Start (Kategorie-Faktor × Admin-Handicap). Wird automatisch nachgebucht, idempotent — kein Cron.</li>
+    <li><b>Konto:</b> Transaktions-Ledger (<code>PointTransaction</code>), Kontostand = Summe. Einsatz nie höher als Kontostand, Konto kann nicht unter 0 fallen.</li>
+    <li><b>Punkte-Ranking:</b> eigene Rangliste — die zweite Meisterschaft neben den km.</li>
+  </ul>
+</div>
+
+<h2>Die vier Wettarten</h2>
+
+<div class="card">
+  <h3>1. Duell (1 gg. 1) mit Handicap</h3>
+  <p>„Ich mache im Zeitraum X mehr km als Person Y." Herausforderer legt Einsatz und optional Handicap fest (km-Vorsprung und/oder Faktor pro Person). Gegner nimmt an oder lehnt ab. Wird das Duell bis zum Zeitraum-Start nicht angenommen, verfällt es (Einsatz zurück).</p>
+  <div class="beispiel">
+    <b>Beispiel:</b> Erik fordert Lisa: 20 P Einsatz, Lisa bekommt 2 km Vorsprung und Faktor ×2.
+    Erik läuft 10 km, Lisa 4 km → Lisa zählt (4+2)×2 = <b>12 &gt; 10</b> → Lisa gewinnt den Pott (40 P).
+    Erik: 100−20 = 80 P · Lisa: 100−20+40 = <b>120 P</b>. Bei Gleichstand: Einsätze zurück.
+  </div>
+</div>
+
+<div class="card">
+  <h3>2. Monats-Tipp</h3>
+  <p>Automatische Tipprunde pro Kalendermonat (erste Runde: <b>August 2026</b>). Bis zum 5. tippen alle für 10 P, wer den Monat gewinnt (gewertete km inkl. Admin-Handicap, wie das Haupt-Ranking). Pott geht zu gleichen Teilen an die Richtigen; liegt niemand richtig, rollt der Pott als <b>Jackpot</b> in den Folgemonat.</p>
+  <div class="beispiel">
+    <b>Beispiel:</b> 3 Tipper à 10 P → Pott 30. Erik + Lisa tippen richtig → je <b>15 P</b>.
+    Tippt niemand richtig → nächster Monats-Tipp startet mit 30 P Jackpot.
+    Nicht teilbare Reste wandern ebenfalls in den Jackpot.
+  </div>
+</div>
+
+<div class="card">
+  <h3>3. Ziel-Wette / Streak-Wette (gegen sich selbst)</h3>
+  <p>„Ich wette N Punkte, dass ich Z km schaffe" oder „…K Tage in Folge Sport mache (≥1 km roh/Tag)". Andere können bis zum Zeitraum-Start <b>dagegenhalten</b> (zusammen max. N). Ohne Gegenhalter verfällt die Wette (Einsatz zurück).</p>
+  <div class="beispiel">
+    <b>Beispiel (verfehlt):</b> Erik wettet 20 P auf 10 km, Lisa hält 7 P, Mia 6 P dagegen. Erik schafft es nicht →
+    Anteile floor(7/13×20)=10 bzw. floor(6/13×20)=9, Rest 1 P an die früheste Gegenhalterin.
+    Lisa: +11 netto, Mia: +9 netto, Erik: −20.
+    <br><b>Beispiel (geschafft):</b> Erik kassiert alle Gegen-Einsätze (bei 13 P dagegen: +13 netto).
+  </div>
+</div>
+
+<div class="card">
+  <h3>4. Über/Unter-Gruppenwette</h3>
+  <p>„Schafft die <b>ganze Gruppe</b> zusammen Z km im Zeitraum?" Jeder setzt den festen Einsatz auf Über oder Unter (bis Zeitraum-Start). Verliererseite zahlt an die Gewinnerseite, proportional zum Einsatz. Genau erreicht = „Über" gewinnt. Eine Seite leer → Einsätze zurück.</p>
+  <div class="beispiel">
+    <b>Beispiel:</b> Ziel 10 km, Erik setzt 10 P auf Über, Lisa 10 P auf Unter. Gruppe macht 12 km →
+    Erik bekommt 10 (Einsatz) + 10 (Lisas Einsatz) = <b>20 P</b>.
+  </div>
+</div>
+
+<h2>Spielregeln (alle Wettarten)</h2>
+<div class="card">
+  <ul>
+    <li>Zeitraum muss <b>in der Zukunft</b> beginnen; Beitritt/Tipp/Dagegenhalten nur bis Zeitraum-Start (Monats-Tipp: bis zum 5.).</li>
+    <li>Wett-km = km × Kategorie-Faktor, <b>ohne</b> Admin-Handicap (Ausnahme Monats-Tipp: wie Haupt-Ranking, <b>mit</b> Handicap). Handicaps im Duell sind Verhandlungssache.</li>
+    <li>Auflösung <b>automatisch beim ersten Seitenaufruf</b> nach Zeitraum-Ende (lazy, kein Cron).</li>
+    <li>Stornieren: nur wer die Wette erstellt hat, nur vor Zeitraum-Start, alle Einsätze zurück.</li>
+    <li>Wird ein Teilnehmer deaktiviert/gelöscht, wird die Wette abgebrochen und alle bekommen ihre Einsätze zurück.</li>
+    <li>Nach der Auflösung wird nie neu abgerechnet, auch wenn Aktivitäten nachträglich geändert werden.</li>
+  </ul>
+</div>
+
+<h2>Wett-Achievements</h2>
+<div class="tablewrap"><table>
+  <tr><th>Achievement</th><th>Bedingung</th></tr>
+  <tr><td>🎰 <b>Zocker</b></td><td>10 Wetten abgeschlossen (egal wie sie ausgingen)</td></tr>
+  <tr><td>⚡ <b>David gegen Goliath</b></td><td>Duell gegen jemanden gewonnen, der beim Wettende im km-Ranking über dir stand</td></tr>
+  <tr><td>🏆 <b>High Roller</b></td><td>Wette mit ≥ 50 P Einsatz gewonnen</td></tr>
+  <tr><td>🔮 <b>Orakel</b></td><td>3 Monats-Tipps richtig</td></tr>
+</table></div>
+
+<h2>API &amp; Datenmodell</h2>
+<div class="tablewrap"><table>
+  <tr><th>Endpoint</th><th>Zweck</th></tr>
+  <tr><td><code>GET /api/bets</code></td><td>Alle Wetten; löst vorher Fälliges auf, legt Monats-Tipprunde an</td></tr>
+  <tr><td><code>POST /api/bets</code></td><td>Wette erstellen (Typ + Parameter)</td></tr>
+  <tr><td><code>POST /api/bets/{id}/respond</code></td><td>annehmen / ablehnen / tippen / dagegenhalten / über / unter</td></tr>
+  <tr><td><code>POST /api/bets/{id}/cancel</code></td><td>Stornieren vor Zeitraum-Start</td></tr>
+  <tr><td><code>GET /api/bets/achievements</code></td><td>Wett-Achievements des eingeloggten Users</td></tr>
+  <tr><td><code>GET /api/points</code></td><td>Kontostand + Transaktionshistorie</td></tr>
+  <tr><td><code>GET /api/points/ranking</code></td><td>Punkte-Rangliste</td></tr>
+</table></div>
+<div class="card">
+  <p>Neue Tabellen: <code>bet</code> (Wette inkl. <code>params_json</code>/<code>result_json</code>/Jackpot), <code>betparticipant</code> (Rolle, Einsatz, Payout, Tipp), <code>pointtransaction</code> (Ledger). Entstehen automatisch beim Start (<code>create_all</code>) — <b>keine manuelle Migration nötig</b>.</p>
+  <p>Frontend: neuer Tab <b>Wetten</b> (sichtbar ab Challenge-Start): Kontostand, „Offen für dich", laufende Wetten mit Live-Zwischenstand, Punkte-Ranking, Wett-Erfolge, Historie, Erstell-Dialog mit den 4 Wettarten.</p>
+</div>
+
+<h2>Bewusste Entscheidungen / bitte prüfen</h2>
+<div class="warn">
+  <ul>
+    <li><b>Admin-Handicap zählt in Wetten nicht</b> (außer Monats-Tipp) — Duell-Handicaps verhandelt man pro Wette. OK?</li>
+    <li><b>Erste Tipprunde August 2026</b>, weil der Juli-Tippschluss (5.7.) vor dem Challenge-Start läge.</li>
+    <li><b>Genau erreichtes Gruppenziel zählt als „Über"</b> (≥).</li>
+    <li>Punkte sind ganzzahlig; nicht teilbare Reste gehen an den frühesten Teilnehmer (bzw. beim Tipp in den Jackpot).</li>
+    <li>Kein Nachschub außer Sport — wer pleite ist, muss km machen. Gewollt (deine Wahl), aber leicht änderbar.</li>
+  </ul>
+</div>
+
+<h2>Testabdeckung</h2>
+<div class="card">
+  <p><b>Backend: 155 Tests grün</b>, davon 33 neu für Sidebets (Punkte-Ledger idempotent, Lifecycle-Validierungen, Auflösung aller 4 Typen inkl. Gleichstand, leerer Seite, fehlender Gegenhalter, Jackpot-Rollover, deaktivierter Teilnehmer, API-Flows). <b>Frontend: 60 Tests grün</b> (u.a. Wetten-Seite: Rendering + Duell annehmen), Lint + TypeScript-Build sauber.</p>
+</div>
+
+</body>
+</html>
