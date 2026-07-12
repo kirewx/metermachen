@@ -83,3 +83,76 @@ def test_inactive_user_hidden_from_comparison(client, session):
     login(client)
     users = client.get("/api/comparison/2026").json()["users"]
     assert [u["display_name"] for u in users] == ["Erik"]
+
+
+def _stichtag_setup(session, start_offset_days):
+    """Season mit start_date relativ zu heute; Aktivitäten um den Stichtag."""
+    from datetime import timedelta
+
+    user = make_user(session, is_admin=True)
+    cat = make_category(session, factor=1.0)
+    start = date.today() + timedelta(days=start_offset_days)
+    season = Season(
+        year=date.today().year, goal_km=1000, start_date=start, milestones_json="[]"
+    )
+    session.add(season)
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=start - timedelta(days=1), distance_km=10))
+    if start_offset_days <= 0:
+        session.add(Activity(user_id=user.id, category_id=cat.id,
+                             date=start, distance_km=7))
+    session.commit()
+    return user, start
+
+
+def test_comparison_counts_everything_before_start(client, session):
+    _stichtag_setup(session, start_offset_days=5)  # Start in Zukunft = Testphase
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}")
+    assert r.json()["users"][0]["total_scaled_km"] == 10.0
+    assert r.json()["start_date"] is not None
+
+
+def test_comparison_counts_only_from_start_after_start(client, session):
+    _stichtag_setup(session, start_offset_days=0)  # Start heute = Challenge läuft
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}")
+    assert r.json()["users"][0]["total_scaled_km"] == 7.0
+
+
+def test_comparison_warmup_phase(client, session):
+    _stichtag_setup(session, start_offset_days=0)
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}?phase=warmup")
+    assert r.json()["users"][0]["total_scaled_km"] == 10.0
+    assert r.json()["phase"] == "warmup"
+
+
+def test_comparison_warmup_404_ohne_startdatum(client, session):
+    make_user(session, is_admin=True)
+    session.add(Season(year=date.today().year, goal_km=1000, milestones_json="[]"))
+    session.commit()
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}?phase=warmup")
+    assert r.status_code == 404
+
+
+def test_comparison_applies_km_factor(client, session):
+    user, _ = _stichtag_setup(session, start_offset_days=0)
+    user.km_factor = 3.0
+    session.add(user)
+    session.commit()
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}")
+    assert r.json()["users"][0]["total_scaled_km"] == 21.0
+    assert r.json()["users"][0]["km_factor"] == 3.0
+
+
+def test_comparison_warmup_ignores_km_factor(client, session):
+    user, _ = _stichtag_setup(session, start_offset_days=0)
+    user.km_factor = 3.0
+    session.add(user)
+    session.commit()
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}?phase=warmup")
+    assert r.json()["users"][0]["total_scaled_km"] == 10.0

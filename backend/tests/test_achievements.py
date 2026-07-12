@@ -98,3 +98,40 @@ def test_only_own_activities_count(client, session):
     login(client)  # als erik
     a = {x["key"]: x for x in client.get("/api/achievements").json()}
     assert a["startschuss"]["achieved"] is False
+
+
+def test_warmup_achievements(client, session):
+    from datetime import date, timedelta
+
+    from app.models import Season
+
+    erik = make_user(session, is_admin=True)
+    lisa = make_user(session, username="lisa")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    rad = make_category(session, name="Radfahren", icon="rad", factor=0.25)
+    start = date.today()  # Challenge startet heute -> Warm-up abgeschlossen
+    session.add(Season(year=date.today().year, goal_km=1000,
+                       start_date=start, milestones_json="[]"))
+    d = start - timedelta(days=2)
+    session.add(Activity(user_id=erik.id, category_id=lauf.id, date=d, distance_km=20))
+    session.add(Activity(user_id=lisa.id, category_id=rad.id, date=d, distance_km=100))
+    session.commit()
+    login(client)
+    r = client.get("/api/achievements/warmup")
+    assert r.status_code == 200
+    body = r.json()
+    by_key = {a["key"]: a for a in body["achievements"]}
+    assert by_key["warmup_laeufer"]["winners"][0]["display_name"] == "Erik"
+    # Guter Start: gewertete km — Erik 20*1.0=20, Lisa 100*0.25=25
+    assert by_key["guter_start"]["winners"][0]["display_name"] == "Lisa"
+    assert by_key["guter_start"]["winners"][0]["km"] == 25.0
+    assert "warmup_schwimmer" not in by_key  # keine Schwimm-Aktivität
+    assert body["final"] is True
+
+
+def test_warmup_achievements_ohne_startdatum_leer(client, session):
+    make_user(session)
+    login(client)
+    r = client.get("/api/achievements/warmup")
+    assert r.status_code == 200
+    assert r.json() == {"final": False, "start_date": None, "achievements": []}

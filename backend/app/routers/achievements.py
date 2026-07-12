@@ -8,13 +8,14 @@ oder bei selbst angelegten Kategorien greift.
 
 import json
 from collections import defaultdict
+from datetime import date as date_type
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
-from ..models import Activity, Category, User
+from ..models import Activity, Category, Season, User
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
 
@@ -95,6 +96,81 @@ DEFINITIONS: list[tuple[str, str, str, str, dict[str, float]]] = [
         "blitz", {"gesamt": 1000.0},
     ),
 ]
+
+
+class WarmupWinner(BaseModel):
+    user_id: int
+    display_name: str
+    avatar: str
+    km: float
+
+
+class WarmupAchievement(BaseModel):
+    key: str
+    title: str
+    icon: str
+    winners: list[WarmupWinner]  # bei Gleichstand mehrere
+
+
+class WarmupOut(BaseModel):
+    final: bool  # True sobald die Challenge gestartet ist
+    start_date: date_type | None
+    achievements: list[WarmupAchievement]
+
+
+# (key, titel, icon, bucket) — "gesamt" = gewertete km (Kategorie-Faktor),
+# Sport-Buckets = rohe km. Admin-Handicap zählt hier bewusst nicht.
+_WARMUP_DEFS = [
+    ("guter_start", "Guter Start", "fahne", "gesamt"),
+    ("warmup_laeufer", "Warm-up-Läufer", "laufen", LAUF),
+    ("warmup_radler", "Warm-up-Radler", "rad", RAD),
+    ("warmup_schwimmer", "Warm-up-Schwimmer", "schwimmen", SCHWIMM),
+]
+
+
+@router.get(
+    "/warmup", response_model=WarmupOut, dependencies=[Depends(get_current_user)]
+)
+def warmup_achievements(session: Session = Depends(get_session)):
+    today = date_type.today()
+    season = session.exec(select(Season).where(Season.year == today.year)).first()
+    start = season.start_date if season else None
+    if start is None:
+        return WarmupOut(final=False, start_date=None, achievements=[])
+
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
+    # {bucket bzw. "gesamt": {user_id: km}}
+    sums: dict[str, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+    for act in session.exec(select(Activity).where(Activity.date < start)).all():
+        if act.user_id not in users or act.date.year != start.year:
+            continue
+        cat = cats.get(act.category_id)
+        if cat is None:
+            continue
+        sums["gesamt"][act.user_id] += act.distance_km * cat.factor
+        bucket = bucket_for_category(cat)
+        if bucket is not None:
+            sums[bucket][act.user_id] += act.distance_km
+
+    out = []
+    for key, title, icon, bucket in _WARMUP_DEFS:
+        totals = sums.get(bucket, {})
+        if not totals:
+            continue
+        best = max(totals.values())
+        winners = [
+            WarmupWinner(
+                user_id=uid,
+                display_name=users[uid].display_name,
+                avatar=users[uid].avatar,
+                km=round(km, 2),
+            )
+            for uid, km in sorted(totals.items(), key=lambda kv: -kv[1])
+            if km == best
+        ]
+        out.append(WarmupAchievement(key=key, title=title, icon=icon, winners=winners))
+    return WarmupOut(final=today >= start, start_date=start, achievements=out)
 
 
 @router.get("", response_model=list[AchievementOut])

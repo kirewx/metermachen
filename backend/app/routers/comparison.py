@@ -1,5 +1,7 @@
 import json
 from collections import defaultdict
+from datetime import date as date_type
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -20,7 +22,11 @@ router = APIRouter(prefix="/api/comparison", tags=["comparison"])
 @router.get(
     "/{year}", response_model=ComparisonOut, dependencies=[Depends(get_current_user)]
 )
-def comparison(year: int, session: Session = Depends(get_session)):
+def comparison(
+    year: int,
+    phase: Literal["challenge", "warmup"] = "challenge",
+    session: Session = Depends(get_session),
+):
     season = session.exec(select(Season).where(Season.year == year)).first()
     if season is None:
         raise HTTPException(status_code=404, detail="Kein Jahr konfiguriert")
@@ -34,6 +40,15 @@ def comparison(year: int, session: Session = Depends(get_session)):
     ).all()
     rows = [(a, c) for a, c in rows if a.date.year == year]
 
+    start = season.start_date
+    if phase == "warmup":
+        if start is None:
+            raise HTTPException(status_code=404, detail="Keine Warm-up-Phase konfiguriert")
+        rows = [(a, c) for a, c in rows if a.date < start]
+    elif start is not None and date_type.today() >= start:
+        # Challenge läuft: Warm-up-KM zählen nicht mehr (vorher Testphase: alles zählt).
+        rows = [(a, c) for a, c in rows if a.date >= start]
+
     by_user: dict[int, list[tuple[Activity, Category]]] = defaultdict(list)
     for a, c in rows:
         by_user[a.user_id].append((a, c))
@@ -43,8 +58,10 @@ def comparison(year: int, session: Session = Depends(get_session)):
         acts = by_user.get(user.id, [])
         segments, cumulative, shares = [], [], defaultdict(float)
         running = 0.0
+        # Admin-Handicap wirkt nur im Challenge-Ranking, nicht im Warm-up-Archiv.
+        factor = user.km_factor if phase == "challenge" else 1.0
         for a, c in acts:
-            scaled = round(a.distance_km * c.factor, 2)
+            scaled = round(a.distance_km * c.factor * factor, 2)
             running = round(running + scaled, 2)
             segments.append(
                 Segment(date=a.date, category_id=c.id, color=c.color, scaled_km=scaled)
@@ -68,6 +85,7 @@ def comparison(year: int, session: Session = Depends(get_session)):
                 user_id=user.id,
                 display_name=user.display_name,
                 avatar=user.avatar,
+                km_factor=user.km_factor,
                 rank=0,
                 total_scaled_km=running,
                 by_category=by_category,
@@ -85,4 +103,6 @@ def comparison(year: int, session: Session = Depends(get_session)):
         goal_km=season.goal_km,
         milestones=json.loads(season.milestones_json),
         users=result_users,
+        start_date=season.start_date,
+        phase=phase,
     )
