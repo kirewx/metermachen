@@ -1,16 +1,19 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api, type Me } from '../../api/client'
 import ProfilModal from './ProfilModal'
 import Avatar from './Avatar'
+import CountdownBanner from './CountdownBanner'
+import { challengeLaeuft } from './countdown'
 import Icon from './Icon'
 import { useTheme } from './useTheme'
 
 const TABS = [
-  { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false },
-  { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false },
-  { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true },
+  { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
+  { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
+  { to: '/archiv', label: 'Archiv', icon: 'pokal', end: false, adminOnly: false, abStart: true },
+  { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
 ]
 
 const pill = ({ isActive }: { isActive: boolean }) =>
@@ -24,7 +27,12 @@ export default function Layout({ me }: { me: Me }) {
   const queryClient = useQueryClient()
   const { theme, toggle } = useTheme()
   const [profilOffen, setProfilOffen] = useState(false)
-  const tabs = TABS.filter((t) => !t.adminOnly || me.is_admin)
+  const { data: seasons } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
+  const season = seasons?.find((s) => s.year === new Date().getFullYear())
+  const gestartet = challengeLaeuft(season?.start_date)
+  const tabs = TABS.filter(
+    (t) => (!t.adminOnly || me.is_admin) && (!t.abStart || (season?.start_date && gestartet)),
+  )
 
   async function logout() {
     await api.logout()
@@ -65,6 +73,7 @@ export default function Layout({ me }: { me: Me }) {
           <Icon name="logout" size={18} />
         </button>
       </nav>
+      <CountdownBanner />
       <main className="mx-auto max-w-5xl p-4">
         <Outlet />
       </main>

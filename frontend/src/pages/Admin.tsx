@@ -305,6 +305,12 @@ function Mitglieder() {
     onSuccess: refresh,
     onError: (e) => toast(e.message),
   })
+  const faktor = useMutation({
+    mutationFn: ({ id, km_factor }: { id: number; km_factor: number }) =>
+      api.patchUser(id, { km_factor }),
+    onSuccess: refresh,
+    onError: (e) => toast(e.message),
+  })
   const loeschen = useMutation({
     mutationFn: (id: number) => api.deleteUser(id),
     onSuccess: () => {
@@ -341,6 +347,19 @@ function Mitglieder() {
                 deaktiviert
               </span>
             )}
+            <Input
+              label="Faktor"
+              type="number"
+              step="0.1"
+              min="0.1"
+              defaultValue={u.km_factor}
+              className="w-20"
+              onBlur={(e) => {
+                const km_factor = parseFloat(e.target.value)
+                if (km_factor > 0 && km_factor !== u.km_factor)
+                  faktor.mutate({ id: u.id, km_factor })
+              }}
+            />
             {u.id !== me?.id && (
               <>
                 <Button

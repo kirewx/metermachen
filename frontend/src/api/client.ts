@@ -21,6 +21,7 @@ export type Season = {
   year: number
   goal_km: number
   milestones: Milestone[]
+  start_date: string | null
 }
 export type Activity = {
   id: number
@@ -54,6 +55,7 @@ export type ComparisonUser = {
   avatar: string
   rank: number
   total_scaled_km: number
+  km_factor: number
   by_category: CategoryShare[]
   segments: Segment[]
   cumulative: { date: string; scaled_km: number }[]
@@ -63,6 +65,25 @@ export type Comparison = {
   goal_km: number
   milestones: Milestone[]
   users: ComparisonUser[]
+  start_date: string | null
+  phase: string
+}
+export type WarmupWinner = {
+  user_id: number
+  display_name: string
+  avatar: string
+  km: number
+}
+export type WarmupAchievement = {
+  key: string
+  title: string
+  icon: string
+  winners: WarmupWinner[]
+}
+export type WarmupOut = {
+  final: boolean
+  start_date: string | null
+  achievements: WarmupAchievement[]
 }
 export type StravaBackfill = {
   state: 'idle' | 'running' | 'done' | 'error'
@@ -82,6 +103,7 @@ export type AdminUser = {
   avatar: string
   is_admin: boolean
   is_active: boolean
+  km_factor: number
   created_at: string
 }
 export type AchievementPart = { label: string; current_km: number; target_km: number }
@@ -150,11 +172,14 @@ export const api = {
   patchMe: (b: { username?: string; display_name?: string; avatar?: string; password?: string }) =>
     request<Me>('/api/users/me', patch(b)),
   listUsers: () => request<AdminUser[]>('/api/users'),
-  patchUser: (id: number, b: { is_active?: boolean }) =>
+  patchUser: (id: number, b: { is_active?: boolean; km_factor?: number }) =>
     request<AdminUser>(`/api/users/${id}`, patch(b)),
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
   achievements: () => request<Achievement[]>('/api/achievements'),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
+  comparisonWarmup: (year: number) =>
+    request<Comparison>(`/api/comparison/${year}?phase=warmup`),
+  warmupAchievements: () => request<WarmupOut>('/api/achievements/warmup'),
   stravaStatus: () => request<StravaStatus>('/api/strava/status'),
   disconnectStrava: () => request<void>('/api/strava/disconnect', { method: 'DELETE' }),
   createInvite: (b: { display_name?: string | null; is_admin?: boolean }) =>

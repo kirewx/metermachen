@@ -54,7 +54,17 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
                 </span>
                 <Avatar value={u.avatar} size="sm" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-ink">{u.display_name}</p>
+                  <p className="truncate text-sm font-bold text-ink">
+                    {u.display_name}
+                    {u.km_factor !== 1 && (
+                      <span
+                        title="Handicap-Faktor"
+                        className="ml-1.5 font-mono text-[10px] font-normal text-ink-mute"
+                      >
+                        ×{u.km_factor}
+                      </span>
+                    )}
+                  </p>
                   {!fuehrt && (
                     <p className="text-[10px] text-ink-mute">−{abstand} km auf P1</p>
                   )}
