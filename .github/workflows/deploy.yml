@@ -2,6 +2,8 @@ name: Build & Publish Image
 
 # Jeder Push auf main baut ein neues Image und schiebt es in die GitHub Container
 # Registry (GHCR). Der Home-Server zieht es von dort — er baut selbst nichts.
+# Zusätzlich deployt der Job "deploy" per SSH auf den NetCup-VPS
+# (git pull + docker compose build, siehe docs/DEPLOY-netcup.md).
 on:
   push:
     branches: [main]
@@ -53,3 +55,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    # Unabhängig vom GHCR-Build: der VPS baut selbst aus dem Git-Stand.
+    steps:
+      - name: Auf VPS deployen
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            cd /opt/metermachen
+            git pull --ff-only
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker image prune -f

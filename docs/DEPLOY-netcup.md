@@ -140,7 +140,27 @@ zusätzlich der Jahres-Backfill im Hintergrund.
 
 ## 8. Betrieb
 
-**Update einspielen:**
+**Update einspielen (automatisch):**
+
+Jeder Push auf `main` deployt automatisch: der GitHub-Actions-Job `deploy`
+(`.github/workflows/deploy.yml`) verbindet sich per SSH mit dem VPS und führt
+dort `git pull` + `docker compose up -d --build` aus.
+
+Einmalige Einrichtung:
+
+    # 1. Auf dem eigenen Rechner ein Deploy-Schlüsselpaar erzeugen (ohne Passphrase):
+    ssh-keygen -t ed25519 -f deploy_key -N "" -C "github-actions-deploy"
+
+    # 2. Public Key auf dem VPS autorisieren:
+    ssh root@<server-ip> "cat >> ~/.ssh/authorized_keys" < deploy_key.pub
+
+    # 3. In GitHub (Repo → Settings → Secrets and variables → Actions) zwei Secrets anlegen:
+    #    VPS_HOST    = <server-ip oder metermachen.jasperz.de>
+    #    VPS_SSH_KEY = kompletter Inhalt der Datei deploy_key (der PRIVATE Key)
+
+    # 4. Lokale Schlüsseldateien danach sicher verwahren oder löschen.
+
+**Update einspielen (manuell, falls nötig):**
 
     cd /opt/metermachen
     git pull
