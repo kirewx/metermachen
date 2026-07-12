@@ -12,6 +12,7 @@ import { useTheme } from './useTheme'
 const TABS = [
   { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
   { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
+  { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: true },
   { to: '/archiv', label: 'Archiv', icon: 'pokal', end: false, adminOnly: false, abStart: true },
   { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
 ]

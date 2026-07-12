@@ -8,6 +8,7 @@ import Einladung from './pages/Einladung'
 import Login from './pages/Login'
 import MeineAktivitaeten from './pages/MeineAktivitaeten'
 import Vergleich from './pages/Vergleich'
+import Wetten from './pages/Wetten'
 
 export default function App() {
   const { data: me, isLoading } = useQuery({
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/" element={<Vergleich />} />
         <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
         <Route path="/archiv" element={<Archiv />} />
+        <Route path="/wetten" element={<Wetten />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
