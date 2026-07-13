@@ -66,6 +66,41 @@ class Season(SQLModel, table=True):
     start_date: date_type | None = None  # Challenge-Start; None = ab 1.1.
 
 
+class Bet(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    type: str  # "duell" | "monats_tipp" | "ziel" | "streak" | "ueber_unter"
+    creator_id: int = Field(foreign_key="user.id", index=True)
+    title: str
+    params_json: str = "{}"  # typspezifisch, siehe services/bets.py
+    stake: int  # bei monats_tipp/ueber_unter: fixer Einsatz pro Teilnehmer
+    period_start: date_type
+    period_end: date_type
+    status: str = "offen"  # "offen" | "laufend" | "entschieden" | "abgelehnt" | "abgebrochen"
+    jackpot: int = 0  # nur monats_tipp: Übertrag aus dem Vormonat
+    created_at: datetime = Field(default_factory=utcnow)
+    resolved_at: datetime | None = None
+    result_json: str = "{}"  # nach Auflösung: Ist-Werte, Gewinner-IDs
+
+
+class BetParticipant(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    bet_id: int = Field(foreign_key="bet.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    role: str  # "ersteller" | "gegner" | "tipper" | "gegenhalter" | "ueber" | "unter"
+    choice_json: str = "{}"  # tipper: {"tipp_user_id": 5}; sonst leer
+    stake: int = 0
+    payout: int | None = None  # Gesamtgutschrift inkl. Einsatz; None = offen
+
+
+class PointTransaction(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    amount: int  # + Gutschrift / - Belastung
+    reason: str  # "start" | "einkommen" | "einsatz" | "gewinn" | "rueckzahlung"
+    bet_id: int | None = Field(default=None, foreign_key="bet.id")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class Invite(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     token: str = Field(unique=True, index=True)

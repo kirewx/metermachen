@@ -14,6 +14,7 @@ from .routers import (
     achievements,
     activities,
     auth_router,
+    bets_router,
     categories,
     comparison,
     invites,
@@ -42,6 +43,8 @@ app = FastAPI(title="MeterMachen", lifespan=lifespan)
 app.include_router(achievements.router)
 app.include_router(auth_router.router)
 app.include_router(activities.router)
+app.include_router(bets_router.router)
+app.include_router(bets_router.points_router)
 app.include_router(categories.router)
 app.include_router(comparison.router)
 app.include_router(invites.router)

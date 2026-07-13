@@ -132,6 +132,93 @@ export type InvitePublic = {
   used?: boolean
 }
 
+export type BetParticipant = {
+  user_id: number
+  display_name: string
+  avatar: string
+  role: string
+  stake: number
+  payout: number | null
+  choice: { tipp_user_id?: number }
+}
+export type BetParams = {
+  opponent_id?: number
+  vorsprung_km?: number
+  factor_creator?: number
+  factor_opponent?: number
+  target_km?: number
+  streak_days?: number
+  side?: 'ueber' | 'unter'
+  month?: string
+}
+export type Bet = {
+  id: number
+  type: 'duell' | 'monats_tipp' | 'ziel' | 'streak' | 'ueber_unter'
+  creator_id: number
+  title: string
+  stake: number
+  period_start: string
+  period_end: string
+  status: 'offen' | 'laufend' | 'entschieden' | 'abgelehnt' | 'abgebrochen'
+  jackpot: number
+  created_at: string
+  resolved_at: string | null
+  params: BetParams
+  result: {
+    winner_ids?: number[]
+    david?: boolean
+    creator_value?: number
+    opponent_value?: number
+    ist?: number
+    erreicht?: boolean
+    gruppen_km?: number
+    gewonnen?: string
+    monats_sieger?: number[]
+    pot?: number
+    grund?: string
+  }
+  participants: BetParticipant[]
+  standing: {
+    creator_km?: number
+    opponent_km?: number
+    km?: number
+    streak?: number
+    gruppen_km?: number
+    fuehrender_user_id?: number | null
+  }
+  my_role: string | null
+}
+export type BetCreateInput = {
+  type: Bet['type']
+  title: string
+  stake: number
+  period_start: string
+  period_end: string
+  params: BetParams
+}
+export type PointTransaction = {
+  amount: number
+  reason: string
+  bet_id: number | null
+  created_at: string
+}
+export type PointsInfo = { balance: number; transactions: PointTransaction[] }
+export type PointsRankingEntry = {
+  user_id: number
+  display_name: string
+  avatar: string
+  balance: number
+  rank: number
+}
+export type BetAchievement = {
+  key: string
+  title: string
+  description: string
+  icon: string
+  achieved: boolean
+  progress: number
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, {
     headers: init?.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
@@ -191,4 +278,14 @@ export const api = {
     token: string,
     b: { username: string; password: string; display_name: string; avatar: string },
   ) => request<Me>(`/api/invites/${token}/accept`, post(b)),
+  bets: () => request<Bet[]>('/api/bets'),
+  createBet: (b: BetCreateInput) => request<Bet>('/api/bets', post(b)),
+  respondBet: (
+    id: number,
+    b: { action: string; stake?: number; choice?: { tipp_user_id?: number } },
+  ) => request<Bet>(`/api/bets/${id}/respond`, post(b)),
+  cancelBet: (id: number) => request<Bet>(`/api/bets/${id}/cancel`, { method: 'POST' }),
+  points: () => request<PointsInfo>('/api/points'),
+  pointsRanking: () => request<PointsRankingEntry[]>('/api/points/ranking'),
+  betAchievements: () => request<BetAchievement[]>('/api/bets/achievements'),
 }
