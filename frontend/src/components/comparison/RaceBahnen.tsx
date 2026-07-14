@@ -1,10 +1,13 @@
-import type { Comparison } from '../../api/client'
+import { useState } from 'react'
+import type { Comparison, ComparisonUser } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import Card from '../ui/Card'
 import Icon from '../ui/Icon'
+import PersonDetail from './PersonDetail'
 import { userColor } from './userColor'
 
 export default function RaceBahnen({ data }: { data: Comparison }) {
+  const [detail, setDetail] = useState<ComparisonUser | null>(null)
   const maxKm = Math.max(data.goal_km, ...data.users.map((u) => u.total_scaled_km))
   const pct = (km: number) => `${(km / maxKm) * 100}%`
   const ids = data.users.map((u) => u.user_id)
@@ -44,7 +47,12 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
             fuehrend && !fuehrt ? Math.round(fuehrend.total_scaled_km - u.total_scaled_km) : 0
           return (
             <div key={u.user_id} className="flex items-center gap-3">
-              <div className="flex w-44 shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDetail(u)}
+                aria-label={`Details zu ${u.display_name}`}
+                className="flex w-44 shrink-0 items-center gap-2 rounded-lg text-left transition hover:opacity-80"
+              >
                 <span
                   className={`w-7 text-sm font-black tabular-nums ${
                     fuehrt ? 'text-accent [text-shadow:var(--t-glow)]' : 'text-ink-mute'
@@ -69,7 +77,7 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
                     <p className="text-[10px] text-ink-mute">−{abstand} km auf P1</p>
                   )}
                 </div>
-              </div>
+              </button>
               <div className="relative h-5 flex-1 overflow-hidden rounded-full border border-line bg-surface">
                 {data.milestones.map((m) => (
                   <span
@@ -95,6 +103,9 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
           )
         })}
       </div>
+      {detail && (
+        <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />
+      )}
     </Card>
   )
 }

@@ -169,3 +169,39 @@ def test_km_factor_must_be_positive(client, session):
     lisa = make_user(session, username="lisa")
     login(client)
     assert client.patch(f"/api/users/{lisa.id}", json={"km_factor": 0}).status_code == 422
+
+
+def test_user_activities_lists_members_entries(client, session):
+    erik = make_user(session)  # eingeloggter Betrachter
+    lisa = make_user(session, username="lisa")
+    cat = make_category(session, factor=4.0)
+    session.add(Activity(user_id=lisa.id, category_id=cat.id, date=date(2026, 3, 1),
+                         distance_km=5.0, elevation_m=120.0, source="strava",
+                         external_id="42"))
+    session.add(Activity(user_id=lisa.id, category_id=cat.id, date=date(2025, 3, 1),
+                         distance_km=9.0))  # anderes Jahr, darf nicht auftauchen
+    session.commit()
+    login(client)  # als erik
+    r = client.get(f"/api/users/{lisa.id}/activities", params={"year": 2026})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["distance_km"] == 5.0
+    assert body[0]["scaled_km"] == 20.0
+    assert body[0]["elevation_m"] == 120.0
+    assert body[0]["strava_url"] == "https://www.strava.com/activities/42"
+
+
+def test_user_activities_requires_login(client, session):
+    lisa = make_user(session, username="lisa")
+    assert client.get(f"/api/users/{lisa.id}/activities", params={"year": 2026}).status_code == 401
+
+
+def test_user_activities_404_for_inactive(client, session):
+    make_user(session)
+    lisa = make_user(session, username="lisa")
+    lisa.is_active = False
+    session.add(lisa)
+    session.commit()
+    login(client)
+    assert client.get(f"/api/users/{lisa.id}/activities", params={"year": 2026}).status_code == 404

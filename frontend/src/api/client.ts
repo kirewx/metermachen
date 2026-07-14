@@ -271,6 +271,8 @@ export const api = {
   patchMe: (b: { username?: string; display_name?: string; avatar?: string; password?: string }) =>
     request<Me>('/api/users/me', patch(b)),
   listUsers: () => request<AdminUser[]>('/api/users'),
+  userActivities: (userId: number, year: number) =>
+    request<Activity[]>(`/api/users/${userId}/activities?year=${year}`),
   patchUser: (id: number, b: { is_active?: boolean; km_factor?: number }) =>
     request<AdminUser>(`/api/users/${id}`, patch(b)),
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),

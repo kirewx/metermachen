@@ -6,7 +6,9 @@ from sqlmodel import Session, select
 
 from .. import auth
 from ..deps import get_current_user, get_session, require_admin
-from ..models import Activity, Invite, StravaConnection, User
+from ..models import Activity, Category, Invite, StravaConnection, User
+from ..schemas import ActivityOut
+from .activities import _to_out
 from .auth_router import MeOut
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -70,6 +72,28 @@ def create_user(data: UserCreate, session: Session = Depends(get_session)):
 @router.get("", response_model=list[UserAdminOut], dependencies=[Depends(require_admin)])
 def list_users(session: Session = Depends(get_session)):
     return session.exec(select(User).order_by(User.id)).all()
+
+
+@router.get(
+    "/{user_id}/activities",
+    response_model=list[ActivityOut],
+    dependencies=[Depends(get_current_user)],
+)
+def user_activities(
+    user_id: int, year: int, session: Session = Depends(get_session)
+) -> list[ActivityOut]:
+    """Aktivitäten eines Mitglieds (neueste zuerst) für die Detailansicht im Vergleich.
+    Nur aktive Accounts — deaktivierte tauchen wie im Ranking nicht auf."""
+    user = session.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=404, detail="User nicht gefunden")
+    rows = session.exec(
+        select(Activity, Category)
+        .join(Category, Activity.category_id == Category.id)
+        .where(Activity.user_id == user_id)
+        .order_by(Activity.date.desc(), Activity.id.desc())
+    ).all()
+    return [_to_out(a, c.factor) for a, c in rows if a.date.year == year]
 
 
 @router.patch("/me", response_model=MeOut)
