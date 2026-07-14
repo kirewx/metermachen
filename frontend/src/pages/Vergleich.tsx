@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import SchnellwahlLeiste from '../components/activities/SchnellwahlLeiste'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
@@ -7,6 +8,7 @@ import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
 import Icon from '../components/ui/Icon'
 import Select from '../components/ui/Select'
+import { useToast } from '../components/ui/Toast'
 
 const ANSICHTEN = [
   { key: 'rennen', label: 'Rennen', icon: 'fahne' },
@@ -15,8 +17,32 @@ const ANSICHTEN = [
 ] as const
 type Ansicht = (typeof ANSICHTEN)[number]['key']
 
+/** Wertet den `?strava=`-Param nach dem OAuth-Rücksprung aus: Toast + Param entfernen. */
+function useStravaRedirectHinweis() {
+  const [params, setParams] = useSearchParams()
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const bearbeitet = useRef(false)
+  useEffect(() => {
+    const s = params.get('strava')
+    if (!s || bearbeitet.current) return
+    bearbeitet.current = true
+    if (s === 'connected') {
+      toast('Mit Strava verbunden', 'ok')
+      queryClient.invalidateQueries({ queryKey: ['strava-status'] })
+    } else if (s === 'denied') {
+      toast('Strava-Verbindung abgebrochen')
+    } else {
+      toast('Strava-Verbindung fehlgeschlagen. Bitte erneut versuchen.')
+    }
+    params.delete('strava')
+    setParams(params, { replace: true })
+  }, [params, setParams, toast, queryClient])
+}
+
 export default function Vergleich() {
   const [ansicht, setAnsicht] = useState<Ansicht>('rennen')
+  useStravaRedirectHinweis()
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const [year, setYear] = useState(new Date().getFullYear())
   const { data, error } = useQuery({
