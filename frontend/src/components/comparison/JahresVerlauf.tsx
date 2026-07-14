@@ -10,11 +10,14 @@ import {
 } from 'recharts'
 import type { Props as LabelProps } from 'recharts/types/component/Label'
 import type { DotItemDotProps } from 'recharts/types/util/types'
-import type { Comparison } from '../../api/client'
+import { useState } from 'react'
+import type { Comparison, ComparisonUser } from '../../api/client'
 import Card from '../ui/Card'
+import PersonDetail from './PersonDetail'
 import { userColor } from './userColor'
 
 export default function JahresVerlauf({ data }: { data: Comparison }) {
+  const [detail, setDetail] = useState<ComparisonUser | null>(null)
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
   const byDate = new Map<string, Record<string, number | string>>()
   for (const u of data.users) {
@@ -115,6 +118,26 @@ export default function JahresVerlauf({ data }: { data: Comparison }) {
           })}
         </LineChart>
       </ResponsiveContainer>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {data.users.map((u) => (
+          <button
+            key={u.user_id}
+            type="button"
+            onClick={() => setDetail(u)}
+            aria-label={`Details zu ${u.display_name}`}
+            className="flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs text-ink transition hover:border-accent hover:text-accent"
+          >
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ background: userColor(u.user_id, ids) }}
+            />
+            {u.display_name}
+          </button>
+        ))}
+      </div>
+      {detail && (
+        <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />
+      )}
     </Card>
   )
 }

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Comparison } from '../../api/client'
-import SportMix from './SportMix'
+import JahresVerlauf from './JahresVerlauf'
 
 vi.mock('../../api/client', () => ({
   api: {
@@ -20,45 +20,24 @@ const data: Comparison = {
   goal_km: 1000,
   milestones: [],
   users: [
-    {
-      user_id: 1,
-      display_name: 'Erik',
-      avatar: 'icon:laufen',
-      rank: 1,
-      total_scaled_km: 300,
-      km_factor: 1,
-      by_category: [
-        { category_id: 1, name: 'Laufen', color: '#f00', icon: 'laufen', scaled_km: 200 },
-        { category_id: 2, name: 'Radfahren', color: '#00f', icon: 'rad', scaled_km: 100 },
-      ],
-      segments: [],
-      cumulative: [],
-    },
+    { user_id: 1, display_name: 'Erik', avatar: 'icon:laufen', rank: 1, total_scaled_km: 300, km_factor: 1, by_category: [], segments: [], cumulative: [{ date: '2026-03-01', scaled_km: 20 }] },
   ],
   start_date: null,
   phase: 'challenge',
 }
 
-function renderMix() {
+function renderVerlauf() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <SportMix data={data} />
+      <JahresVerlauf data={data} />
     </QueryClientProvider>,
   )
 }
 
-describe('SportMix', () => {
-  it('zeigt Person, gewertete Gesamtsumme und Kategorie-Legende', () => {
-    renderMix()
-    expect(screen.getByText('Erik')).toBeInTheDocument()
-    expect(screen.getByText('300')).toBeInTheDocument()
-    expect(screen.getByText('Laufen')).toBeInTheDocument()
-    expect(screen.getByText('Radfahren')).toBeInTheDocument()
-  })
-
-  it('öffnet beim Klick auf eine Person deren Detailansicht', async () => {
-    renderMix()
+describe('JahresVerlauf Detailansicht', () => {
+  it('öffnet über die anklickbare Personen-Legende die Detailansicht', async () => {
+    renderVerlauf()
     fireEvent.click(screen.getByLabelText('Details zu Erik'))
     expect(await screen.findByText('Morgenlauf', { exact: false })).toBeInTheDocument()
   })
