@@ -26,22 +26,31 @@ def test_seed_creates_admin_categories_season(session):
     assert season.goal_km == 1000.0
 
 
-def test_seed_registers_sidebets_addon_disabled(session):
+def test_seed_registers_sidebets_addon_scheduled(session):
+    from datetime import datetime, timezone
+
+    from app.deps import addon_active
+
     seed_all(session, admin_user="chef", admin_password="geheim", year=2026)
     addon = session.exec(select(AddOn).where(AddOn.key == "sidebets")).one()
-    assert addon.enabled is False  # Default AUS — Rick schaltet selbst scharf
+    # Vorkonfiguriert: eingeschaltet, aber per Fenster auf den Challenge-Start terminiert.
+    assert addon.enabled is True
+    assert addon.active_from is not None
+    # Vor dem 20.07.2026 noch nicht aktiv, danach schon.
+    assert addon_active(addon, datetime(2026, 7, 1, tzinfo=timezone.utc)) is False
+    assert addon_active(addon, datetime(2026, 7, 20, 12, tzinfo=timezone.utc)) is True
 
 
 def test_seed_does_not_override_existing_addon(session):
     seed_all(session, admin_user="chef", admin_password="geheim", year=2026)
     addon = session.exec(select(AddOn).where(AddOn.key == "sidebets")).one()
-    addon.enabled = True
+    addon.enabled = False  # Admin schaltet bewusst wieder aus
     session.add(addon)
     session.commit()
-    # Erneutes Seeding darf einen scharf geschalteten Toggle nicht zurücksetzen.
+    # Erneutes Seeding darf die Admin-Entscheidung nicht zurücksetzen.
     seed_all(session, admin_user="chef", admin_password="geheim", year=2026)
     addon = session.exec(select(AddOn).where(AddOn.key == "sidebets")).one()
-    assert addon.enabled is True
+    assert addon.enabled is False
 
 
 def test_seed_is_idempotent(session):
