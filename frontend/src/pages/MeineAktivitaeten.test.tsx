@@ -50,17 +50,17 @@ describe('MeineAktivitaeten', () => {
     expect(screen.getByText('32 km')).toBeInTheDocument()
     expect(screen.queryByText(/Strava/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('Laufen'))
-    expect(await screen.findByText('Strava ↗')).toBeInTheDocument()
+    expect(await screen.findByText('View on Strava')).toBeInTheDocument()
   })
 
   it('verlinkt das Strava-Badge auf die Aktivität und zeigt Höhenmeter', async () => {
     renderPage()
     fireEvent.click(await screen.findByText('Laufen'))
-    const link = await screen.findByText('Strava ↗')
+    const link = await screen.findByText('View on Strava')
     expect(link).toHaveAttribute('href', 'https://www.strava.com/activities/1')
     expect(screen.getByText(/340 hm/)).toBeInTheDocument()
     // Nur die eine Strava-Aktivität hat ein Badge.
-    expect(screen.getAllByText('Strava ↗')).toHaveLength(1)
+    expect(screen.getAllByText('View on Strava')).toHaveLength(1)
   })
 })
 

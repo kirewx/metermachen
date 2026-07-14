@@ -4,6 +4,7 @@ import { api } from './api/client'
 import Layout from './components/ui/Layout'
 import Admin from './pages/Admin'
 import Archiv from './pages/Archiv'
+import Datenschutz from './pages/Datenschutz'
 import Einladung from './pages/Einladung'
 import Login from './pages/Login'
 import MeineAktivitaeten from './pages/MeineAktivitaeten'
@@ -26,6 +27,7 @@ export default function App() {
     return (
       <Routes>
         <Route path="/einladung/:token" element={<Einladung />} />
+        <Route path="/datenschutz" element={<Datenschutz />} />
         <Route path="*" element={<Login />} />
       </Routes>
     )
@@ -37,6 +39,7 @@ export default function App() {
         <Route path="/archiv" element={<Archiv />} />
         {sidebetsAktiv && <Route path="/wetten" element={<Wetten />} />}
         <Route path="/admin" element={<Admin />} />
+        <Route path="/datenschutz" element={<Datenschutz />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

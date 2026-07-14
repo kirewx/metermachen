@@ -5,6 +5,7 @@ import AvatarWahl from './AvatarWahl'
 import Button from './Button'
 import Input from './Input'
 import Modal from './Modal'
+import StravaConnectButton from './StravaConnectButton'
 import { useToast } from './Toast'
 
 type Props = { me: Me; open: boolean; onClose: () => void }
@@ -107,17 +108,17 @@ export default function ProfilModal({ me, open, onClose }: Props) {
                 </button>
               )
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href = '/api/strava/connect'
-                }}
-                className="text-sm text-accent hover:underline"
-              >
-                Mit Strava verbinden
-              </button>
+              <StravaConnectButton />
             )}
           </div>
+        )}
+        {strava?.enabled && (
+          <p className="text-[11px] text-ink-mute">
+            Mit dem Verbinden holen wir deine Strava-Aktivitäten fürs Ranking.{' '}
+            <a href="/datenschutz" target="_blank" className="text-accent hover:underline">
+              Datenschutz
+            </a>
+          </p>
         )}
         <Button
           className="w-full"

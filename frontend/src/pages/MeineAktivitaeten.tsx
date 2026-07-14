@@ -123,7 +123,7 @@ export default function MeineAktivitaeten() {
                                 rel="noopener noreferrer"
                                 className="ml-2 rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent hover:bg-accent/10"
                               >
-                                Strava ↗
+                                View on Strava
                               </a>
                             ) : (
                               <span className="ml-2 rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
