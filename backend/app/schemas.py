@@ -1,9 +1,10 @@
 import json
 from datetime import date as date_type
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, field_validator
 
-from .models import Category, Season
+from .models import AddOn, Category, Season
 
 
 class Milestone(BaseModel):
@@ -83,6 +84,49 @@ class SeasonOut(BaseModel):
             goal_km=season.goal_km,
             milestones=json.loads(season.milestones_json),
             start_date=season.start_date,
+        )
+
+
+class AddOnCreate(BaseModel):
+    key: str = Field(min_length=1, pattern=r"^[a-z0-9_]+$")
+    label: str = Field(min_length=1)
+    description: str = ""
+    enabled: bool = False
+    active_from: datetime | None = None
+    active_until: datetime | None = None
+
+
+class AddOnPatch(BaseModel):
+    label: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    enabled: bool | None = None
+    active_from: datetime | None = None  # None + gesetzt = Fenster-Start löschen
+    active_until: datetime | None = None
+
+
+class AddOnOut(BaseModel):
+    id: int
+    key: str
+    label: str
+    description: str
+    enabled: bool
+    active_from: datetime | None
+    active_until: datetime | None
+    active: bool
+
+    @classmethod
+    def from_addon(cls, addon: AddOn) -> "AddOnOut":
+        from .deps import addon_active
+
+        return cls(
+            id=addon.id,
+            key=addon.key,
+            label=addon.label,
+            description=addon.description,
+            enabled=addon.enabled,
+            active_from=addon.active_from,
+            active_until=addon.active_until,
+            active=addon_active(addon, datetime.now(timezone.utc)),
         )
 
 

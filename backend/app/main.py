@@ -13,6 +13,7 @@ from .db import engine, init_db
 from .routers import (
     achievements,
     activities,
+    addons,
     auth_router,
     bets_router,
     categories,
@@ -43,6 +44,7 @@ app = FastAPI(title="MeterMachen", lifespan=lifespan)
 app.include_router(achievements.router)
 app.include_router(auth_router.router)
 app.include_router(activities.router)
+app.include_router(addons.router)
 app.include_router(bets_router.router)
 app.include_router(bets_router.points_router)
 app.include_router(categories.router)

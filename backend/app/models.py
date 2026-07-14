@@ -66,6 +66,17 @@ class Season(SQLModel, table=True):
     start_date: date_type | None = None  # Challenge-Start; None = ab 1.1.
 
 
+class AddOn(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    key: str = Field(unique=True, index=True)
+    label: str
+    description: str = ""
+    enabled: bool = False
+    active_from: datetime | None = None  # UTC; None = kein Startlimit
+    active_until: datetime | None = None  # UTC; None = kein Endlimit
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class Bet(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     type: str  # "duell" | "monats_tipp" | "ziel" | "streak" | "ueber_unter"

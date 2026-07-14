@@ -106,6 +106,16 @@ export type AdminUser = {
   km_factor: number
   created_at: string
 }
+export type AddOn = {
+  id: number
+  key: string
+  label: string
+  description: string
+  enabled: boolean
+  active_from: string | null
+  active_until: string | null
+  active: boolean
+}
 export type AchievementPart = { label: string; current_km: number; target_km: number }
 export type Achievement = {
   key: string
@@ -262,6 +272,26 @@ export const api = {
   patchUser: (id: number, b: { is_active?: boolean; km_factor?: number }) =>
     request<AdminUser>(`/api/users/${id}`, patch(b)),
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
+  addons: () => request<AddOn[]>('/api/addons'),
+  createAddon: (b: {
+    key: string
+    label: string
+    description?: string
+    enabled?: boolean
+    active_from?: string | null
+    active_until?: string | null
+  }) => request<AddOn>('/api/addons', post(b)),
+  patchAddon: (
+    id: number,
+    b: Partial<{
+      label: string
+      description: string
+      enabled: boolean
+      active_from: string | null
+      active_until: string | null
+    }>,
+  ) => request<AddOn>(`/api/addons/${id}`, patch(b)),
+  deleteAddon: (id: number) => request<void>(`/api/addons/${id}`, { method: 'DELETE' }),
   achievements: () => request<Achievement[]>('/api/achievements'),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
   comparisonWarmup: (year: number) =>

@@ -7,15 +7,8 @@ import Avatar from './Avatar'
 import CountdownBanner from './CountdownBanner'
 import { challengeLaeuft } from './countdown'
 import Icon from './Icon'
+import { sichtbareTabs, TABS } from './tabs'
 import { useTheme } from './useTheme'
-
-const TABS = [
-  { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
-  { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
-  { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: true },
-  { to: '/archiv', label: 'Archiv', icon: 'pokal', end: false, adminOnly: false, abStart: true },
-  { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
-]
 
 const pill = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-1.5 rounded-full px-3 py-1 text-sm transition ${
@@ -29,11 +22,11 @@ export default function Layout({ me }: { me: Me }) {
   const { theme, toggle } = useTheme()
   const [profilOffen, setProfilOffen] = useState(false)
   const { data: seasons } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
+  const { data: addons } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
   const season = seasons?.find((s) => s.year === new Date().getFullYear())
-  const gestartet = challengeLaeuft(season?.start_date)
-  const tabs = TABS.filter(
-    (t) => (!t.adminOnly || me.is_admin) && (!t.abStart || (season?.start_date && gestartet)),
-  )
+  const gestartet = Boolean(season?.start_date && challengeLaeuft(season?.start_date))
+  const aktiveAddons = new Set((addons ?? []).filter((a) => a.active).map((a) => a.key))
+  const tabs = sichtbareTabs(TABS, { isAdmin: me.is_admin, gestartet, aktiveAddons })
 
   async function logout() {
     await api.logout()

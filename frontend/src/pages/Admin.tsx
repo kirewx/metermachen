@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, type AdminUser, type Invite, type Milestone, type Season } from '../api/client'
+import { api, type AddOn, type AdminUser, type Invite, type Milestone, type Season } from '../api/client'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
 import Icon from '../components/ui/Icon'
@@ -26,9 +26,158 @@ export default function Admin() {
       <Kategorien />
       <StravaMapping />
       <Jahr />
+      <AddOns />
       <Mitglieder />
       <Einladungen />
     </div>
+  )
+}
+
+// Speicherformat ist UTC-ISO, das <input type="datetime-local"> erwartet lokale Zeit.
+function toLocalInput(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function fromLocalInput(v: string): string | null {
+  return v ? new Date(v).toISOString() : null
+}
+
+function AddOns() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const { data: addons = [] } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['addons'] })
+  const patch = useMutation({
+    mutationFn: ({ id, ...b }: { id: number } & Parameters<typeof api.patchAddon>[1]) =>
+      api.patchAddon(id, b),
+    onSuccess: refresh,
+    onError: (e) => toast(e.message),
+  })
+  const [neu, setNeu] = useState({ key: '', label: '' })
+  const create = useMutation({
+    mutationFn: () => api.createAddon({ key: neu.key, label: neu.label }),
+    onSuccess: () => {
+      setNeu({ key: '', label: '' })
+      refresh()
+    },
+    onError: (e) => toast(e.message),
+  })
+  const [loeschAddon, setLoeschAddon] = useState<AddOn | null>(null)
+  const loeschen = useMutation({
+    mutationFn: (id: number) => api.deleteAddon(id),
+    onSuccess: () => {
+      setLoeschAddon(null)
+      refresh()
+    },
+    onError: (e) => toast(e.message),
+  })
+
+  return (
+    <section>
+      <SectionTitle>Add-ons</SectionTitle>
+      <p className="mb-3 text-xs text-ink-mute">
+        Features an- und ausschalten. Optionales Zeitfenster: aktiv nur, wenn eingeschaltet
+        <em> und</em> (falls gesetzt) innerhalb des Fensters.
+      </p>
+      <div className="space-y-3">
+        {addons.map((a) => (
+          <div key={a.id} className="border-b border-line/30 pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-32 flex-1 text-sm font-bold text-ink">{a.label}</span>
+              <span className="font-mono text-xs text-ink-mute">{a.key}</span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  a.active
+                    ? 'border border-accent/40 text-accent'
+                    : 'border border-line text-ink-tech'
+                }`}
+              >
+                {a.active ? 'aktiv' : 'aus'}
+              </span>
+              <Button variant="ghost" onClick={() => patch.mutate({ id: a.id, enabled: !a.enabled })}>
+                {a.enabled ? 'Deaktivieren' : 'Aktivieren'}
+              </Button>
+              <button
+                aria-label={`Add-on ${a.key} löschen`}
+                className="text-ink-mute hover:text-danger"
+                onClick={() => setLoeschAddon(a)}
+              >
+                <Icon name="papierkorb" size={16} />
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <label className="flex flex-col gap-1 text-xs font-semibold text-ink-mute">
+                Aktiv ab
+                <input
+                  type="datetime-local"
+                  className="rounded-xl border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+                  defaultValue={toLocalInput(a.active_from)}
+                  onBlur={(e) =>
+                    patch.mutate({ id: a.id, active_from: fromLocalInput(e.target.value) })
+                  }
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-ink-mute">
+                Aktiv bis
+                <input
+                  type="datetime-local"
+                  className="rounded-xl border border-line bg-surface px-2 py-1.5 text-sm text-ink"
+                  defaultValue={toLocalInput(a.active_until)}
+                  onBlur={(e) =>
+                    patch.mutate({ id: a.id, active_until: fromLocalInput(e.target.value) })
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        ))}
+        {addons.length === 0 && (
+          <p className="text-sm text-ink-mute">Noch keine Add-ons angelegt.</p>
+        )}
+      </div>
+      <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-dashed border-line pt-3">
+        <Input
+          label="Key (a-z, 0-9, _)"
+          value={neu.key}
+          onChange={(e) => setNeu({ ...neu, key: e.target.value.toLowerCase() })}
+        />
+        <Input
+          label="Bezeichnung"
+          value={neu.label}
+          onChange={(e) => setNeu({ ...neu, label: e.target.value })}
+        />
+        <Button
+          disabled={!/^[a-z0-9_]+$/.test(neu.key) || !neu.label || create.isPending}
+          onClick={() => create.mutate()}
+        >
+          Add-on anlegen
+        </Button>
+      </div>
+      <Modal
+        open={loeschAddon !== null}
+        onClose={() => setLoeschAddon(null)}
+        title={`Add-on „${loeschAddon?.label ?? ''}" löschen?`}
+      >
+        <p className="mb-4 text-sm text-ink-mute">
+          Das Feature wird abgeschaltet und die Konfiguration entfernt. Zum bloßen Pausieren
+          reicht „Deaktivieren".
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setLoeschAddon(null)}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="danger"
+            disabled={loeschen.isPending}
+            onClick={() => loeschAddon && loeschen.mutate(loeschAddon.id)}
+          >
+            Löschen
+          </Button>
+        </div>
+      </Modal>
+    </section>
   )
 }
 

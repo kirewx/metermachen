@@ -24,6 +24,10 @@ vi.mock('../api/client', () => ({
     ]),
     patchUser: vi.fn().mockResolvedValue({}),
     deleteUser: vi.fn().mockResolvedValue(undefined),
+    addons: vi.fn().mockResolvedValue([]),
+    createAddon: vi.fn().mockResolvedValue({}),
+    patchAddon: vi.fn().mockResolvedValue({}),
+    deleteAddon: vi.fn().mockResolvedValue(undefined),
   },
 }))
 vi.mock('../components/ui/Toast', () => ({ useToast: () => vi.fn() }))
