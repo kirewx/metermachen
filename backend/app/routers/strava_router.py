@@ -1,7 +1,12 @@
+import logging
+
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlmodel import Session, select
+
+logger = logging.getLogger(__name__)
 
 from .. import config
 from ..db import engine
@@ -51,19 +56,28 @@ def callback(
     background_tasks: BackgroundTasks,
     code: str | None = None,
     state: str | None = None,
+    error: str | None = None,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     _require_enabled()
+    # User hat auf Stravas Zustimmungsseite abgelehnt/abgebrochen → freundlich zurück.
+    if error:
+        return RedirectResponse("/?strava=denied")
     if not code or not state:
-        raise HTTPException(status_code=400, detail="Fehlende OAuth-Parameter")
+        return RedirectResponse("/?strava=error")
     try:
         state_user_id = _state_serializer.loads(state, max_age=600)
     except BadSignature:
-        raise HTTPException(status_code=400, detail="Ungültiger State")
+        return RedirectResponse("/?strava=error")
     if state_user_id != user.id:
-        raise HTTPException(status_code=400, detail="State passt nicht zum angemeldeten User")
-    data = strava.exchange_code(code)
+        return RedirectResponse("/?strava=error")
+    try:
+        data = strava.exchange_code(code)
+    except httpx.HTTPError:
+        # Abgelaufener/doppelt genutzter Code oder Strava-Ausfall: kein roher 500.
+        logger.exception("Strava-Token-Tausch fehlgeschlagen fuer user_id=%s", user.id)
+        return RedirectResponse("/?strava=error")
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()

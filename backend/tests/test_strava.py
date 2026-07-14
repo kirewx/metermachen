@@ -1,3 +1,4 @@
+import httpx
 import pytest
 from sqlmodel import select
 
@@ -292,6 +293,62 @@ def test_callback_stores_connection(client, session, monkeypatch):
     assert conn is not None
     assert conn.athlete_id == 77
     assert conn.access_token == "AT"
+
+
+def test_callback_success_redirects_connected(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    from app.routers import strava_router
+    user = make_user(session)
+    login(client)
+    state = strava_router._state_serializer.dumps(user.id)
+    monkeypatch.setattr(strava_router.strava, "exchange_code", lambda code: {
+        "access_token": "AT", "refresh_token": "RT", "expires_at": 8888888888,
+        "athlete": {"id": 77},
+    })
+    monkeypatch.setattr(strava_router.strava, "backfill_current_year", lambda uid: None)
+    r = client.get("/api/strava/callback", params={"code": "xyz", "state": state},
+                   follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/?strava=connected"
+
+
+def test_callback_redirects_denied_when_user_declines(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    login(client)
+    r = client.get("/api/strava/callback", params={"error": "access_denied"},
+                   follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/?strava=denied"
+    assert session.exec(select(StravaConnection)).all() == []
+
+
+def test_callback_redirects_error_on_missing_params(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    make_user(session)
+    login(client)
+    r = client.get("/api/strava/callback", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/?strava=error"
+
+
+def test_callback_redirects_error_on_exchange_failure(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    from app.routers import strava_router
+    user = make_user(session)
+    login(client)
+    state = strava_router._state_serializer.dumps(user.id)
+
+    def boom(code):
+        raise httpx.HTTPError("code abgelaufen")
+
+    monkeypatch.setattr(strava_router.strava, "exchange_code", boom)
+    r = client.get("/api/strava/callback", params={"code": "xyz", "state": state},
+                   follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/?strava=error"
+    assert session.exec(select(StravaConnection).where(
+        StravaConnection.user_id == user.id)).first() is None
 
 
 def test_disconnect_removes_connection(client, session, monkeypatch):
