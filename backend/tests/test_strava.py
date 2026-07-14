@@ -266,6 +266,18 @@ def test_webhook_post_schedules_processing(client, monkeypatch):
     assert seen.get("object_type") == "activity"
 
 
+def test_webhook_post_returns_200_on_invalid_body(client, monkeypatch):
+    from app.routers import strava_router
+    called = {"n": 0}
+    monkeypatch.setattr(strava_router, "process_event",
+                        lambda payload: called.__setitem__("n", called["n"] + 1))
+    r = client.post("/api/strava/webhook", content=b"kein json",
+                    headers={"content-type": "application/json"})
+    # Strava darf kein 5xx sehen, sonst deaktiviert es die Subscription.
+    assert r.status_code == 200
+    assert called["n"] == 0
+
+
 def test_connect_redirects_to_strava(client, session, monkeypatch):
     _enable_strava(monkeypatch)
     make_user(session)

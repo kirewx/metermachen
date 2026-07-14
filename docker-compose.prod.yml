@@ -24,6 +24,8 @@ services:
       STRAVA_WEBHOOK_VERIFY_TOKEN: ${STRAVA_WEBHOOK_VERIFY_TOKEN:-}
       STRAVA_IMPORT_SINCE: ${STRAVA_IMPORT_SINCE:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL setzen, z. B. https://meter.example.com}
+      # Session-Cookie nur über HTTPS senden. Prod läuft hinter Caddy (HTTPS) → default an.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-1}
     restart: unless-stopped
 
   caddy:

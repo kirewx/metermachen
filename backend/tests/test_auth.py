@@ -1,3 +1,4 @@
+from app import config
 from tests.conftest import login, make_user
 
 
@@ -40,3 +41,17 @@ def test_login_rejected_for_inactive_user(client, session):
     session.commit()
     r = client.post("/api/auth/login", json={"username": "erik", "password": "pw123"})
     assert r.status_code == 403
+
+
+def test_cookie_has_secure_flag_when_configured(client, session, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_COOKIE_SECURE", True)
+    make_user(session)
+    r = client.post("/api/auth/login", json={"username": "erik", "password": "pw123"})
+    assert "secure" in r.headers["set-cookie"].lower()
+
+
+def test_cookie_without_secure_flag_by_default(client, session, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_COOKIE_SECURE", False)
+    make_user(session)
+    r = client.post("/api/auth/login", json={"username": "erik", "password": "pw123"})
+    assert "secure" not in r.headers["set-cookie"].lower()

@@ -17,6 +17,14 @@ STRAVA_WEBHOOK_VERIFY_TOKEN = os.environ.get("STRAVA_WEBHOOK_VERIFY_TOKEN", "")
 STRAVA_IMPORT_SINCE = os.environ.get("STRAVA_IMPORT_SINCE", "")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 
+# Session-Cookie mit Secure-Flag ausliefern (nur über HTTPS senden). Default aus,
+# damit lokale Entwicklung + Tests über http funktionieren; Prod setzt es auf 1.
+SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 
 def strava_import_since() -> date | None:
     if not STRAVA_IMPORT_SINCE:

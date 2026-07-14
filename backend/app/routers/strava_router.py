@@ -126,6 +126,12 @@ def process_event(payload: dict) -> None:
 
 @router.post("/webhook")
 async def webhook_event(request: Request, background_tasks: BackgroundTasks):
-    payload = await request.json()
+    # Strava erwartet zügig ein 200. Ein Fehler beim Body-Parsen darf NICHT nach
+    # außen dringen — sonst retryt Strava und deaktiviert irgendwann die Subscription.
+    try:
+        payload = await request.json()
+    except Exception:
+        logger.warning("Strava-Webhook: Body nicht lesbar, ignoriert")
+        return {"ok": True}
     background_tasks.add_task(process_event, payload)
     return {"ok": True}
