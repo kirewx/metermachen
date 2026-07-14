@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from .. import auth
+from .. import auth, config
 from ..deps import get_current_user, get_session
 from ..models import User
 
@@ -38,13 +38,20 @@ def login(data: LoginIn, response: Response, session: Session = Depends(get_sess
         max_age=auth.SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
+        secure=config.SESSION_COOKIE_SECURE,
     )
     return user
 
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie(auth.SESSION_COOKIE)
+    # Attribute müssen zum Setzen passen, damit der Browser das Cookie sicher löscht.
+    response.delete_cookie(
+        auth.SESSION_COOKIE,
+        httponly=True,
+        samesite="lax",
+        secure=config.SESSION_COOKIE_SECURE,
+    )
     return {"ok": True}
 
 
