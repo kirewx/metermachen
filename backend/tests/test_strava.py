@@ -223,7 +223,7 @@ def test_status_connected(client, session, monkeypatch):
     login(client)
     r = client.get("/api/strava/status")
     assert r.json() == {
-        "enabled": True, "connected": True, "athlete_id": 42,
+        "enabled": True, "connected": True, "athlete_id": 42, "consent": False,
         "backfill": {"state": "idle", "total": 0, "done": 0},
     }
 
@@ -282,9 +282,43 @@ def test_connect_redirects_to_strava(client, session, monkeypatch):
     _enable_strava(monkeypatch)
     make_user(session)
     login(client)
+    assert client.post("/api/strava/consent").status_code == 204
     r = client.get("/api/strava/connect", follow_redirects=False)
     assert r.status_code in (302, 307)
     assert r.headers["location"].startswith("https://www.strava.com/oauth/authorize")
+
+
+def test_connect_requires_consent(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    make_user(session)
+    login(client)
+    # Ohne vorherige Zustimmung leitet Connect NICHT zu Strava, sondern zurück.
+    r = client.get("/api/strava/connect", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert r.headers["location"] == "/?strava=consent"
+
+
+def test_consent_sets_timestamp_and_status(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    login(client)
+    assert client.get("/api/strava/status").json()["consent"] is False
+    assert client.post("/api/strava/consent").status_code == 204
+    session.refresh(user)
+    assert user.strava_consent_at is not None
+    assert client.get("/api/strava/status").json()["consent"] is True
+
+
+def test_consent_is_idempotent(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    login(client)
+    client.post("/api/strava/consent")
+    session.refresh(user)
+    first = user.strava_consent_at
+    client.post("/api/strava/consent")
+    session.refresh(user)
+    assert user.strava_consent_at == first  # zweiter Aufruf ändert den Zeitpunkt nicht
 
 
 def test_callback_stores_connection(client, session, monkeypatch):

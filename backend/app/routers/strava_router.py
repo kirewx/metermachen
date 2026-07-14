@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 from .. import config
 from ..db import engine
 from ..deps import get_current_user, get_session
-from ..models import StravaConnection, User
+from ..models import StravaConnection, User, utcnow
 from ..services import strava
 
 router = APIRouter(prefix="/api/strava", tags=["strava"])
@@ -34,6 +34,7 @@ def status(user: User = Depends(get_current_user), session: Session = Depends(ge
         "enabled": True,
         "connected": conn is not None,
         "athlete_id": conn.athlete_id if conn else None,
+        "consent": user.strava_consent_at is not None,
     }
     if conn is not None:
         result["backfill"] = {
@@ -47,8 +48,26 @@ def status(user: User = Depends(get_current_user), session: Session = Depends(ge
 @router.get("/connect")
 def connect(user: User = Depends(get_current_user)):
     _require_enabled()
+    # Ohne explizite Einwilligung kein Connect (API-Policy §2.3: fremde Strava-Daten
+    # nur mit Zustimmung im Gruppen-Ranking zeigen). Normalerweise blockt schon das
+    # Frontend; das hier ist die Absicherung, falls jemand den Link direkt aufruft.
+    if user.strava_consent_at is None:
+        return RedirectResponse("/?strava=consent")
     state = _state_serializer.dumps(user.id)
     return RedirectResponse(strava.authorize_url(state))
+
+
+@router.post("/consent", status_code=204)
+def consent(
+    user: User = Depends(get_current_user), session: Session = Depends(get_session)
+):
+    """Erfasst die explizite Einwilligung, die eigenen Aktivitäten den anderen
+    Gruppenmitgliedern im Ranking zu zeigen. Idempotent — einmal gesetzt, bleibt sie."""
+    _require_enabled()
+    if user.strava_consent_at is None:
+        user.strava_consent_at = utcnow()
+        session.add(user)
+        session.commit()
 
 
 @router.get("/callback")

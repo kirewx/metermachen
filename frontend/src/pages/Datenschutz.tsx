@@ -51,7 +51,10 @@ export default function Datenschutz() {
         </p>
         <p>
           <span className="font-bold text-ink">Zweck:</span> Anzeige und Wertung deiner
-          Aktivitäten im gemeinsamen Gruppen-Ranking. Wir geben deine Strava-Daten
+          Aktivitäten im gemeinsamen Gruppen-Ranking. Bevor du Strava verbindest, holen
+          wir dazu deine <span className="font-bold text-ink">ausdrückliche Einwilligung</span>
+          ein, dass deine Aktivitäten den anderen Mitgliedern deiner Gruppe angezeigt werden
+          dürfen. Wir geben deine Strava-Daten
           <span className="font-bold text-ink"> nicht an Dritte weiter</span> und nutzen
           sie insbesondere <span className="font-bold text-ink">nicht für KI-/Machine-Learning-Tools</span>.
         </p>

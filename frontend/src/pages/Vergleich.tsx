@@ -32,6 +32,8 @@ function useStravaRedirectHinweis() {
       queryClient.invalidateQueries({ queryKey: ['strava-status'] })
     } else if (s === 'denied') {
       toast('Strava-Verbindung abgebrochen')
+    } else if (s === 'consent') {
+      toast('Bitte stimme zuerst der Anzeige deiner Aktivitäten im Ranking zu.')
     } else {
       toast('Strava-Verbindung fehlgeschlagen. Bitte erneut versuchen.')
     }

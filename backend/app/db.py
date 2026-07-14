@@ -50,6 +50,8 @@ def migrate(target=engine) -> None:
             conn.execute(
                 text('ALTER TABLE "user" ADD COLUMN km_factor FLOAT NOT NULL DEFAULT 1.0')
             )
+        if user_cols and "strava_consent_at" not in user_cols:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN strava_consent_at DATETIME'))
 
         if _table_exists(conn, "category"):
             cat_cols = _columns(conn, "category")

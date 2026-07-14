@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Me } from '../../api/client'
 import ProfilModal from './ProfilModal'
@@ -7,9 +7,15 @@ import ProfilModal from './ProfilModal'
 const me: Me = { id: 1, username: 'erik', display_name: 'Erik', avatar: 'icon:laufen', is_admin: false }
 
 const stravaStatus = vi.fn()
+const consentStrava = vi.fn()
 const toastSpy = vi.fn()
 vi.mock('../../api/client', () => ({
-  api: { patchMe: vi.fn(), stravaStatus: () => stravaStatus(), disconnectStrava: vi.fn() },
+  api: {
+    patchMe: vi.fn(),
+    stravaStatus: () => stravaStatus(),
+    consentStrava: () => consentStrava(),
+    disconnectStrava: vi.fn(),
+  },
 }))
 vi.mock('./Toast', () => ({ useToast: () => toastSpy }))
 
@@ -26,13 +32,24 @@ function renderModal() {
 beforeEach(() => {
   toastSpy.mockClear()
   stravaStatus.mockReset()
+  consentStrava.mockReset()
+  consentStrava.mockResolvedValue(undefined)
 })
 
 describe('ProfilModal Strava-Abschnitt', () => {
-  it('zeigt Verbinden-Button, wenn nicht verbunden', async () => {
-    stravaStatus.mockResolvedValue({ enabled: true, connected: false })
+  it('zeigt Verbinden-Button, wenn nicht verbunden und zugestimmt', async () => {
+    stravaStatus.mockResolvedValue({ enabled: true, connected: false, consent: true })
     renderModal()
     expect(await screen.findByRole('link', { name: /Connect with Strava/ })).toBeInTheDocument()
+  })
+
+  it('zeigt Zustimmungs-Checkbox statt Verbinden-Button ohne Consent', async () => {
+    stravaStatus.mockResolvedValue({ enabled: true, connected: false, consent: false })
+    renderModal()
+    const cb = await screen.findByRole('checkbox')
+    expect(screen.queryByRole('link', { name: /Connect with Strava/ })).not.toBeInTheDocument()
+    fireEvent.click(cb)
+    await waitFor(() => expect(consentStrava).toHaveBeenCalled())
   })
 
   it('zeigt Trennen-Button, wenn verbunden', async () => {
