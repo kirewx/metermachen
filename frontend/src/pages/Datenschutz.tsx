@@ -72,11 +72,12 @@ export default function Datenschutz() {
         <h2 className="font-bold text-ink">Verbindung trennen &amp; Daten löschen</h2>
         <p>
           Du kannst die Strava-Verbindung jederzeit in deinem Profil über
-          „Strava trennen" aufheben. Dabei werden deine Strava-Token sofort und
-          vollständig aus unserem System gelöscht; wir rufen danach keine weiteren
-          Aktivitäten mehr ab. Bereits importierte Aktivitäten kannst du einzeln in
-          „Meine Aktivitäten" löschen. Für die Löschung deines gesamten Kontos wende
-          dich an den oben genannten Kontakt.
+          „Strava trennen" aufheben. Dabei werden deine Strava-Token
+          <span className="font-bold text-ink"> und alle aus Strava importierten
+          Aktivitäten</span> sofort und vollständig aus unserem System gelöscht; wir
+          rufen danach keine weiteren Aktivitäten mehr ab. Manuell erfasste Aktivitäten
+          bleiben erhalten und kannst du einzeln in „Meine Aktivitäten" löschen. Für die
+          Löschung deines gesamten Kontos wende dich an den oben genannten Kontakt.
         </p>
         <p>
           Unabhängig davon kannst du den Zugriff auch direkt bei Strava unter{' '}

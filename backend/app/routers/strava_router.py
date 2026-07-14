@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 from .. import config
 from ..db import engine
 from ..deps import get_current_user, get_session
-from ..models import StravaConnection, User, utcnow
+from ..models import Activity, StravaConnection, User, utcnow
 from ..services import strava
 
 router = APIRouter(prefix="/api/strava", tags=["strava"])
@@ -124,7 +124,15 @@ def disconnect(
     ).first()
     if conn is not None:
         session.delete(conn)
-        session.commit()
+    # API-Policy §7.4: bei Widerruf müssen alle Strava-Daten gelöscht werden —
+    # also nicht nur die Tokens, sondern auch die importierten Aktivitäten.
+    # Manuell erfasste Aktivitäten (source == "manual") bleiben erhalten.
+    strava_acts = session.exec(
+        select(Activity).where(Activity.user_id == user.id, Activity.source == "strava")
+    ).all()
+    for act in strava_acts:
+        session.delete(act)
+    session.commit()
 
 
 @router.get("/webhook")
