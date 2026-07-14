@@ -46,6 +46,12 @@ export default function ProfilModal({ me, open, onClose }: Props) {
     onError: (e) => toast(e.message),
   })
 
+  const zustimmen = useMutation({
+    mutationFn: () => api.consentStrava(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['strava-status'] }),
+    onError: (e) => toast(e.message),
+  })
+
   const save = useMutation({
     mutationFn: () =>
       api.patchMe({
@@ -84,31 +90,49 @@ export default function ProfilModal({ me, open, onClose }: Props) {
           onChange={(e) => setPasswort(e.target.value)}
         />
         {strava?.enabled && (
-          <div className="flex items-center justify-between border-t border-line/40 pt-3">
-            <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-ink-tech">
-              Strava
-              {strava.connected && strava.backfill?.state !== 'running' && (
-                <span className="text-accent">✓ Verbunden</span>
-              )}
-            </span>
-            {strava.connected ? (
-              strava.backfill?.state === 'running' ? (
-                <span className="flex items-center gap-2 text-sm text-ink-mute">
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Importiere… {strava.backfill.done} von {strava.backfill.total}
-                </span>
+          <div className="space-y-3 border-t border-line/40 pt-3">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-ink-tech">
+                Strava
+                {strava.connected && strava.backfill?.state !== 'running' && (
+                  <span className="text-accent">✓ Verbunden</span>
+                )}
+              </span>
+              {strava.connected ? (
+                strava.backfill?.state === 'running' ? (
+                  <span className="flex items-center gap-2 text-sm text-ink-mute">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Importiere… {strava.backfill.done} von {strava.backfill.total}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => trennen.mutate()}
+                    disabled={trennen.isPending}
+                    className="text-sm text-ink-mute hover:text-danger"
+                  >
+                    Strava trennen
+                  </button>
+                )
               ) : (
-                <button
-                  type="button"
-                  onClick={() => trennen.mutate()}
-                  disabled={trennen.isPending}
-                  className="text-sm text-ink-mute hover:text-danger"
-                >
-                  Strava trennen
-                </button>
-              )
-            ) : (
-              <StravaConnectButton />
+                strava.consent && <StravaConnectButton />
+              )}
+            </div>
+            {!strava.connected && !strava.consent && (
+              <label className="flex items-start gap-2 text-xs text-ink-soft">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={false}
+                  disabled={zustimmen.isPending}
+                  onChange={() => zustimmen.mutate()}
+                />
+                <span>
+                  Ich bin einverstanden, dass meine – auch via Strava importierten –
+                  Aktivitäten für die anderen Mitglieder meiner Gruppe im Ranking sichtbar
+                  sind. Danach kann ich Strava verbinden.
+                </span>
+              </label>
             )}
           </div>
         )}

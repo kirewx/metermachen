@@ -18,6 +18,10 @@ class User(SQLModel, table=True):
     is_active: bool = True
     km_factor: float = 1.0  # Admin-Handicap, wirkt nur im Challenge-Ranking
     created_at: datetime = Field(default_factory=utcnow)
+    # Zeitpunkt der expliziten Einwilligung, die eigenen (auch via Strava
+    # importierten) Aktivitäten den anderen Gruppenmitgliedern im Ranking zu
+    # zeigen. None = noch nicht zugestimmt. Voraussetzung für Strava-Connect.
+    strava_consent_at: datetime | None = None
 
 
 class Category(SQLModel, table=True):

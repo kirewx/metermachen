@@ -95,6 +95,7 @@ export type StravaBackfill = {
 export type StravaStatus = {
   enabled: boolean
   connected: boolean
+  consent?: boolean
   athlete_id?: number | null
   backfill?: StravaBackfill
 }
@@ -316,6 +317,7 @@ export const api = {
     request<Comparison>(`/api/comparison/${year}?phase=warmup`),
   warmupAchievements: () => request<WarmupOut>('/api/achievements/warmup'),
   stravaStatus: () => request<StravaStatus>('/api/strava/status'),
+  consentStrava: () => request<void>('/api/strava/consent', { method: 'POST' }),
   disconnectStrava: () => request<void>('/api/strava/disconnect', { method: 'DELETE' }),
   createInvite: (b: { display_name?: string | null; is_admin?: boolean }) =>
     request<Invite>('/api/invites', post(b)),
