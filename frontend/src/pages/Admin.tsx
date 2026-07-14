@@ -4,20 +4,29 @@ import { QRCodeSVG } from 'qrcode.react'
 import { api, type AddOn, type AdminUser, type Invite, type Milestone, type Season } from '../api/client'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
+import Collapsible from '../components/ui/Collapsible'
 import Icon from '../components/ui/Icon'
 import IconPicker from '../components/ui/IconPicker'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { MEILENSTEIN_ICONS, SPORT_ICONS } from '../components/ui/icons'
-import SectionTitle from '../components/ui/SectionTitle'
 import Select from '../components/ui/Select'
 import { useToast } from '../components/ui/Toast'
 
+// Strava sport_type-Werte (Stand 2024+). Sportarten ohne Distanz (Tennis, Golf …)
+// können zwar zugeordnet werden, zählen aber 0 km und werden beim Import übersprungen.
 const STRAVA_SPORT_TYPES = [
-  'Run', 'TrailRun', 'Walk', 'Hike', 'Ride', 'MountainBikeRide', 'GravelRide',
-  'EBikeRide', 'VirtualRide', 'VirtualRun', 'Swim', 'Rowing', 'Kayaking',
-  'NordicSki', 'AlpineSki', 'BackcountrySki', 'Snowboard', 'IceSkate',
-  'InlineSkate', 'Elliptical', 'StairStepper', 'Workout', 'WeightTraining',
+  // Distanz-Sportarten (zählen km)
+  'Run', 'TrailRun', 'VirtualRun', 'Walk', 'Hike', 'Ride', 'MountainBikeRide',
+  'GravelRide', 'EBikeRide', 'EMountainBikeRide', 'VirtualRide', 'Velomobile',
+  'Handcycle', 'Wheelchair', 'Swim', 'Rowing', 'VirtualRow', 'Kayaking',
+  'Canoeing', 'StandUpPaddling', 'Surfing', 'Kitesurf', 'Windsurf', 'Sail',
+  'NordicSki', 'AlpineSki', 'BackcountrySki', 'RollerSki', 'Snowboard',
+  'Snowshoe', 'IceSkate', 'InlineSkate', 'Skateboard',
+  // km-lose Sportarten (Zuordnung möglich, zählen aber nichts)
+  'Tennis', 'TableTennis', 'Badminton', 'Squash', 'Racquetball', 'Pickleball',
+  'Golf', 'Soccer', 'RockClimbing', 'Crossfit', 'Elliptical', 'StairStepper',
+  'WeightTraining', 'Workout', 'HighIntensityIntervalTraining', 'Yoga', 'Pilates',
 ]
 
 export default function Admin() {
@@ -75,8 +84,7 @@ function AddOns() {
   })
 
   return (
-    <section>
-      <SectionTitle>Add-ons</SectionTitle>
+    <Collapsible title="Add-ons">
       <p className="mb-3 text-xs text-ink-mute">
         Features an- und ausschalten. Optionales Zeitfenster: aktiv nur, wenn eingeschaltet
         <em> und</em> (falls gesetzt) innerhalb des Fensters.
@@ -177,7 +185,7 @@ function AddOns() {
           </Button>
         </div>
       </Modal>
-    </section>
+    </Collapsible>
   )
 }
 
@@ -212,8 +220,7 @@ function Kategorien() {
   })
 
   return (
-    <section>
-      <SectionTitle>Kategorien &amp; Faktoren</SectionTitle>
+    <Collapsible title="Kategorien & Faktoren" defaultOpen>
       <div className="space-y-2">
         {categories.map((c) => (
           <div
@@ -293,7 +300,7 @@ function Kategorien() {
           Kategorie anlegen
         </Button>
       </div>
-    </section>
+    </Collapsible>
   )
 }
 
@@ -327,10 +334,10 @@ function StravaMapping() {
   if (!categories.length) return null
 
   return (
-    <section>
-      <SectionTitle>Strava-Zuordnung</SectionTitle>
+    <Collapsible title="Strava-Zuordnung">
       <p className="mb-3 text-xs text-ink-mute">
-        Jede Strava-Sportart zählt zu höchstens einer Kategorie.
+        Jede Strava-Sportart zählt zu höchstens einer Kategorie. Sportarten ohne
+        Distanz (Tennis, Golf, Kraftraum …) lassen sich zuordnen, zählen aber 0 km.
       </p>
       <div>
         {STRAVA_SPORT_TYPES.map((sport) => (
@@ -353,7 +360,7 @@ function StravaMapping() {
           </div>
         ))}
       </div>
-    </section>
+    </Collapsible>
   )
 }
 
@@ -372,8 +379,7 @@ function Jahr() {
   const ms = milestones ?? season.milestones
 
   return (
-    <section>
-      <SectionTitle>Jahr {season.year}</SectionTitle>
+    <Collapsible title={`Jahr ${season.year}`}>
       <Input
         label="Ziel (gewertete km)"
         type="number"
@@ -435,7 +441,7 @@ function Jahr() {
           Speichern
         </Button>
       </div>
-    </section>
+    </Collapsible>
   )
 }
 
@@ -471,8 +477,7 @@ function Mitglieder() {
   })
 
   return (
-    <section>
-      <SectionTitle>Mitglieder</SectionTitle>
+    <Collapsible title="Mitglieder" defaultOpen>
       <ul>
         {users.map((u) => (
           <li
@@ -552,7 +557,7 @@ function Mitglieder() {
           </Button>
         </div>
       </Modal>
-    </section>
+    </Collapsible>
   )
 }
 
@@ -605,8 +610,7 @@ function Einladungen() {
   }
 
   return (
-    <section>
-      <SectionTitle>Mitglied einladen</SectionTitle>
+    <Collapsible title="Mitglied einladen">
       <div className="flex flex-wrap items-end gap-2">
         <Input
           label="Anzeigename (optional)"
@@ -676,6 +680,6 @@ function Einladungen() {
           })}
         </ul>
       )}
-    </section>
+    </Collapsible>
   )
 }
