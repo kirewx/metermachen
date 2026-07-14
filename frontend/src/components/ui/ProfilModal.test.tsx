@@ -8,13 +8,14 @@ const me: Me = { id: 1, username: 'erik', display_name: 'Erik', avatar: 'icon:la
 
 const stravaStatus = vi.fn()
 const consentStrava = vi.fn()
+const disconnectStrava = vi.fn()
 const toastSpy = vi.fn()
 vi.mock('../../api/client', () => ({
   api: {
     patchMe: vi.fn(),
     stravaStatus: () => stravaStatus(),
     consentStrava: () => consentStrava(),
-    disconnectStrava: vi.fn(),
+    disconnectStrava: () => disconnectStrava(),
   },
 }))
 vi.mock('./Toast', () => ({ useToast: () => toastSpy }))
@@ -34,6 +35,8 @@ beforeEach(() => {
   stravaStatus.mockReset()
   consentStrava.mockReset()
   consentStrava.mockResolvedValue(undefined)
+  disconnectStrava.mockReset()
+  disconnectStrava.mockResolvedValue(undefined)
 })
 
 describe('ProfilModal Strava-Abschnitt', () => {
@@ -56,6 +59,15 @@ describe('ProfilModal Strava-Abschnitt', () => {
     stravaStatus.mockResolvedValue({ enabled: true, connected: true, athlete_id: 42 })
     renderModal()
     expect(await screen.findByRole('button', { name: /Strava trennen/ })).toBeInTheDocument()
+  })
+
+  it('trennt erst nach Bestätigung (Zwei-Klick)', async () => {
+    stravaStatus.mockResolvedValue({ enabled: true, connected: true, athlete_id: 42 })
+    renderModal()
+    fireEvent.click(await screen.findByRole('button', { name: /Strava trennen/ }))
+    expect(disconnectStrava).not.toHaveBeenCalled() // erster Klick warnt nur
+    fireEvent.click(await screen.findByRole('button', { name: /Wirklich trennen/ }))
+    await waitFor(() => expect(disconnectStrava).toHaveBeenCalled())
   })
 
   it('zeigt nichts, wenn Feature deaktiviert', async () => {

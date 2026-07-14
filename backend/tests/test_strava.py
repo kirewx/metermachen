@@ -408,6 +408,27 @@ def test_disconnect_removes_connection(client, session, monkeypatch):
     assert session.exec(select(StravaConnection)).all() == []
 
 
+def test_disconnect_deletes_strava_activities_keeps_manual(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    cat = make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    session.add(StravaConnection(user_id=user.id, athlete_id=42,
+                                 access_token="a", refresh_token="r", expires_at=999))
+    d = __import__("datetime").date
+    session.add(Activity(user_id=user.id, category_id=cat.id, date=d(2026, 7, 1),
+                         distance_km=5.0, source="strava", external_id="1"))
+    session.add(Activity(user_id=user.id, category_id=cat.id, date=d(2026, 7, 2),
+                         distance_km=3.0, source="manual"))
+    session.commit()
+    login(client)
+    assert client.delete("/api/strava/disconnect").status_code == 204
+    # API-Policy §7.4: importierte Strava-Aktivitäten weg, manuelle bleiben.
+    acts = session.exec(select(Activity)).all()
+    assert len(acts) == 1
+    assert acts[0].source == "manual"
+    assert session.exec(select(StravaConnection)).all() == []
+
+
 def test_handle_webhook_event_dedup_skips_fetch(session, monkeypatch):
     user, conn = _setup_conn(session)
     make_category(session, name="Laufen", strava_sport_types='["Run"]')

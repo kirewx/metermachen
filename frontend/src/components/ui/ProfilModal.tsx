@@ -17,6 +17,7 @@ export default function ProfilModal({ me, open, onClose }: Props) {
   const [name, setName] = useState(me.display_name)
   const [avatar, setAvatar] = useState(me.avatar)
   const [passwort, setPasswort] = useState('')
+  const [trennenConfirm, setTrennenConfirm] = useState(false)
 
   const { data: strava } = useQuery({
     queryKey: ['strava-status'],
@@ -24,6 +25,13 @@ export default function ProfilModal({ me, open, onClose }: Props) {
     refetchInterval: (query) =>
       query.state.data?.backfill?.state === 'running' ? 1500 : false,
   })
+
+  // Beim Schließen den Bestätigungs-Zustand zurücksetzen — sonst löst ein
+  // einzelner Klick beim Wiederöffnen versehentlich das Trennen aus.
+  const close = () => {
+    setTrennenConfirm(false)
+    onClose()
+  }
 
   const prevBackfill = useRef<string | undefined>(undefined)
   useEffect(() => {
@@ -40,8 +48,13 @@ export default function ProfilModal({ me, open, onClose }: Props) {
   const trennen = useMutation({
     mutationFn: () => api.disconnectStrava(),
     onSuccess: () => {
+      setTrennenConfirm(false)
+      // Beim Trennen werden importierte Aktivitäten gelöscht (API-Policy §7.4) —
+      // Ranking und Aktivitätenliste neu laden.
       queryClient.invalidateQueries({ queryKey: ['strava-status'] })
-      toast('Strava getrennt', 'ok')
+      queryClient.invalidateQueries({ queryKey: ['comparison'] })
+      queryClient.invalidateQueries({ queryKey: ['activities'] })
+      toast('Strava getrennt, importierte Aktivitäten gelöscht', 'ok')
     },
     onError: (e) => toast(e.message),
   })
@@ -65,13 +78,13 @@ export default function ProfilModal({ me, open, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['comparison'] })
       setPasswort('')
       toast('Profil gespeichert', 'ok')
-      onClose()
+      close()
     },
     onError: (e) => toast(e.message),
   })
 
   return (
-    <Modal open={open} onClose={onClose} title="Profil">
+    <Modal open={open} onClose={close} title="Profil">
       <div className="space-y-4">
         <Input
           label="Benutzername (Login)"
@@ -107,11 +120,19 @@ export default function ProfilModal({ me, open, onClose }: Props) {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => trennen.mutate()}
+                    onClick={() =>
+                      trennenConfirm ? trennen.mutate() : setTrennenConfirm(true)
+                    }
                     disabled={trennen.isPending}
-                    className="text-sm text-ink-mute hover:text-danger"
+                    className={
+                      trennenConfirm
+                        ? 'text-right text-sm font-bold text-danger'
+                        : 'text-sm text-ink-mute hover:text-danger'
+                    }
                   >
-                    Strava trennen
+                    {trennenConfirm
+                      ? 'Wirklich trennen? Löscht importierte km'
+                      : 'Strava trennen'}
                   </button>
                 )
               ) : (
