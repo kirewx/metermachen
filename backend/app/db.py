@@ -87,6 +87,11 @@ def migrate(target=engine) -> None:
                         {"m": json.dumps(milestones), "id": id_},
                     )
 
+        if _table_exists(conn, "activity"):
+            act_cols = _columns(conn, "activity")
+            if "elevation_m" not in act_cols:
+                conn.execute(text("ALTER TABLE activity ADD COLUMN elevation_m FLOAT"))
+
         if _table_exists(conn, "stravaconnection"):
             sc_cols = _columns(conn, "stravaconnection")
             if "backfill_state" not in sc_cols:

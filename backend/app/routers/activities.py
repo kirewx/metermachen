@@ -17,16 +17,23 @@ def _validate_category(session: Session, category_id: int) -> Category:
 
 
 def _to_out(activity: Activity, factor: float) -> ActivityOut:
+    strava_url = (
+        f"https://www.strava.com/activities/{activity.external_id}"
+        if activity.source == "strava" and activity.external_id
+        else None
+    )
     return ActivityOut(
         id=activity.id,
         category_id=activity.category_id,
         date=activity.date,
         distance_km=activity.distance_km,
         duration_min=activity.duration_min,
+        elevation_m=activity.elevation_m,
         note=activity.note,
         scaled_km=round(activity.distance_km * factor, 2),
         edited=activity.updated_at is not None,
         source=activity.source,
+        strava_url=strava_url,
     )
 
 

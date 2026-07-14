@@ -117,6 +117,7 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     distance_km = round((data.get("distance") or 0) / 1000, 2)
     if distance_km <= 0:
         return False
+    elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
     act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
     # Stichtag gilt überall — auch für nachträglich bei Strava erfasste alte
     # Aktivitäten, die per Webhook als "create" hereinkommen.
@@ -130,6 +131,7 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
         date=act_date,
         distance_km=distance_km,
         duration_min=duration_min,
+        elevation_m=elevation_m,
         note=data.get("name"),
         source="strava",
         external_id=str(activity_id),

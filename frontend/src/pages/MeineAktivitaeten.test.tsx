@@ -9,8 +9,8 @@ vi.mock('../api/client', () => ({
       { id: 1, name: 'Laufen', factor: 4, color: '#fff', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: ['Run'] },
     ]),
     activities: vi.fn().mockResolvedValue([
-      { id: 1, category_id: 1, date: '2026-03-01', distance_km: 5, duration_min: null, note: null, scaled_km: 20, edited: false, source: 'strava' },
-      { id: 2, category_id: 1, date: '2026-03-02', distance_km: 3, duration_min: null, note: null, scaled_km: 12, edited: false, source: 'manual' },
+      { id: 1, category_id: 1, date: '2026-03-01', distance_km: 5, duration_min: null, elevation_m: 340, note: null, scaled_km: 20, edited: false, source: 'strava', strava_url: 'https://www.strava.com/activities/1' },
+      { id: 2, category_id: 1, date: '2026-03-02', distance_km: 3, duration_min: null, elevation_m: null, note: null, scaled_km: 12, edited: false, source: 'manual', strava_url: null },
     ]),
     achievements: vi.fn().mockResolvedValue([
       {
@@ -48,16 +48,19 @@ describe('MeineAktivitaeten', () => {
     expect(await screen.findByText('Laufen')).toBeInTheDocument()
     expect(screen.getByText(/2 Einträge/)).toBeInTheDocument()
     expect(screen.getByText('32 km')).toBeInTheDocument()
-    expect(screen.queryByText('Strava')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Strava/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('Laufen'))
-    expect(await screen.findByText('Strava')).toBeInTheDocument()
+    expect(await screen.findByText('Strava ↗')).toBeInTheDocument()
   })
 
-  it('zeigt genau ein Strava-Badge (nur für die Strava-Aktivität)', async () => {
+  it('verlinkt das Strava-Badge auf die Aktivität und zeigt Höhenmeter', async () => {
     renderPage()
     fireEvent.click(await screen.findByText('Laufen'))
-    const badges = screen.getAllByText('Strava')
-    expect(badges).toHaveLength(1)
+    const link = await screen.findByText('Strava ↗')
+    expect(link).toHaveAttribute('href', 'https://www.strava.com/activities/1')
+    expect(screen.getByText(/340 hm/)).toBeInTheDocument()
+    // Nur die eine Strava-Aktivität hat ein Badge.
+    expect(screen.getAllByText('Strava ↗')).toHaveLength(1)
   })
 })
 

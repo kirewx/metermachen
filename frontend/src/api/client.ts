@@ -29,10 +29,12 @@ export type Activity = {
   date: string
   distance_km: number
   duration_min: number | null
+  elevation_m: number | null
   note: string | null
   scaled_km: number
   edited: boolean
   source: string
+  strava_url: string | null
 }
 export type ActivityInput = {
   category_id: number

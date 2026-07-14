@@ -166,10 +166,12 @@ class ActivityOut(BaseModel):
     date: date_type
     distance_km: float
     duration_min: int | None
+    elevation_m: float | None
     note: str | None
     scaled_km: float
     edited: bool
     source: str
+    strava_url: str | None
 
 
 class CategoryShare(BaseModel):

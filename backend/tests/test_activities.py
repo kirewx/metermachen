@@ -17,6 +17,9 @@ def test_create_and_list_with_scaled_km(client, session):
     assert r.status_code == 201
     assert r.json()["scaled_km"] == 20.0
     assert r.json()["edited"] is False
+    # Manuelle Aktivität: keine Höhenmeter, kein Strava-Link.
+    assert r.json()["elevation_m"] is None
+    assert r.json()["strava_url"] is None
     r = client.get("/api/activities", params={"year": 2026})
     assert len(r.json()) == 1
     assert client.get("/api/activities", params={"year": 2025}).json() == []

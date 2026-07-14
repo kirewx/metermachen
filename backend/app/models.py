@@ -51,6 +51,7 @@ class Activity(SQLModel, table=True):
     date: date_type = Field(index=True)
     distance_km: float
     duration_min: int | None = None
+    elevation_m: float | None = None  # Höhenmeter (Strava total_elevation_gain)
     note: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime | None = None

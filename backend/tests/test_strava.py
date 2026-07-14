@@ -164,6 +164,7 @@ def test_import_activity_inserts_and_is_idempotent(session):
     user, conn = _setup_conn(session)
     make_category(session, name="Laufen", strava_sport_types='["Run"]')
     data = {"id": 999, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+            "total_elevation_gain": 123.4,
             "start_date_local": "2026-03-01T07:00:00Z", "name": "Lauf"}
     assert strava.import_activity(session, conn, data) is True
     assert strava.import_activity(session, conn, data) is False  # Dublette
@@ -172,7 +173,18 @@ def test_import_activity_inserts_and_is_idempotent(session):
     assert acts[0].external_id == "999"
     assert acts[0].distance_km == 5.0
     assert acts[0].duration_min == 30
+    assert acts[0].elevation_m == 123.4  # Höhenmeter aus total_elevation_gain
     assert acts[0].source == "strava"
+
+
+def test_import_activity_without_elevation_is_none(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {"id": 1000, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+            "start_date_local": "2026-03-01T07:00:00Z"}
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity)).one()
+    assert act.elevation_m is None  # kein/0 total_elevation_gain → None statt 0.0
 
 
 def test_import_activity_skips_unmapped_and_zero(session):
