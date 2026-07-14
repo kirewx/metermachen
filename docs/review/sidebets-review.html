@@ -40,7 +40,30 @@
 <body>
 
 <h1>🎲 Sidebet-System — <span>Review</span></h1>
-<p class="mute">Branch <code>feature/sidebets</code> · Spec: <code>docs/superpowers/specs/2026-07-12-countdown-warmup-sidebets-design.md</code></p>
+<p class="mute">Auf <code>main</code>, hinter Add-on <code>sidebets</code> (Default AUS) · Spec: <code>docs/superpowers/specs/2026-07-12-countdown-warmup-sidebets-design.md</code></p>
+
+<h2>🧩 Ausgeliefert als Add-on <code>sidebets</code> — Default AUS</h2>
+<div class="warn">
+  <p>Das komplette Wetten-Feature hängt am <b>Add-on-System</b> (Feature-Toggles). Beim
+  ersten Start wird das Add-on <code>sidebets</code> <b>abgeschaltet</b> angelegt — für
+  Nutzer ist zunächst nichts sichtbar. Du entscheidest im Admin-Panel, wann es live geht.</p>
+</div>
+<div class="card">
+  <ul>
+    <li><b>Scharfschalten:</b> Admin-Panel → Abschnitt <b>Add-ons</b> → bei „Wetten" auf
+      <b>Aktivieren</b>. Optional ein Zeitfenster (aktiv ab / aktiv bis), damit sich das
+      Feature selbst ein- und ausschaltet.</li>
+    <li><b>Backend-Guard:</b> Solange <code>sidebets</code> aus ist, liefern
+      <code>/api/bets*</code> und <code>/api/points*</code> ein <b>404</b> („Feature nicht
+      verfügbar"). Kein Zugriff auf Wetten oder Punkte.</li>
+    <li><b>Frontend:</b> Ohne aktives Add-on erscheint <b>kein Wetten-Tab</b> und die Route
+      <code>/wetten</code> leitet auf die Startseite um.</li>
+    <li><b>Bestandsdaten bleiben:</b> Aus-/Anschalten löscht nichts — bereits angelegte
+      Wetten und Punktekonten sind nach dem Wieder-Aktivieren unverändert da.</li>
+    <li><b>„Aktiv" heißt:</b> eingeschaltet <em>und</em> (falls ein Fenster gesetzt ist)
+      innerhalb des Fensters. Der Schalter ist der Hauptschalter, das Fenster plant.</li>
+  </ul>
+</div>
 
 <h2>Punkte-Ökonomie</h2>
 <div class="card">
@@ -128,7 +151,7 @@
 </table></div>
 <div class="card">
   <p>Neue Tabellen: <code>bet</code> (Wette inkl. <code>params_json</code>/<code>result_json</code>/Jackpot), <code>betparticipant</code> (Rolle, Einsatz, Payout, Tipp), <code>pointtransaction</code> (Ledger). Entstehen automatisch beim Start (<code>create_all</code>) — <b>keine manuelle Migration nötig</b>.</p>
-  <p>Frontend: neuer Tab <b>Wetten</b> (sichtbar ab Challenge-Start): Kontostand, „Offen für dich", laufende Wetten mit Live-Zwischenstand, Punkte-Ranking, Wett-Erfolge, Historie, Erstell-Dialog mit den 4 Wettarten.</p>
+  <p>Frontend: neuer Tab <b>Wetten</b> (sichtbar, wenn das Add-on <code>sidebets</code> aktiv ist): Kontostand, „Offen für dich", laufende Wetten mit Live-Zwischenstand, Punkte-Ranking, Wett-Erfolge, Historie, Erstell-Dialog mit den 4 Wettarten.</p>
 </div>
 
 <h2>Bewusste Entscheidungen / bitte prüfen</h2>
@@ -144,7 +167,7 @@
 
 <h2>Testabdeckung</h2>
 <div class="card">
-  <p><b>Backend: 155 Tests grün</b>, davon 33 neu für Sidebets (Punkte-Ledger idempotent, Lifecycle-Validierungen, Auflösung aller 4 Typen inkl. Gleichstand, leerer Seite, fehlender Gegenhalter, Jackpot-Rollover, deaktivierter Teilnehmer, API-Flows). <b>Frontend: 60 Tests grün</b> (u.a. Wetten-Seite: Rendering + Duell annehmen), Lint + TypeScript-Build sauber.</p>
+  <p><b>Backend: 173 Tests grün</b> — Sidebets (Punkte-Ledger idempotent, Lifecycle-Validierungen, Auflösung aller 4 Typen inkl. Gleichstand, leerer Seite, fehlender Gegenhalter, Jackpot-Rollover, deaktivierter Teilnehmer, API-Flows) plus Add-on-System (Guard-Logik inkl. Zeitfenster, CRUD, <code>/api/bets</code> → 404 wenn Add-on aus, Seed legt <code>sidebets</code> abgeschaltet an). <b>Frontend: 66 Tests grün</b> (Wetten-Seite, Tab-Filter nach Add-on), Lint + TypeScript-Build sauber.</p>
 </div>
 
 </body>

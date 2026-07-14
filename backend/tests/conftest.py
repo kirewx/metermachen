@@ -10,7 +10,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from app import auth
 from app.deps import get_session
 from app.main import app
-from app.models import Category, User
+from app.models import AddOn, Category, User
 
 
 @pytest.fixture
@@ -60,3 +60,11 @@ def make_category(session, name="Joggen", factor=4.0, icon="laufen", **kw) -> Ca
     session.commit()
     session.refresh(cat)
     return cat
+
+
+def make_addon(session, key="sidebets", label="Wetten", enabled=True, **kw) -> AddOn:
+    addon = AddOn(key=key, label=label, enabled=enabled, **kw)
+    session.add(addon)
+    session.commit()
+    session.refresh(addon)
+    return addon

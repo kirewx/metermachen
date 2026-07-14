@@ -1,7 +1,7 @@
 from sqlmodel import Session, select
 
 from . import auth
-from .models import Category, Season, User
+from .models import AddOn, Category, Season, User
 
 DEFAULT_CATEGORIES = [
     # (Name, Faktor, Farbe, Icon, Standard-km)
@@ -12,6 +12,13 @@ DEFAULT_CATEGORIES = [
     ("Schwimmen", 10.0, "#9b59b6", "schwimmen", 1.0),
     ("Radfahren", 1.0, "#3498db", "rad", 20.0),
     ("Tanzen", 3.0, "#e67e22", "tanzen", 5.0),
+]
+
+# Code-bekannte Add-ons, die einen Guard/Tab im Code haben. Werden idempotent
+# angelegt (Default aus); ein bereits gesetzter Toggle wird nie überschrieben.
+KNOWN_ADDONS = [
+    # (key, label, description)
+    ("sidebets", "Wetten", "Sidebet-System: Punkte, Duelle, Monats-Tipps & Gruppenwetten."),
 ]
 
 
@@ -32,4 +39,7 @@ def seed_all(session: Session, admin_user: str, admin_password: str, year: int) 
             )
     if session.exec(select(Season).where(Season.year == year)).first() is None:
         session.add(Season(year=year, goal_km=1000.0))
+    for key, label, description in KNOWN_ADDONS:
+        if session.exec(select(AddOn).where(AddOn.key == key)).first() is None:
+            session.add(AddOn(key=key, label=label, description=description, enabled=False))
     session.commit()

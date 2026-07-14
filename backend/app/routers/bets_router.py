@@ -12,12 +12,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from ..deps import get_current_user, get_session
+from ..deps import get_current_user, get_session, require_addon
 from ..models import Bet, BetParticipant, PointTransaction, User
 from ..services import bet_metrics, bets, points
 
-router = APIRouter(prefix="/api/bets", tags=["bets"])
-points_router = APIRouter(prefix="/api/points", tags=["points"])
+# Das gesamte Wetten-Feature hängt am Add-on "sidebets": ist es aus, liefern
+# alle Endpoints 404 (require_addon läuft vor der Auth-Prüfung der Endpoints).
+_sidebets_guard = [Depends(require_addon("sidebets"))]
+router = APIRouter(prefix="/api/bets", tags=["bets"], dependencies=_sidebets_guard)
+points_router = APIRouter(prefix="/api/points", tags=["points"], dependencies=_sidebets_guard)
 
 
 # ------------------------------------------------------------------ Schemas

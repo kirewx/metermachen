@@ -15,6 +15,12 @@ export default function App() {
     queryKey: ['me'],
     queryFn: () => api.me().catch(() => null),
   })
+  const { data: addons } = useQuery({
+    queryKey: ['addons'],
+    queryFn: () => api.addons().catch(() => []),
+    enabled: !!me,
+  })
+  const sidebetsAktiv = (addons ?? []).some((a) => a.key === 'sidebets' && a.active)
   if (isLoading) return <p className="p-8 text-ink-mute">Lade…</p>
   if (!me)
     return (
@@ -29,7 +35,7 @@ export default function App() {
         <Route path="/" element={<Vergleich />} />
         <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
         <Route path="/archiv" element={<Archiv />} />
-        <Route path="/wetten" element={<Wetten />} />
+        {sidebetsAktiv && <Route path="/wetten" element={<Wetten />} />}
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

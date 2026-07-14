@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from app.models import Season
-from tests.conftest import make_category, make_user, login
+from tests.conftest import make_addon, make_category, make_user, login
 
 HEUTE = date.today()
 
@@ -15,6 +15,7 @@ def _setup(session):
             start_date=HEUTE - timedelta(days=10),
         )
     )
+    make_addon(session, "sidebets", enabled=True)  # Wetten-Add-on aktiv
     erik = make_user(session, is_admin=True)
     lisa = make_user(session, username="lisa")
     make_category(session, factor=1.0)
@@ -34,7 +35,16 @@ def _duell_body(lisa, stake=20):
 
 
 def test_bets_requires_auth(client, session):
+    make_addon(session, "sidebets", enabled=True)
     assert client.get("/api/bets").status_code == 401
+
+
+def test_bets_404_when_addon_disabled(client, session):
+    # Ohne aktives sidebets-Add-on ist die Wetten-API nicht verfügbar.
+    make_user(session, is_admin=True)
+    login(client)
+    assert client.get("/api/bets").status_code == 404
+    assert client.get("/api/points").status_code == 404
 
 
 def test_create_and_accept_duell_flow(client, session):
