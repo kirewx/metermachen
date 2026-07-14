@@ -32,7 +32,7 @@ describe('ProfilModal Strava-Abschnitt', () => {
   it('zeigt Verbinden-Button, wenn nicht verbunden', async () => {
     stravaStatus.mockResolvedValue({ enabled: true, connected: false })
     renderModal()
-    expect(await screen.findByRole('button', { name: /Mit Strava verbinden/ })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Connect with Strava/ })).toBeInTheDocument()
   })
 
   it('zeigt Trennen-Button, wenn verbunden', async () => {

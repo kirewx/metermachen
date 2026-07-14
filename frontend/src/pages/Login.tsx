@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -49,6 +50,11 @@ export default function Login() {
             Los geht's
           </Button>
         </Card>
+        <p className="mt-4 text-center text-[11px] text-ink-mute">
+          <Link to="/datenschutz" className="hover:text-accent">
+            Datenschutz
+          </Link>
+        </p>
       </form>
     </div>
   )

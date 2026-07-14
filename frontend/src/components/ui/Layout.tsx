@@ -71,6 +71,13 @@ export default function Layout({ me }: { me: Me }) {
       <main className="mx-auto max-w-5xl p-4">
         <Outlet />
       </main>
+      <footer className="mx-auto max-w-5xl px-4 pb-24 pt-2 text-center text-[11px] text-ink-mute sm:pb-6">
+        <NavLink to="/datenschutz" className="hover:text-accent">
+          Datenschutz
+        </NavLink>
+        <span className="mx-2">·</span>
+        <span>Powered by Strava</span>
+      </footer>
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-line bg-card/95 py-2 backdrop-blur sm:hidden">
         {tabs.map((t) => (
           <NavLink
