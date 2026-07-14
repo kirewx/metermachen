@@ -231,6 +231,20 @@ export type BetAchievement = {
   progress: number
 }
 
+/** Fehler mit HTTP-Status, damit Aufrufer 401 (Session weg) von Netz-/Serverfehlern trennen können. */
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+export function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, {
     headers: init?.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
@@ -238,7 +252,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!r.ok) {
     const detail = (await r.json().catch(() => null))?.detail
-    throw new Error(typeof detail === 'string' ? detail : `Fehler ${r.status}`)
+    throw new ApiError(r.status, typeof detail === 'string' ? detail : `Fehler ${r.status}`)
   }
   return r.status === 204 ? (undefined as T) : r.json()
 }
