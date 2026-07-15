@@ -180,7 +180,9 @@ Davor einfügen:
         <div className="ml-auto flex overflow-hidden rounded-full border border-line text-xs">
           <button
             type="button"
-            onClick={() => mode !== 'mm' && toggleUnit()}
+            onClick={() => {
+              if (mode !== 'mm') toggleUnit()
+            }}
             className={`px-3 py-1 font-bold transition ${
               mode === 'mm' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
             }`}
@@ -189,7 +191,9 @@ Davor einfügen:
           </button>
           <button
             type="button"
-            onClick={() => mode !== 'km' && toggleUnit()}
+            onClick={() => {
+              if (mode !== 'km') toggleUnit()
+            }}
             className={`px-3 py-1 font-bold transition ${
               mode === 'km' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
             }`}
@@ -253,7 +257,15 @@ git commit -m "feat(vergleich): MM/km-Toggle im Header + Rennen-Readout (F1)"
 
 - [ ] **Step 1: Failing test ergänzen (Icon ab Breite + Einheit)**
 
-In `frontend/src/components/comparison/SportMix.test.tsx` innerhalb `describe('SportMix', …)` zwei Tests ergänzen. Die Testdaten oben haben Erik mit Laufen 200 (66,7 %) und Radfahren 100 (33,3 %) — beide über der 9 %-Schwelle → beide Icons sichtbar.
+In `frontend/src/components/comparison/SportMix.test.tsx`:
+
+**Zuerst** die bestehende Assertion anpassen — der Gesamtwert rendert künftig als „300 MM" (Zahl + Einheiten-Span), der exakte Match `getByText('300')` bricht dann:
+```ts
+    expect(screen.getByText(/^300/)).toBeInTheDocument()
+```
+(`/^300/` matcht nur den Wert-Span, dessen textContent mit „300" beginnt — Eltern-Elemente beginnen mit „P1Erik…".)
+
+**Dann** innerhalb `describe('SportMix', …)` zwei Tests ergänzen. Die Testdaten oben haben Erik mit Laufen 200 (66,7 %) und Radfahren 100 (33,3 %) — beide über der 9 %-Schwelle → beide Icons sichtbar.
 
 ```ts
   it('zeigt Sportart-Piktogramme in ausreichend breiten Segmenten', () => {
@@ -462,9 +474,7 @@ git commit -m "feat(vergleich): Verlauf km-Achse + Ziel-Linien nur in MM (F1)"
 
 - [ ] **Step 1: Failing test schreiben**
 
-Zuerst den bestehenden Test lesen, um die Testdaten wiederzuverwenden. Falls die Datei nur einen Detail-Test hat, folgende Tests im `describe` ergänzen. Sie brauchen mind. zwei Personen; lege dafür lokale Testdaten an.
-
-In `frontend/src/components/comparison/JahresVerlauf.test.tsx` ergänzen (Imports oben ggf. um `fireEvent` erweitern):
+Die Datei `JahresVerlauf.test.tsx` hat bereits einen `vi.mock('../../api/client', …)` mit `userActivities`/„Morgenlauf" und ein `describe` mit einem Detail-Test (klickt `getByLabelText('Details zu Erik')` — bleibt gültig, weil der „i"-Button dieses aria-label behält). `fireEvent` ist bereits importiert. Folgende Tests im `describe` ergänzen:
 ```ts
   it('togglet eine Kurve über den Chip und schaltet mit Alle/Keine', () => {
     const zwei: Comparison = {
@@ -502,20 +512,6 @@ In `frontend/src/components/comparison/JahresVerlauf.test.tsx` ergänzen (Import
     fireEvent.click(screen.getByRole('button', { name: 'Details zu Erik' }))
     expect(await screen.findByText('Morgenlauf', { exact: false })).toBeInTheDocument()
   })
-```
-
-Sicherstellen, dass der `vi.mock('../../api/client', …)` am Dateikopf `userActivities` mit einem `Morgenlauf`-Eintrag liefert (analog zum SportMix-Test); falls noch nicht vorhanden, den Mock entsprechend ergänzen:
-```ts
-vi.mock('../../api/client', () => ({
-  api: {
-    categories: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Laufen', factor: 4, color: '#f00', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: [] },
-    ]),
-    userActivities: vi.fn().mockResolvedValue([
-      { id: 7, category_id: 1, date: '2026-03-01', distance_km: 5, duration_min: null, elevation_m: null, note: 'Morgenlauf', scaled_km: 20, edited: false, source: 'manual', strava_url: null },
-    ]),
-  },
-}))
 ```
 
 - [ ] **Step 2: Test laufen lassen — muss fehlschlagen**
@@ -1156,7 +1152,9 @@ Neuen Test im `describe` ergänzen (Erik jetzt 300, Snapshot 100 → +200):
   it('zeigt das Seit-Besuch-Banner und das Delta, wenn der letzte Besuch alt genug ist', async () => {
     renderRace()
     expect(await screen.findByText(/Seit deinem letzten Besuch/)).toBeInTheDocument()
-    expect(screen.getByText(/\+200/)).toBeInTheDocument()
+    // Exakter String: matcht nur das Balken-Label "+200" — das Banner enthält
+    // "+200" ebenfalls, aber als Teil eines längeren Textes (kein exakter Match).
+    expect(screen.getByText('+200')).toBeInTheDocument()
   })
 ```
 
