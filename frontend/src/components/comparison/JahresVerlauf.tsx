@@ -19,6 +19,7 @@ import { userColor } from './userColor'
 
 export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
   const [detail, setDetail] = useState<ComparisonUser | null>(null)
+  const [visible, setVisible] = useState<Set<number>>(() => new Set(data.users.map((u) => u.user_id)))
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
   const byDate = new Map<string, Record<string, number | string>>()
   for (const u of data.users) {
@@ -83,7 +84,7 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
               label={{ value: 'Ziel', fontSize: 11, fill: 'var(--t-accent)' }}
             />
           )}
-          {data.users.map((u) => {
+          {data.users.filter((u) => visible.has(u.user_id)).map((u) => {
             const farbe = userColor(u.user_id, ids)
             const letzte = lastIndex.get(u.display_name)
             return (
@@ -122,22 +123,60 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
           })}
         </LineChart>
       </ResponsiveContainer>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {data.users.map((u) => (
-          <button
-            key={u.user_id}
-            type="button"
-            onClick={() => setDetail(u)}
-            aria-label={`Details zu ${u.display_name}`}
-            className="flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs text-ink transition hover:border-accent hover:text-accent"
-          >
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setVisible(new Set(data.users.map((u) => u.user_id)))}
+          className="rounded-full border border-line px-2.5 py-1 text-xs font-bold text-ink-mute transition hover:text-ink"
+        >
+          Alle
+        </button>
+        <button
+          type="button"
+          onClick={() => setVisible(new Set())}
+          className="rounded-full border border-line px-2.5 py-1 text-xs font-bold text-ink-mute transition hover:text-ink"
+        >
+          Keine
+        </button>
+        {data.users.map((u) => {
+          const an = visible.has(u.user_id)
+          const farbe = userColor(u.user_id, ids)
+          return (
             <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ background: userColor(u.user_id, ids) }}
-            />
-            {u.display_name}
-          </button>
-        ))}
+              key={u.user_id}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+                an ? 'text-ink' : 'text-ink-mute opacity-50'
+              }`}
+              style={{ borderColor: an ? farbe : 'var(--t-line)' }}
+            >
+              <button
+                type="button"
+                aria-pressed={an}
+                aria-label={`${u.display_name} ein-/ausblenden`}
+                onClick={() =>
+                  setVisible((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(u.user_id)) next.delete(u.user_id)
+                    else next.add(u.user_id)
+                    return next
+                  })
+                }
+                className="flex items-center gap-1.5"
+              >
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: an ? farbe : 'var(--t-ink-mute)' }} />
+                {u.display_name}
+              </button>
+              <button
+                type="button"
+                aria-label={`Details zu ${u.display_name}`}
+                onClick={() => setDetail(u)}
+                className="flex h-4 w-4 items-center justify-center rounded-full border border-line text-[9px] text-ink-mute transition hover:border-accent hover:text-accent"
+              >
+                i
+              </button>
+            </span>
+          )
+        })}
       </div>
       {detail && (
         <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />
