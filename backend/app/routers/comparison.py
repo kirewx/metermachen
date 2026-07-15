@@ -51,17 +51,23 @@ def compute_comparison(
     result_users = []
     for user in users:
         acts = by_user.get(user.id, [])
-        segments, cumulative, shares = [], [], defaultdict(float)
+        segments, cumulative = [], []
+        shares, real_shares = defaultdict(float), defaultdict(float)
         running = 0.0
+        real_running = 0.0
         factor = user.km_factor if phase == "challenge" else 1.0
         for a, c in acts:
             scaled = round(a.distance_km * c.factor * factor, 2)
             running = round(running + scaled, 2)
+            real_running = round(real_running + a.distance_km, 2)
             segments.append(
                 Segment(date=a.date, category_id=c.id, color=c.color, scaled_km=scaled)
             )
-            cumulative.append(CumulativePoint(date=a.date, scaled_km=running))
+            cumulative.append(
+                CumulativePoint(date=a.date, scaled_km=running, real_km=real_running)
+            )
             shares[c.id] += scaled
+            real_shares[c.id] += a.distance_km
         by_category = [
             CategoryShare(
                 category_id=c.id,
@@ -69,6 +75,7 @@ def compute_comparison(
                 color=c.color,
                 icon=c.icon,
                 scaled_km=round(km, 2),
+                real_km=round(real_shares[c.id], 2),
             )
             for c, km in (
                 (session.get(Category, cid), km) for cid, km in shares.items()
@@ -82,6 +89,7 @@ def compute_comparison(
                 km_factor=user.km_factor,
                 rank=0,
                 total_scaled_km=running,
+                total_real_km=real_running,
                 by_category=by_category,
                 segments=segments,
                 cumulative=cumulative,

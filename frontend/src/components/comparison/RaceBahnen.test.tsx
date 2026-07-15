@@ -25,17 +25,17 @@ const data: Comparison = {
   goal_km: 1000,
   milestones: [],
   users: [
-    { user_id: 1, display_name: 'Erik', avatar: 'icon:laufen', rank: 1, total_scaled_km: 300, km_factor: 1, by_category: [], segments: [], cumulative: [] },
+    { user_id: 1, display_name: 'Erik', avatar: 'icon:laufen', rank: 1, total_scaled_km: 300, total_real_km: 75, km_factor: 1, by_category: [], segments: [], cumulative: [] },
   ],
   start_date: null,
   phase: 'challenge',
 }
 
-function renderRace() {
+function renderRace(mode?: 'mm' | 'km') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <RaceBahnen data={data} />
+      <RaceBahnen data={data} mode={mode} />
     </QueryClientProvider>,
   )
 }
@@ -51,6 +51,12 @@ describe('RaceBahnen Detailansicht', () => {
       'href',
       'https://www.strava.com/activities/42',
     )
+  })
+
+  it('zeigt im km-Modus die echten km statt der skalierten MM', () => {
+    renderRace('km')
+    expect(screen.getByText('75')).toBeInTheDocument()
+    expect(screen.queryByText('300')).not.toBeInTheDocument()
   })
 
   it('zeigt das Seit-Besuch-Banner und das Delta, wenn der letzte Besuch alt genug ist', async () => {

@@ -46,8 +46,8 @@ vi.mock('../api/client', () => ({
       year: 2026, goal_km: 1000, milestones: [], start_date: '2026-07-20',
       phase: 'challenge',
       users: [
-        { user_id: 1, display_name: 'Chef', avatar: 'icon:laufen', rank: 1, total_scaled_km: 0, km_factor: 1, by_category: [], segments: [], cumulative: [] },
-        { user_id: 2, display_name: 'Lisa', avatar: 'icon:rad', rank: 2, total_scaled_km: 0, km_factor: 1, by_category: [], segments: [], cumulative: [] },
+        { user_id: 1, display_name: 'Chef', avatar: 'icon:laufen', rank: 1, total_scaled_km: 0, total_real_km: 0, km_factor: 1, by_category: [], segments: [], cumulative: [] },
+        { user_id: 2, display_name: 'Lisa', avatar: 'icon:rad', rank: 2, total_scaled_km: 0, total_real_km: 0, km_factor: 1, by_category: [], segments: [], cumulative: [] },
       ],
     }),
     respondBet: (...a: unknown[]) => respondBet(...a),

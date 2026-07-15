@@ -53,9 +53,31 @@ def test_cumulative_series(client, session):
     login(client)
     erik = client.get("/api/comparison/2026").json()["users"][0]
     assert erik["cumulative"] == [
-        {"date": "2026-01-10", "scaled_km": 20.0},
-        {"date": "2026-02-01", "scaled_km": 50.0},
+        {"date": "2026-01-10", "scaled_km": 20.0, "real_km": 5.0},
+        {"date": "2026-02-01", "scaled_km": 50.0, "real_km": 35.0},
     ]
+
+
+def test_comparison_includes_real_km(client, session):
+    setup_data(session)
+    login(client)
+    erik = client.get("/api/comparison/2026").json()["users"][0]
+    # echte km: 5 (Joggen) + 30 (Radfahren) = 35 — unabhängig von Faktoren
+    assert erik["total_real_km"] == 35.0
+    breakdown = {b["name"]: b["real_km"] for b in erik["by_category"]}
+    assert breakdown == {"Joggen": 5.0, "Radfahren": 30.0}
+    assert [p["real_km"] for p in erik["cumulative"]] == [5.0, 35.0]
+
+
+def test_real_km_unaffected_by_km_factor(client, session):
+    user, _ = _stichtag_setup(session, start_offset_days=0)
+    user.km_factor = 3.0
+    session.add(user)
+    session.commit()
+    login(client)
+    u = client.get(f"/api/comparison/{date.today().year}").json()["users"][0]
+    assert u["total_scaled_km"] == 21.0
+    assert u["total_real_km"] == 7.0
 
 
 def test_empty_year_and_users_without_activities(client, session):

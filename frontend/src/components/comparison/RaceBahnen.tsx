@@ -153,7 +153,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                 )}
               </div>
               <p className="w-24 shrink-0 text-right text-lg font-black tabular-nums text-ink">
-                {Math.round(toDisplay(u.total_scaled_km, u.km_factor, mode))}{' '}
+                {Math.round(toDisplay(u.total_scaled_km, u.total_real_km, mode))}{' '}
                 <span className="text-xs font-normal text-ink-mute">{unitLabel(mode)}</span>
               </p>
             </div>
