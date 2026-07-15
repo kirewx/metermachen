@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import { computeSinceLastSeen, describeSinceLastSeen, type UserLike } from './sinceLastSeen'
 
 const users: UserLike[] = [

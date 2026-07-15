@@ -16,7 +16,10 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
     queryKey: ['comparison-last-seen', data.year],
     queryFn: () => api.lastSeenComparison(data.year),
   })
-  const since = computeSinceLastSeen(data.users, lastSeen ?? null, Date.now())
+  // "Jetzt" einmal beim Öffnen der Ansicht einfrieren — stabil über Re-Renders
+  // und erfüllt die Purity-Regel (kein Date.now() im Render).
+  const [nowMs] = useState(() => Date.now())
+  const since = computeSinceLastSeen(data.users, lastSeen ?? null, nowMs)
   const [grown, setGrown] = useState(false)
   const marked = useRef(false)
   useEffect(() => {
