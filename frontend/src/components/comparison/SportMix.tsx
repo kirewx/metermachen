@@ -2,8 +2,9 @@ import { useState } from 'react'
 import type { Comparison, ComparisonUser } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import PersonDetail from './PersonDetail'
+import { type UnitMode } from './unit'
 
-export default function SportMix({ data }: { data: Comparison }) {
+export default function SportMix({ data }: { data: Comparison; mode?: UnitMode }) {
   const [detail, setDetail] = useState<ComparisonUser | null>(null)
   // Alle vorkommenden Kategorien für die Legende sammeln (Reihenfolge stabil).
   const legende = new Map<number, { name: string; color: string }>()

@@ -14,9 +14,10 @@ import { useState } from 'react'
 import type { Comparison, ComparisonUser } from '../../api/client'
 import Card from '../ui/Card'
 import PersonDetail from './PersonDetail'
+import { type UnitMode } from './unit'
 import { userColor } from './userColor'
 
-export default function JahresVerlauf({ data }: { data: Comparison }) {
+export default function JahresVerlauf({ data }: { data: Comparison; mode?: UnitMode }) {
   const [detail, setDetail] = useState<ComparisonUser | null>(null)
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
   const byDate = new Map<string, Record<string, number | string>>()

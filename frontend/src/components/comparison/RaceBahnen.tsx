@@ -4,9 +4,10 @@ import Avatar from '../ui/Avatar'
 import Card from '../ui/Card'
 import Icon from '../ui/Icon'
 import PersonDetail from './PersonDetail'
+import { toDisplay, unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
 
-export default function RaceBahnen({ data }: { data: Comparison }) {
+export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
   const [detail, setDetail] = useState<ComparisonUser | null>(null)
   const maxKm = Math.max(data.goal_km, ...data.users.map((u) => u.total_scaled_km))
   const pct = (km: number) => `${(km / maxKm) * 100}%`
@@ -96,8 +97,8 @@ export default function RaceBahnen({ data }: { data: Comparison }) {
                 />
               </div>
               <p className="w-24 shrink-0 text-right text-lg font-black tabular-nums text-ink">
-                {Math.round(u.total_scaled_km)}{' '}
-                <span className="text-xs font-normal text-ink-mute">km</span>
+                {Math.round(toDisplay(u.total_scaled_km, u.km_factor, mode))}{' '}
+                <span className="text-xs font-normal text-ink-mute">{unitLabel(mode)}</span>
               </p>
             </div>
           )

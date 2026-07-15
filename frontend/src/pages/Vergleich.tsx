@@ -6,6 +6,7 @@ import SchnellwahlLeiste from '../components/activities/SchnellwahlLeiste'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
 import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
+import { useUnitMode } from '../components/comparison/unit'
 import Icon from '../components/ui/Icon'
 import Select from '../components/ui/Select'
 import { useToast } from '../components/ui/Toast'
@@ -44,6 +45,7 @@ function useStravaRedirectHinweis() {
 
 export default function Vergleich() {
   const [ansicht, setAnsicht] = useState<Ansicht>('rennen')
+  const { mode, toggle: toggleUnit } = useUnitMode()
   useStravaRedirectHinweis()
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const [year, setYear] = useState(new Date().getFullYear())
@@ -70,11 +72,35 @@ export default function Vergleich() {
             {a.label}
           </button>
         ))}
+        <div className="ml-auto flex overflow-hidden rounded-full border border-line text-xs">
+          <button
+            type="button"
+            onClick={() => {
+              if (mode !== 'mm') toggleUnit()
+            }}
+            className={`px-3 py-1 font-bold transition ${
+              mode === 'mm' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
+            }`}
+          >
+            MM
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (mode !== 'km') toggleUnit()
+            }}
+            className={`px-3 py-1 font-bold transition ${
+              mode === 'km' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
+            }`}
+          >
+            km
+          </button>
+        </div>
         <Select
           label="Jahr"
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="ml-auto w-24"
+          className="w-24"
         >
           {seasons.map((s) => (
             <option key={s.id} value={s.year}>
@@ -84,9 +110,9 @@ export default function Vergleich() {
         </Select>
       </div>
       {error && <p className="text-sm text-danger">{error.message}</p>}
-      {data && ansicht === 'rennen' && <RaceBahnen data={data} />}
-      {data && ansicht === 'verlauf' && <JahresVerlauf data={data} />}
-      {data && ansicht === 'sportmix' && <SportMix data={data} />}
+      {data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
+      {data && ansicht === 'verlauf' && <JahresVerlauf data={data} mode={mode} />}
+      {data && ansicht === 'sportmix' && <SportMix data={data} mode={mode} />}
     </div>
   )
 }
