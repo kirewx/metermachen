@@ -12,6 +12,11 @@ vi.mock('../../api/client', () => ({
     userActivities: vi.fn().mockResolvedValue([
       { id: 7, category_id: 1, date: '2026-03-01', distance_km: 5, duration_min: null, elevation_m: 120, note: 'Morgenlauf', scaled_km: 20, edited: false, source: 'strava', strava_url: 'https://www.strava.com/activities/42' },
     ]),
+    lastSeenComparison: vi.fn().mockResolvedValue({
+      seen_at: '2020-01-01T00:00:00Z',
+      entries: [{ user_id: 1, scaled_km: 100, rank: 1 }],
+    }),
+    markComparisonSeen: vi.fn().mockResolvedValue({ seen_at: '2020-01-01T00:00:00Z', entries: [] }),
   },
 }))
 
@@ -46,5 +51,13 @@ describe('RaceBahnen Detailansicht', () => {
       'href',
       'https://www.strava.com/activities/42',
     )
+  })
+
+  it('zeigt das Seit-Besuch-Banner und das Delta, wenn der letzte Besuch alt genug ist', async () => {
+    renderRace()
+    expect(await screen.findByText(/Seit deinem letzten Besuch/)).toBeInTheDocument()
+    // Exakter String: matcht nur das Balken-Label "+200" — das Banner enthält
+    // "+200" ebenfalls, aber als Teil eines längeren Textes (kein exakter Match).
+    expect(screen.getByText('+200')).toBeInTheDocument()
   })
 })
