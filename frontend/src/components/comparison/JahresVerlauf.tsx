@@ -23,10 +23,9 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
   const byDate = new Map<string, Record<string, number | string>>()
   for (const u of data.users) {
-    const faktor = mode === 'km' && u.km_factor > 0 ? u.km_factor : 1
     for (const p of u.cumulative) {
       const row = byDate.get(p.date) ?? { date: p.date }
-      row[u.display_name] = p.scaled_km / faktor
+      row[u.display_name] = mode === 'km' ? p.real_km : p.scaled_km
       byDate.set(p.date, row)
     }
   }

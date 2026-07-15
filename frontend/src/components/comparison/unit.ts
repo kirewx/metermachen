@@ -15,9 +15,9 @@ export function useUnitMode() {
   return { mode, toggle: () => setMode((m) => (m === 'mm' ? 'km' : 'mm')) }
 }
 
-/** Skalierte MM in die anzuzeigende Einheit umrechnen. km = MM / km_factor. */
-export function toDisplay(scaledKm: number, kmFactor: number, mode: UnitMode): number {
-  return mode === 'km' && kmFactor > 0 ? scaledKm / kmFactor : scaledKm
+/** Anzeigewert wählen: MM = skaliert (Kategorie-Faktor × Handicap), km = echte km vom Backend. */
+export function toDisplay(scaledKm: number, realKm: number, mode: UnitMode): number {
+  return mode === 'km' ? realKm : scaledKm
 }
 
 export const unitLabel = (mode: UnitMode): string => (mode === 'km' ? 'km' : 'MM')

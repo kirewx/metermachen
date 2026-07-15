@@ -49,6 +49,7 @@ export type CategoryShare = {
   color: string
   icon: string
   scaled_km: number
+  real_km: number
 }
 export type Segment = { date: string; category_id: number; color: string; scaled_km: number }
 export type ComparisonUser = {
@@ -57,10 +58,11 @@ export type ComparisonUser = {
   avatar: string
   rank: number
   total_scaled_km: number
+  total_real_km: number
   km_factor: number
   by_category: CategoryShare[]
   segments: Segment[]
-  cumulative: { date: string; scaled_km: number }[]
+  cumulative: { date: string; scaled_km: number; real_km: number }[]
 }
 export type Comparison = {
   year: number

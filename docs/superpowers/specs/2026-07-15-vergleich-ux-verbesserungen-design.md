@@ -31,17 +31,16 @@ Backend: FastAPI + SQLModel + SQLite (`meter.db`). Frontend: React + TypeScript 
 - Standard-Einheitslabel wird in allen drei Views von „km" auf **„MM"** geändert (die Werte sind faktorisiert → „MM" = MeterMachen-Einheit).
 - Ein **Toggle** (Segment-Switch `MM · km`) im Header der Vergleichsseite schaltet die **Zahl-Anzeige** auf echte km um.
 - **Variante A (verbindlich):** Der Toggle ändert **nur die angezeigten Zahlen**. Bahnenlänge, Rangfolge und Ziel bleiben immer in MM — das Handicap-Rennen bleibt unverändert. **Der Toggle ändert das Ranking nicht.**
-- Echte km werden clientseitig berechnet: `real_km = total_scaled_km / km_factor` (bzw. `scaled_km / km_factor` je Segment). **Kein Backend nötig.**
+- Echte km liefert das **Backend** mit (`total_real_km`, `real_km` je Kategorie und je Kurvenpunkt = Σ `distance_km`). Eine clientseitige Division durch `km_factor` reicht **nicht**: MM = `distance_km × category.factor × user.km_factor`, und `km_factor` ist nur das Admin-Handicap (Default 1) — der Kategorie-Faktor bliebe drin.
 - Der Toggle wirkt in **allen drei Views**; die Einstellung wird in `localStorage` gemerkt (`mm_unit_mode: "mm" | "km"`, Default `"mm"`).
 
 **Verlauf-Sonderfall (km-Modus)**
-- Die Kurven zeigen rohe km je Person (`cumulative[i].scaled_km / km_factor`).
+- Die Kurven zeigen rohe km je Person (`cumulative[i].real_km`).
 - Ziel- und Meilenstein-Referenzlinien werden **ausgeblendet** — sie sind in MM definiert und pro Person (unterschiedliche Faktoren) nicht auf eine gemeinsame km-Achse übertragbar.
 
 **Umsetzung**
 - Kleiner `UnitContext` (oder Prop-Durchreichung) mit `mode` + `toggle`, persistiert via `localStorage`.
-- Helper `toDisplay(scaledKm, kmFactor, mode)` zentral, damit alle Views konsistent umrechnen und labeln.
-- Randfall `km_factor === 1`: MM == km (nichts Besonderes nötig).
+- Helper `toDisplay(scaledKm, realKm, mode)` zentral: wählt zwischen skaliertem und echtem Wert, damit alle Views konsistent anzeigen und labeln.
 
 ---
 

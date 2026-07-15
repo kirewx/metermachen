@@ -17,6 +17,7 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
       <div className="space-y-3">
         {data.users.map((u, i) => {
           const gesamt = u.by_category.reduce((s, c) => s + c.scaled_km, 0)
+          const gesamtReal = u.by_category.reduce((s, c) => s + c.real_km, 0)
           return (
             <div
               key={u.user_id}
@@ -41,7 +42,7 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
                   return (
                     <span
                       key={c.category_id}
-                      title={`${c.name}: ${Math.round(toDisplay(c.scaled_km, u.km_factor, mode))} ${unitLabel(mode)}`}
+                      title={`${c.name}: ${Math.round(toDisplay(c.scaled_km, c.real_km, mode))} ${unitLabel(mode)}`}
                       className="balken-wachsen flex h-full items-center justify-center"
                       style={{ width: `${anteil}%`, background: c.color }}
                     >
@@ -58,7 +59,7 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
                 })}
               </div>
               <span className="w-24 text-right font-mono text-sm font-bold tabular-nums text-ink">
-                {Math.round(toDisplay(gesamt, u.km_factor, mode))}{' '}
+                {Math.round(toDisplay(gesamt, gesamtReal, mode))}{' '}
                 <span className="text-[10px] font-normal text-ink-mute">{unitLabel(mode)}</span>
               </span>
             </div>

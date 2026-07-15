@@ -26,10 +26,11 @@ const data: Comparison = {
       avatar: 'icon:laufen',
       rank: 1,
       total_scaled_km: 300,
+      total_real_km: 150,
       km_factor: 1,
       by_category: [
-        { category_id: 1, name: 'Laufen', color: '#f00', icon: 'laufen', scaled_km: 200 },
-        { category_id: 2, name: 'Radfahren', color: '#00f', icon: 'rad', scaled_km: 100 },
+        { category_id: 1, name: 'Laufen', color: '#f00', icon: 'laufen', scaled_km: 200, real_km: 50 },
+        { category_id: 2, name: 'Radfahren', color: '#00f', icon: 'rad', scaled_km: 100, real_km: 100 },
       ],
       segments: [],
       cumulative: [],
@@ -57,6 +58,18 @@ describe('SportMix', () => {
     expect(screen.getByText('Radfahren')).toBeInTheDocument()
   })
 
+  it('zeigt im km-Modus die echten km statt der skalierten MM', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <SportMix data={data} mode="km" />
+      </QueryClientProvider>,
+    )
+    // echte km: 50 (Laufen) + 100 (Radfahren) = 150, nicht 300 MM
+    expect(screen.getByText(/^150/)).toBeInTheDocument()
+    expect(screen.queryByText(/^300/)).not.toBeInTheDocument()
+  })
+
   it('öffnet beim Klick auf eine Person deren Detailansicht', async () => {
     renderMix()
     fireEvent.click(screen.getByLabelText('Details zu Erik'))
@@ -77,8 +90,8 @@ describe('SportMix', () => {
         {
           ...data.users[0],
           by_category: [
-            { category_id: 1, name: 'Laufen', color: '#f00', icon: 'laufen', scaled_km: 195 },
-            { category_id: 2, name: 'Radfahren', color: '#00f', icon: 'rad', scaled_km: 5 }, // 2,5 % < 9 %
+            { category_id: 1, name: 'Laufen', color: '#f00', icon: 'laufen', scaled_km: 195, real_km: 48.75 },
+            { category_id: 2, name: 'Radfahren', color: '#00f', icon: 'rad', scaled_km: 5, real_km: 5 }, // 2,5 % < 9 %
           ],
         },
       ],
