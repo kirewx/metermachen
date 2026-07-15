@@ -7,31 +7,27 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
-from ..models import Activity, Category, Season, User
+from ..models import Activity, Category, ComparisonSeen, Season, User, utcnow
 from ..schemas import (
     CategoryShare,
     ComparisonOut,
     ComparisonUser,
     CumulativePoint,
+    LastSeenEntry,
+    LastSeenOut,
     Segment,
 )
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
 
 
-@router.get(
-    "/{year}", response_model=ComparisonOut, dependencies=[Depends(get_current_user)]
-)
-def comparison(
-    year: int,
-    phase: Literal["challenge", "warmup"] = "challenge",
-    session: Session = Depends(get_session),
-):
+def compute_comparison(
+    session: Session, year: int, phase: Literal["challenge", "warmup"] = "challenge"
+) -> ComparisonOut:
     season = session.exec(select(Season).where(Season.year == year)).first()
     if season is None:
         raise HTTPException(status_code=404, detail="Kein Jahr konfiguriert")
 
-    # Deaktivierte Accounts tauchen nicht mehr im Vergleich auf.
     users = session.exec(select(User).where(User.is_active).order_by(User.id)).all()
     rows = session.exec(
         select(Activity, Category)
@@ -46,7 +42,6 @@ def comparison(
             raise HTTPException(status_code=404, detail="Keine Warm-up-Phase konfiguriert")
         rows = [(a, c) for a, c in rows if a.date < start]
     elif start is not None and date_type.today() >= start:
-        # Challenge läuft: Warm-up-KM zählen nicht mehr (vorher Testphase: alles zählt).
         rows = [(a, c) for a, c in rows if a.date >= start]
 
     by_user: dict[int, list[tuple[Activity, Category]]] = defaultdict(list)
@@ -58,7 +53,6 @@ def comparison(
         acts = by_user.get(user.id, [])
         segments, cumulative, shares = [], [], defaultdict(float)
         running = 0.0
-        # Admin-Handicap wirkt nur im Challenge-Ranking, nicht im Warm-up-Archiv.
         factor = user.km_factor if phase == "challenge" else 1.0
         for a, c in acts:
             scaled = round(a.distance_km * c.factor * factor, 2)
@@ -106,3 +100,63 @@ def comparison(
         start_date=season.start_date,
         phase=phase,
     )
+
+
+@router.get(
+    "/{year}", response_model=ComparisonOut, dependencies=[Depends(get_current_user)]
+)
+def comparison(
+    year: int,
+    phase: Literal["challenge", "warmup"] = "challenge",
+    session: Session = Depends(get_session),
+):
+    return compute_comparison(session, year, phase)
+
+
+@router.get("/{year}/last-seen", response_model=LastSeenOut | None)
+def last_seen(
+    year: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    row = session.exec(
+        select(ComparisonSeen).where(
+            ComparisonSeen.user_id == user.id, ComparisonSeen.year == year
+        )
+    ).first()
+    if row is None:
+        return None
+    return LastSeenOut(
+        seen_at=row.seen_at,
+        entries=[LastSeenEntry(**e) for e in json.loads(row.snapshot_json)],
+    )
+
+
+@router.post("/{year}/seen", response_model=LastSeenOut)
+def mark_seen(
+    year: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    data = compute_comparison(session, year, "challenge")
+    entries = [
+        LastSeenEntry(user_id=u.user_id, scaled_km=u.total_scaled_km, rank=u.rank)
+        for u in data.users
+    ]
+    row = session.exec(
+        select(ComparisonSeen).where(
+            ComparisonSeen.user_id == user.id, ComparisonSeen.year == year
+        )
+    ).first()
+    payload = json.dumps([e.model_dump() for e in entries])
+    now = utcnow()
+    if row is None:
+        row = ComparisonSeen(
+            user_id=user.id, year=year, seen_at=now, snapshot_json=payload
+        )
+    else:
+        row.seen_at = now
+        row.snapshot_json = payload
+    session.add(row)
+    session.commit()
+    return LastSeenOut(seen_at=now, entries=entries)

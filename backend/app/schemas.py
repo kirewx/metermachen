@@ -213,3 +213,14 @@ class ComparisonOut(BaseModel):
     users: list[ComparisonUser]
     start_date: date_type | None = None
     phase: str = "challenge"
+
+
+class LastSeenEntry(BaseModel):
+    user_id: int
+    scaled_km: float
+    rank: int
+
+
+class LastSeenOut(BaseModel):
+    seen_at: datetime
+    entries: list[LastSeenEntry]

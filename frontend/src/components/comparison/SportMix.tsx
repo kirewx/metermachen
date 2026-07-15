@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import type { Comparison, ComparisonUser } from '../../api/client'
 import Avatar from '../ui/Avatar'
+import Icon from '../ui/Icon'
 import PersonDetail from './PersonDetail'
+import { toDisplay, unitLabel, type UnitMode } from './unit'
 
-export default function SportMix({ data }: { data: Comparison }) {
+export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
   const [detail, setDetail] = useState<ComparisonUser | null>(null)
   // Alle vorkommenden Kategorien für die Legende sammeln (Reihenfolge stabil).
   const legende = new Map<number, { name: string; color: string }>()
@@ -33,21 +35,31 @@ export default function SportMix({ data }: { data: Comparison }) {
                 <Avatar value={u.avatar} size="sm" />
                 <span className="w-24 truncate text-sm font-bold text-ink">{u.display_name}</span>
               </button>
-              <div className="flex h-4 flex-1 overflow-hidden rounded-full bg-surface">
-                {u.by_category.map((c) => (
-                  <span
-                    key={c.category_id}
-                    title={`${c.name}: ${Math.round(c.scaled_km)} km`}
-                    className="balken-wachsen h-full"
-                    style={{
-                      width: gesamt > 0 ? `${(c.scaled_km / gesamt) * 100}%` : '0%',
-                      background: c.color,
-                    }}
-                  />
-                ))}
+              <div className="flex h-6 flex-1 overflow-hidden rounded-full bg-surface">
+                {u.by_category.map((c) => {
+                  const anteil = gesamt > 0 ? (c.scaled_km / gesamt) * 100 : 0
+                  return (
+                    <span
+                      key={c.category_id}
+                      title={`${c.name}: ${Math.round(toDisplay(c.scaled_km, u.km_factor, mode))} ${unitLabel(mode)}`}
+                      className="balken-wachsen flex h-full items-center justify-center"
+                      style={{ width: `${anteil}%`, background: c.color }}
+                    >
+                      {anteil >= 9 && (
+                        <Icon
+                          name={c.icon}
+                          size={14}
+                          label={c.name}
+                          className="text-white [filter:drop-shadow(0_1px_1px_rgba(0,0,0,.5))]"
+                        />
+                      )}
+                    </span>
+                  )
+                })}
               </div>
               <span className="w-24 text-right font-mono text-sm font-bold tabular-nums text-ink">
-                {Math.round(gesamt)}
+                {Math.round(toDisplay(gesamt, u.km_factor, mode))}{' '}
+                <span className="text-[10px] font-normal text-ink-mute">{unitLabel(mode)}</span>
               </span>
             </div>
           )
