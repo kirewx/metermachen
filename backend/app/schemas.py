@@ -180,6 +180,7 @@ class CategoryShare(BaseModel):
     color: str
     icon: str
     scaled_km: float
+    real_km: float = 0.0
 
 
 class Segment(BaseModel):
@@ -192,6 +193,7 @@ class Segment(BaseModel):
 class CumulativePoint(BaseModel):
     date: date_type
     scaled_km: float
+    real_km: float = 0.0
 
 
 class ComparisonUser(BaseModel):
@@ -200,6 +202,7 @@ class ComparisonUser(BaseModel):
     avatar: str
     rank: int
     total_scaled_km: float
+    total_real_km: float = 0.0
     km_factor: float = 1.0
     by_category: list[CategoryShare]
     segments: list[Segment]
