@@ -52,7 +52,7 @@ describe('SportMix', () => {
   it('zeigt Person, gewertete Gesamtsumme und Kategorie-Legende', () => {
     renderMix()
     expect(screen.getByText('Erik')).toBeInTheDocument()
-    expect(screen.getByText('300')).toBeInTheDocument()
+    expect(screen.getByText(/^300/)).toBeInTheDocument()
     expect(screen.getByText('Laufen')).toBeInTheDocument()
     expect(screen.getByText('Radfahren')).toBeInTheDocument()
   })
@@ -61,5 +61,35 @@ describe('SportMix', () => {
     renderMix()
     fireEvent.click(screen.getByLabelText('Details zu Erik'))
     expect(await screen.findByText('Morgenlauf', { exact: false })).toBeInTheDocument()
+  })
+
+  it('zeigt Sportart-Piktogramme in ausreichend breiten Segmenten', () => {
+    renderMix()
+    // Icon rendert als <svg> mit aria-label = Kategoriename
+    expect(screen.getByLabelText('Laufen')).toBeInTheDocument()
+    expect(screen.getByLabelText('Radfahren')).toBeInTheDocument()
+  })
+
+  it('blendet Piktogramme in sehr schmalen Segmenten aus', () => {
+    const schmal: Comparison = {
+      ...data,
+      users: [
+        {
+          ...data.users[0],
+          by_category: [
+            { category_id: 1, name: 'Laufen', color: '#f00', icon: 'laufen', scaled_km: 195 },
+            { category_id: 2, name: 'Radfahren', color: '#00f', icon: 'rad', scaled_km: 5 }, // 2,5 % < 9 %
+          ],
+        },
+      ],
+    }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <SportMix data={schmal} />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByLabelText('Laufen')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Radfahren')).not.toBeInTheDocument()
   })
 })
