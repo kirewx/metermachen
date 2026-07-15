@@ -1,6 +1,7 @@
 from datetime import date as date_type
 from datetime import datetime, timezone
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -127,3 +128,16 @@ class Invite(SQLModel, table=True):
     expires_at: datetime
     used_at: datetime | None = None
     used_by_user_id: int | None = Field(default=None, foreign_key="user.id")
+
+
+class ComparisonSeen(SQLModel, table=True):
+    """Letzter vom jeweiligen Betrachter gesehener Vergleichsstand (pro Jahr)."""
+
+    __table_args__ = (UniqueConstraint("user_id", "year", name="uq_seen_user_year"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    year: int = Field(index=True)
+    seen_at: datetime = Field(default_factory=utcnow)
+    # JSON: [{"user_id": int, "scaled_km": float, "rank": int}, …]
+    snapshot_json: str = "[]"
