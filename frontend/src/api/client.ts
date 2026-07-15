@@ -70,6 +70,8 @@ export type Comparison = {
   start_date: string | null
   phase: string
 }
+export type SeenEntry = { user_id: number; scaled_km: number; rank: number }
+export type LastSeen = { seen_at: string; entries: SeenEntry[] }
 export type WarmupWinner = {
   user_id: number
   display_name: string
@@ -313,6 +315,10 @@ export const api = {
   deleteAddon: (id: number) => request<void>(`/api/addons/${id}`, { method: 'DELETE' }),
   achievements: () => request<Achievement[]>('/api/achievements'),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
+  lastSeenComparison: (year: number) =>
+    request<LastSeen | null>(`/api/comparison/${year}/last-seen`),
+  markComparisonSeen: (year: number) =>
+    request<LastSeen>(`/api/comparison/${year}/seen`, { method: 'POST' }),
   comparisonWarmup: (year: number) =>
     request<Comparison>(`/api/comparison/${year}?phase=warmup`),
   warmupAchievements: () => request<WarmupOut>('/api/achievements/warmup'),
