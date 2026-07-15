@@ -14,17 +14,18 @@ import { useState } from 'react'
 import type { Comparison, ComparisonUser } from '../../api/client'
 import Card from '../ui/Card'
 import PersonDetail from './PersonDetail'
-import { type UnitMode } from './unit'
+import { unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
 
-export default function JahresVerlauf({ data }: { data: Comparison; mode?: UnitMode }) {
+export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
   const [detail, setDetail] = useState<ComparisonUser | null>(null)
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
   const byDate = new Map<string, Record<string, number | string>>()
   for (const u of data.users) {
+    const faktor = mode === 'km' && u.km_factor > 0 ? u.km_factor : 1
     for (const p of u.cumulative) {
       const row = byDate.get(p.date) ?? { date: p.date }
-      row[u.display_name] = p.scaled_km
+      row[u.display_name] = p.scaled_km / faktor
       byDate.set(p.date, row)
     }
   }
@@ -55,7 +56,7 @@ export default function JahresVerlauf({ data }: { data: Comparison; mode?: UnitM
             tickLine={false}
             axisLine={{ stroke: 'var(--t-line)' }}
           />
-          <YAxis fontSize={11} unit=" km" stroke="var(--t-ink-mute)" tickLine={false} axisLine={false} />
+          <YAxis fontSize={11} unit={` ${unitLabel(mode)}`} stroke="var(--t-ink-mute)" tickLine={false} axisLine={false} />
           <Tooltip
             contentStyle={{
               background: 'var(--t-card)',
@@ -65,7 +66,7 @@ export default function JahresVerlauf({ data }: { data: Comparison; mode?: UnitM
             }}
             labelStyle={{ color: 'var(--t-ink-mute)' }}
           />
-          {data.milestones.map((m) => (
+          {mode === 'mm' && data.milestones.map((m) => (
             <ReferenceLine
               key={m.km}
               y={m.km}
@@ -75,11 +76,13 @@ export default function JahresVerlauf({ data }: { data: Comparison; mode?: UnitM
               label={{ value: m.label, fontSize: 11, position: 'right', fill: 'var(--t-ink-mute)' }}
             />
           ))}
-          <ReferenceLine
-            y={data.goal_km}
-            stroke="var(--t-accent)"
-            label={{ value: 'Ziel', fontSize: 11, fill: 'var(--t-accent)' }}
-          />
+          {mode === 'mm' && (
+            <ReferenceLine
+              y={data.goal_km}
+              stroke="var(--t-accent)"
+              label={{ value: 'Ziel', fontSize: 11, fill: 'var(--t-accent)' }}
+            />
+          )}
           {data.users.map((u) => {
             const farbe = userColor(u.user_id, ids)
             const letzte = lastIndex.get(u.display_name)
