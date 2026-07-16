@@ -28,6 +28,7 @@ def _to_out(activity: Activity, factor: float) -> ActivityOut:
         date=activity.date,
         distance_km=activity.distance_km,
         duration_min=activity.duration_min,
+        start_time=activity.start_time,
         elevation_m=activity.elevation_m,
         note=activity.note,
         scaled_km=round(activity.distance_km * factor, 2),
@@ -84,7 +85,7 @@ def patch_activity(
     changes = {
         key: value
         for key, value in data.model_dump(exclude_unset=True).items()
-        if value is not None or key in ("note", "duration_min")
+        if value is not None or key in ("note", "duration_min", "start_time")
     }
     if "category_id" in changes:
         _validate_category(session, changes["category_id"])
