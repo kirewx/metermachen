@@ -10,6 +10,7 @@ import IconPicker from '../components/ui/IconPicker'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { MEILENSTEIN_ICONS, SPORT_ICONS } from '../components/ui/icons'
+import { aktiveSeason, saisonLabel } from '../components/ui/season'
 import Select from '../components/ui/Select'
 import { useToast } from '../components/ui/Toast'
 
@@ -368,18 +369,20 @@ function Jahr() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
-  const season: Season | undefined = seasons.find((s) => s.year === new Date().getFullYear())
+  const season: Season | undefined = aktiveSeason(seasons)
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['seasons'] })
     queryClient.invalidateQueries({ queryKey: ['comparison'] })
   }
   const [goal, setGoal] = useState('')
   const [milestones, setMilestones] = useState<Milestone[] | null>(null)
+  const [startDatum, setStartDatum] = useState<string | null>(null)
+  const [endDatum, setEndDatum] = useState<string | null>(null)
   if (!season) return null
   const ms = milestones ?? season.milestones
 
   return (
-    <Collapsible title={`Jahr ${season.year}`}>
+    <Collapsible title={`Saison ${saisonLabel(season)}`}>
       <Input
         label="Ziel (gewertete km)"
         type="number"
@@ -387,6 +390,22 @@ function Jahr() {
         defaultValue={season.goal_km}
         onChange={(e) => setGoal(e.target.value)}
       />
+      <div className="mt-3 flex flex-wrap gap-3">
+        <Input
+          label="Challenge-Start"
+          type="date"
+          className="w-40"
+          defaultValue={season.start_date ?? ''}
+          onChange={(e) => setStartDatum(e.target.value)}
+        />
+        <Input
+          label="Challenge-Ende (leer = offen)"
+          type="date"
+          className="w-40"
+          defaultValue={season.end_date ?? ''}
+          onChange={(e) => setEndDatum(e.target.value)}
+        />
+      </div>
       <h3 className="mt-4 mb-1 text-xs font-semibold text-ink-mute">Meilensteine</h3>
       <div className="space-y-2">
         {ms.map((m, i) => (
@@ -433,7 +452,12 @@ function Jahr() {
         <Button
           onClick={() =>
             api
-              .patchSeason(season.id, { goal_km: goal ? parseFloat(goal) : undefined, milestones: ms })
+              .patchSeason(season.id, {
+                goal_km: goal ? parseFloat(goal) : undefined,
+                milestones: ms,
+                ...(startDatum !== null ? { start_date: startDatum || null } : {}),
+                ...(endDatum !== null ? { end_date: endDatum || null } : {}),
+              })
               .then(refresh)
               .catch((e) => toast(e.message))
           }

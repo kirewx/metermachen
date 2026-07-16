@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
-from ..models import AchievementUnlock, Activity, Category, Season, User
+from ..models import AchievementUnlock, Activity, Category, User
 from ..services.achievements import (
     DISZIPLIN_ICON,
     DISZIPLIN_LABEL,
@@ -31,6 +31,7 @@ from ..services.achievements import (
     check_unlocks,
     stufen_key,
 )
+from ..services.season_window import current_season
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
 
@@ -131,7 +132,7 @@ _WARMUP_DEFS = [
 )
 def warmup_achievements(session: Session = Depends(get_session)):
     today = date_type.today()
-    season = session.exec(select(Season).where(Season.year == today.year)).first()
+    season = current_season(session)
     start = season.start_date if season else None
     if start is None:
         return WarmupOut(final=False, start_date=None, achievements=[])

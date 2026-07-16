@@ -640,3 +640,21 @@ def test_import_activity_without_start_date_has_no_time(session):
     assert strava.import_activity(session, conn, data) is True
     act = session.exec(select(Activity).where(Activity.external_id == "1002")).one()
     assert act.start_time is None
+
+
+def test_backfill_from_nutzt_jahr_der_aktiven_season(session):
+    from datetime import date, timedelta
+
+    from app.models import Season
+
+    heute = date.today()
+    session.add(Season(year=heute.year - 1, goal_km=1000, milestones_json="[]",
+                       start_date=heute - timedelta(days=300)))
+    session.commit()
+    assert strava._backfill_from(session) == date(heute.year - 1, 1, 1)
+
+
+def test_backfill_from_ohne_season_aktuelles_jahr(session):
+    from datetime import date
+
+    assert strava._backfill_from(session) == date(date.today().year, 1, 1)

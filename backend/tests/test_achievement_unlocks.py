@@ -207,3 +207,33 @@ def test_strava_import_loest_unlock_aus(session):
             "start_date_local": "2026-08-01T07:00:00Z", "name": "Ultra"}
     assert strava.import_activity(session, conn, data) is True
     assert "stufe_lauf_bronze" in keys_of(session, user)
+
+
+def test_saison_checks_finden_jahresuebergreifende_season(session):
+    # Season vom Vorjahr, Fenster offen (kein Ende) — enthält heute
+    heute = date.today()
+    start = heute - timedelta(days=200)
+    session.add(Season(year=start.year, goal_km=1000, milestones_json="[]",
+                       start_date=start))
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    session.commit()
+    # Warm-up-Aktivität im Startjahr -> Testphasen-Sieger trotz Season.year != heute.year
+    add_act(session, erik, lauf, 50.0, d=start - timedelta(days=1))
+    check_unlocks(session, erik.id)
+    assert "testphasen_sieger" in keys_of(session, erik)
+
+
+def test_wochenkoenig_stoppt_am_saisonende(session):
+    heute = date.today()
+    start = heute - timedelta(days=30)
+    ende = start + timedelta(days=5)  # nur 6 Challenge-Tage bis zum Ende
+    session.add(Season(year=heute.year, goal_km=1000, milestones_json="[]",
+                       start_date=start, end_date=ende))
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    session.commit()
+    add_act(session, erik, lauf, 50.0, d=start)
+    check_unlocks(session, erik.id)
+    # 6 Tage alleiniger Platz 1 reichen nicht — und nach dem Ende wächst nichts mehr
+    assert "wochenkoenig" not in keys_of(session, erik)

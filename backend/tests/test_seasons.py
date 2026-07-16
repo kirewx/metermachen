@@ -88,3 +88,41 @@ def test_season_start_date_roundtrip(client, session):
     r = client.patch(f"/api/seasons/{sid}", json={"start_date": None})
     assert r.status_code == 200
     assert r.json()["start_date"] is None
+
+
+def test_season_end_date_roundtrip(client, session):
+    make_user(session, is_admin=True)
+    login(client)
+    r = client.post(
+        "/api/seasons",
+        json={"year": 2031, "goal_km": 1000,
+              "start_date": "2031-07-20", "end_date": "2032-05-15"},
+    )
+    assert r.status_code == 201
+    assert r.json()["end_date"] == "2032-05-15"
+    sid = r.json()["id"]
+    # explizites null löscht das Enddatum (Fenster wieder offen)
+    r = client.patch(f"/api/seasons/{sid}", json={"end_date": None})
+    assert r.status_code == 200
+    assert r.json()["end_date"] is None
+    # setzen per Patch
+    r = client.patch(f"/api/seasons/{sid}", json={"end_date": "2032-06-01"})
+    assert r.status_code == 200
+    assert r.json()["end_date"] == "2032-06-01"
+
+
+def test_season_end_vor_start_abgelehnt(client, session):
+    make_user(session, is_admin=True)
+    login(client)
+    r = client.post(
+        "/api/seasons",
+        json={"year": 2031, "goal_km": 1000,
+              "start_date": "2031-07-20", "end_date": "2031-01-01"},
+    )
+    assert r.status_code == 422
+    r = client.post(
+        "/api/seasons", json={"year": 2031, "goal_km": 1000, "start_date": "2031-07-20"}
+    )
+    sid = r.json()["id"]
+    r = client.patch(f"/api/seasons/{sid}", json={"end_date": "2031-01-01"})
+    assert r.status_code == 422

@@ -73,3 +73,12 @@ def test_seed_registers_blackboard_addon_scheduled(session):
     assert addon.enabled is True
     assert addon_active(addon, datetime(2026, 7, 1, tzinfo=timezone.utc)) is False
     assert addon_active(addon, datetime(2026, 7, 20, 12, tzinfo=timezone.utc)) is True
+
+
+def test_seed_legt_keine_zweite_season_an(session):
+    seed_all(session, admin_user="chef", admin_password="geheim", year=2026)
+    # Jahreswechsel: Seed mit neuem Jahr darf KEINE Season 2027 anlegen,
+    # solange die 2026er-Saison existiert (läuft bis Stuttgartlauf 2027).
+    seed_all(session, admin_user="chef", admin_password="geheim", year=2027)
+    seasons = session.exec(select(Season)).all()
+    assert [s.year for s in seasons] == [2026]

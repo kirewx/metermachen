@@ -135,3 +135,35 @@ def test_ensure_monthly_tip_idempotent_und_ab_august(session):
         assert tips[0].period_start == HEUTE.replace(day=1)
     else:
         assert tips == []  # vor August 2026 keine Tipprunde
+
+
+def test_kein_neuer_monats_tipp_nach_saisonende(session, monkeypatch):
+    monkeypatch.setattr(bets, "FIRST_TIP_MONTH", date(2020, 1, 1))
+    session.add(Season(
+        year=HEUTE.year, goal_km=1000, milestones_json="[]",
+        start_date=HEUTE - timedelta(days=60),
+        end_date=HEUTE.replace(day=1) - timedelta(days=1),  # Ende vor Monatsbeginn
+    ))
+    make_user(session)
+    session.commit()
+    bets.ensure_monthly_tip(session)
+    assert session.exec(select(Bet).where(Bet.type == "monats_tipp")).all() == []
+
+
+def test_create_bet_nach_saisonende_abgelehnt(session):
+    session.add(Season(
+        year=HEUTE.year, goal_km=1000, milestones_json="[]",
+        start_date=HEUTE - timedelta(days=10),
+        end_date=HEUTE + timedelta(days=3),
+    ))
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    session.commit()
+    points.ensure_start_credit(session, erik.id)
+    with pytest.raises(ValueError, match="Saisonende"):
+        bets.create_bet(
+            session, erik, type="duell", title="Zu spät", stake=10,
+            period_start=HEUTE + timedelta(days=5),
+            period_end=HEUTE + timedelta(days=9),
+            params={"opponent_id": lisa.id},
+        )

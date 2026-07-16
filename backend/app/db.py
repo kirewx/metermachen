@@ -79,6 +79,8 @@ def migrate(target=engine) -> None:
                 conn.execute(text(
                     "UPDATE season SET start_date = '2026-07-20' WHERE year = 2026"
                 ))
+            if "end_date" not in season_cols:
+                conn.execute(text("ALTER TABLE season ADD COLUMN end_date DATE"))
             for id_, raw in conn.execute(text("SELECT id, milestones_json FROM season")).fetchall():
                 milestones = json.loads(raw or "[]")
                 if any("emoji" in m for m in milestones):

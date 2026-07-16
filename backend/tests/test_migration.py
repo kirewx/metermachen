@@ -198,3 +198,22 @@ def test_init_erzeugt_achievementunlock_tabelle(tmp_path):
     with engine.begin() as conn:
         cols = [row[1] for row in conn.execute(text('PRAGMA table_info("achievementunlock")'))]
     assert {"id", "user_id", "key", "unlocked_at", "context_json", "showcased"} <= set(cols)
+
+
+def test_migration_adds_season_end_date(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE season (id INTEGER PRIMARY KEY, year INTEGER, "
+            "goal_km FLOAT, milestones_json TEXT, start_date DATE)"
+        ))
+        conn.execute(text(
+            "INSERT INTO season (year, goal_km, milestones_json, start_date)"
+            " VALUES (2026, 1000, '[]', '2026-07-20')"
+        ))
+    migrate(engine)
+    migrate(engine)  # idempotent
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text('PRAGMA table_info("season")'))]
+        assert "end_date" in cols
+        assert conn.execute(text("SELECT end_date FROM season")).scalar() is None

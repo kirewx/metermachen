@@ -40,6 +40,7 @@ vi.mock('../api/client', () => ({
       { id: 1, key: 'blackboard', label: 'Blackboard', description: '', enabled: true,
         active_from: null, active_until: null, active: true },
     ]),
+    seasons: vi.fn().mockResolvedValue([]),
     bets: vi.fn().mockResolvedValue([duell]),
     betAchievements: vi.fn().mockResolvedValue([]),
     pointsRanking: vi.fn().mockResolvedValue([

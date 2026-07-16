@@ -54,7 +54,9 @@ def seed_all(session: Session, admin_user: str, admin_password: str, year: int) 
             session.add(
                 Category(name=name, factor=factor, color=color, icon=icon, default_km=default_km)
             )
-    if session.exec(select(Season).where(Season.year == year)).first() is None:
+    # Nur wenn noch GAR KEINE Season existiert — sonst würde am 01.01. des
+    # Folgejahres eine leere Season entstehen, obwohl die Challenge noch läuft.
+    if session.exec(select(Season)).first() is None:
         session.add(Season(year=year, goal_km=1000.0))
     for spec in KNOWN_ADDONS:
         if session.exec(select(AddOn).where(AddOn.key == spec["key"])).first() is None:

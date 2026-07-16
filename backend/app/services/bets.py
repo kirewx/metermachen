@@ -15,8 +15,9 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Bet, BetParticipant, PointTransaction, Season, User, utcnow
+from ..models import Bet, BetParticipant, PointTransaction, User, utcnow
 from . import bet_metrics, points
+from .season_window import current_season, season_window
 
 FIRST_TIP_MONTH = date_type(2026, 8, 1)  # Juli-Tippschluss läge vor Challenge-Start
 TIP_STAKE = 10
@@ -63,10 +64,15 @@ def _month_end(first_day: date_type) -> date_type:
 
 
 def _season_start(session: Session) -> date_type | None:
-    season = session.exec(
-        select(Season).where(Season.year == date_type.today().year)
-    ).first()
+    season = current_season(session)
     return season.start_date if season else None
+
+
+def _season_end(session: Session) -> date_type | None:
+    season = current_season(session)
+    if season is None:
+        return None
+    return season_window(season)[1]
 
 
 # ---------------------------------------------------------------- Lifecycle
@@ -95,6 +101,9 @@ def create_bet(
     start = _season_start(session)
     if start is not None and period_start < start:
         raise ValueError("Wetten gibt es erst ab dem Challenge-Start")
+    ende = _season_end(session)
+    if ende is not None and period_start > ende:
+        raise ValueError("Wetten gibt es nur bis zum Saisonende")
 
     role = "ersteller"
     if type == "duell":
@@ -259,6 +268,9 @@ def ensure_monthly_tip(session: Session) -> None:
     if start is None or today < start:
         return
     month_start = today.replace(day=1)
+    ende = _season_end(session)
+    if ende is not None and month_start > ende:
+        return  # kein neuer Tipp für Monate nach dem Saisonende
     exists = session.exec(
         select(Bet).where(
             Bet.type == "monats_tipp", Bet.period_start == month_start

@@ -8,6 +8,7 @@ import PunkteRanking from '../components/bets/PunkteRanking'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Icon from '../components/ui/Icon'
+import { aktiveSeason } from '../components/ui/season'
 
 export default function Wetten() {
   const [dialogOffen, setDialogOffen] = useState(false)
@@ -19,7 +20,8 @@ export default function Wetten() {
     queryFn: api.betAchievements,
   })
   const { data: addons = [] } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
-  const year = new Date().getFullYear()
+  const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
+  const year = aktiveSeason(seasons)?.year ?? new Date().getFullYear()
   const { data: vergleich } = useQuery({
     queryKey: ['comparison', year],
     queryFn: () => api.comparison(year),

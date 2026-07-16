@@ -72,6 +72,7 @@ class Season(SQLModel, table=True):
     goal_km: float
     milestones_json: str = "[]"  # JSON-Liste [{"km":..,"label":..,"icon":..}]
     start_date: date_type | None = None  # Challenge-Start; None = ab 1.1.
+    end_date: date_type | None = None  # Challenge-Ende; None + start_date = offen
 
 
 class AddOn(SQLModel, table=True):

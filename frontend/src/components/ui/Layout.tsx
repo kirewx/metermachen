@@ -7,6 +7,7 @@ import Avatar from './Avatar'
 import CountdownBanner from './CountdownBanner'
 import { challengeLaeuft } from './countdown'
 import Icon from './Icon'
+import { aktiveSeason } from './season'
 import { sichtbareTabs, TABS } from './tabs'
 import { useTheme } from './useTheme'
 
@@ -23,7 +24,7 @@ export default function Layout({ me }: { me: Me }) {
   const [profilOffen, setProfilOffen] = useState(false)
   const { data: seasons } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const { data: addons } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
-  const season = seasons?.find((s) => s.year === new Date().getFullYear())
+  const season = aktiveSeason(seasons ?? [])
   const gestartet = Boolean(season?.start_date && challengeLaeuft(season?.start_date))
   const aktiveAddons = new Set((addons ?? []).filter((a) => a.active).map((a) => a.key))
   const tabs = sichtbareTabs(TABS, { isAdmin: me.is_admin, gestartet, aktiveAddons })

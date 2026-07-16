@@ -123,3 +123,24 @@ def test_start_time_ist_optional(client, session):
     })
     assert r.status_code == 201, r.text
     assert r.json()["start_time"] is None
+
+
+def test_liste_zeigt_saison_fenster_ueber_jahresgrenze(client, session):
+    from datetime import date
+
+    from app.models import Activity, Season
+
+    user = make_user(session)
+    cat = make_category(session)
+    session.add(Season(year=2026, goal_km=1000, milestones_json="[]",
+                       start_date=date(2026, 7, 1), end_date=date(2027, 5, 16)))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2027, 1, 15), distance_km=10))  # im Fenster
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2027, 6, 1), distance_km=5))  # nach dem Ende
+    session.commit()
+    login(client)
+    r = client.get("/api/activities?year=2026")
+    daten = [a["date"] for a in r.json()]
+    assert "2027-01-15" in daten
+    assert "2027-06-01" not in daten

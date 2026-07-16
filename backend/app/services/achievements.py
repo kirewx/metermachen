@@ -13,7 +13,8 @@ from datetime import timedelta
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ..models import AchievementUnlock, Activity, Category, Season, User
+from ..models import AchievementUnlock, Activity, Category, User
+from .season_window import current_season, season_window
 
 RAD, LAUF, SCHWIMM = "rad", "lauf", "schwimm"
 
@@ -168,7 +169,7 @@ def check_unlocks(session: Session, user_id: int) -> None:
 
     # Saison-abhängige Achievements — brauchen Challenge-Start
     today = date_type.today()
-    season = session.exec(select(Season).where(Season.year == today.year)).first()
+    season = current_season(session)
     start = season.start_date if season else None
     if start is None or today < start:
         return
@@ -179,7 +180,9 @@ def check_unlocks(session: Session, user_id: int) -> None:
             have.add("testphasen_sieger")
 
     if "wochenkoenig" not in have:
-        ctx = _wochenkoenig_fenster(session, user_id, start, today)
+        _, saison_ende = season_window(season)
+        bis = min(today, saison_ende) if saison_ende is not None else today
+        ctx = _wochenkoenig_fenster(session, user_id, start, bis)
         if ctx is not None and _unlock(session, user_id, "wochenkoenig", ctx):
             have.add("wochenkoenig")
 

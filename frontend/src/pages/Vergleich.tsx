@@ -8,6 +8,7 @@ import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
 import { useUnitMode } from '../components/comparison/unit'
 import Icon from '../components/ui/Icon'
+import { aktiveSeason, saisonLabel } from '../components/ui/season'
 import Select from '../components/ui/Select'
 import { useToast } from '../components/ui/Toast'
 
@@ -48,7 +49,8 @@ export default function Vergleich() {
   const { mode, toggle: toggleUnit } = useUnitMode()
   useStravaRedirectHinweis()
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
-  const [year, setYear] = useState(new Date().getFullYear())
+  const [gewaehlt, setGewaehlt] = useState<number | null>(null)
+  const year = gewaehlt ?? aktiveSeason(seasons)?.year ?? new Date().getFullYear()
   const { data, error } = useQuery({
     queryKey: ['comparison', year],
     queryFn: () => api.comparison(year),
@@ -97,14 +99,14 @@ export default function Vergleich() {
           </button>
         </div>
         <Select
-          label="Jahr"
+          label="Saison"
           value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
+          onChange={(e) => setGewaehlt(Number(e.target.value))}
           className="w-24"
         >
           {seasons.map((s) => (
             <option key={s.id} value={s.year}>
-              {s.year}
+              {saisonLabel(s)}
             </option>
           ))}
         </Select>

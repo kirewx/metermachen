@@ -22,6 +22,7 @@ export type Season = {
   goal_km: number
   milestones: Milestone[]
   start_date: string | null
+  end_date: string | null
 }
 export type Activity = {
   id: number
@@ -288,8 +289,15 @@ export const api = {
   seasons: () => request<Season[]>('/api/seasons'),
   createSeason: (b: { year: number; goal_km: number; milestones?: Milestone[] }) =>
     request<Season>('/api/seasons', post(b)),
-  patchSeason: (id: number, b: { goal_km?: number; milestones?: Milestone[] }) =>
-    request<Season>(`/api/seasons/${id}`, patch(b)),
+  patchSeason: (
+    id: number,
+    b: {
+      goal_km?: number
+      milestones?: Milestone[]
+      start_date?: string | null
+      end_date?: string | null
+    },
+  ) => request<Season>(`/api/seasons/${id}`, patch(b)),
   activities: (year: number) => request<Activity[]>(`/api/activities?year=${year}`),
   createActivity: (b: ActivityInput) => request<Activity>('/api/activities', post(b)),
   patchActivity: (id: number, b: Partial<ActivityInput>) =>

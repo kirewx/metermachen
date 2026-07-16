@@ -193,3 +193,26 @@ def test_comparison_liefert_showcased_emojis(client, session):
     r = client.get(f"/api/comparison/{date.today().year}")
     me = next(u for u in r.json()["users"] if u["user_id"] == user.id)
     assert me["emojis"] == ["🏔️"]  # nur showcased UND mit Emoji
+
+
+def test_comparison_fenster_ueber_jahresgrenze_mit_freeze(client, session):
+    from datetime import date
+
+    from app.models import Activity, Season
+
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    session.add(Season(year=2026, goal_km=1000, milestones_json="[]",
+                       start_date=date(2026, 7, 1), end_date=date(2027, 5, 16)))
+    # zählt: Challenge-Phase, auch über die Jahresgrenze
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2027, 1, 15), distance_km=10))
+    # zählt nicht: nach dem Saisonende (Freeze)
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2027, 5, 17), distance_km=99))
+    session.commit()
+    login(client)
+    r = client.get("/api/comparison/2026")
+    assert r.status_code == 200
+    me = next(u for u in r.json()["users"] if u["user_id"] == user.id)
+    assert me["total_scaled_km"] == 10.0

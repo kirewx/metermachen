@@ -60,3 +60,18 @@ def test_income_zero_before_challenge_start(session):
     session.commit()
     points.ensure_income(session, user.id)
     assert points.balance(session, user.id) == 0
+
+
+def test_income_stoppt_am_saisonende(session):
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    s = _season(session)  # Start vor 10 Tagen
+    s.end_date = date.today() - timedelta(days=1)  # Saison gestern beendet
+    session.add(s)
+    session.commit()
+    session.add(
+        Activity(user_id=user.id, category_id=cat.id, date=date.today(), distance_km=50)
+    )
+    session.commit()
+    points.ensure_income(session, user.id)
+    assert points.balance(session, user.id) == 0  # km nach dem Ende zählen nicht
