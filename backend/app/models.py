@@ -1,5 +1,6 @@
 from datetime import date as date_type
 from datetime import datetime, timezone
+from datetime import time as time_type
 
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
@@ -54,6 +55,7 @@ class Activity(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     category_id: int = Field(foreign_key="category.id")
     date: date_type = Field(index=True)
+    start_time: time_type | None = None  # nur Datensammlung, keine Auswertung (Spec §3)
     distance_km: float
     duration_min: int | None = None
     elevation_m: float | None = None  # Höhenmeter (Strava total_elevation_gain)

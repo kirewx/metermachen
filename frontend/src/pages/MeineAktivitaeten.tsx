@@ -133,6 +133,7 @@ export default function MeineAktivitaeten() {
                         </p>
                         <p className="truncate text-xs text-ink-mute">
                           {a.date}
+                          {a.start_time ? ` · ${a.start_time.slice(0, 5)} Uhr` : ''}
                           {a.duration_min ? ` · ${a.duration_min} min` : ''}
                           {a.elevation_m ? ` · ${Math.round(a.elevation_m)} hm` : ''}
                           {a.note ? ` · ${a.note}` : ''}

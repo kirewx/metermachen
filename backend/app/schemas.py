@@ -1,6 +1,7 @@
 import json
 from datetime import date as date_type
 from datetime import datetime, timezone
+from datetime import time as time_type
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -135,6 +136,7 @@ class ActivityCreate(BaseModel):
     date: date_type
     distance_km: float = Field(gt=0)
     duration_min: int | None = Field(default=None, gt=0)
+    start_time: time_type | None = None
     note: str | None = None
 
     @field_validator("date")
@@ -150,6 +152,7 @@ class ActivityPatch(BaseModel):
     date: date_type | None = None
     distance_km: float | None = Field(default=None, gt=0)
     duration_min: int | None = Field(default=None, gt=0)
+    start_time: time_type | None = None
     note: str | None = None
 
     @field_validator("date")
@@ -166,6 +169,7 @@ class ActivityOut(BaseModel):
     date: date_type
     distance_km: float
     duration_min: int | None
+    start_time: time_type | None
     elevation_m: float | None
     note: str | None
     scaled_km: float

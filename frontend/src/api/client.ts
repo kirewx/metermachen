@@ -29,6 +29,7 @@ export type Activity = {
   date: string
   distance_km: number
   duration_min: number | null
+  start_time: string | null
   elevation_m: number | null
   note: string | null
   scaled_km: number
@@ -42,6 +43,7 @@ export type ActivityInput = {
   distance_km: number
   duration_min?: number | null
   note?: string | null
+  start_time?: string | null
 }
 export type CategoryShare = {
   category_id: number

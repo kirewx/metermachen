@@ -619,3 +619,24 @@ def test_webhook_event_respects_since_cutoff(session, monkeypatch):
     })
     strava.handle_webhook_event(session, _payload())
     assert session.exec(select(Activity)).all() == []
+
+
+def test_import_activity_sets_start_time(session):
+    from datetime import time as time_type
+
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {"id": 1001, "sport_type": "Run", "distance": 5000.0,
+            "start_date_local": "2026-03-01T06:45:00Z", "name": "Frühlauf"}
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "1001")).one()
+    assert act.start_time == time_type(6, 45)
+
+
+def test_import_activity_without_start_date_has_no_time(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {"id": 1002, "sport_type": "Run", "distance": 5000.0, "name": "Lauf"}
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "1002")).one()
+    assert act.start_time is None

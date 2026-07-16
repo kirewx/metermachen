@@ -93,3 +93,33 @@ def test_manual_activity_has_source_manual(client, session):
     r = create_activity(client, cat.id)
     assert r.status_code == 201
     assert r.json()["source"] == "manual"
+
+
+def test_start_time_roundtrip(client, session):
+    make_user(session)
+    cat = make_category(session)
+    login(client)
+    r = client.post("/api/activities", json={
+        "category_id": cat.id, "date": "2026-07-01", "distance_km": 5.0,
+        "start_time": "07:30",
+    })
+    assert r.status_code == 201, r.text
+    assert r.json()["start_time"] == "07:30:00"
+    act_id = r.json()["id"]
+    # Patch ohne Angabe lässt die Zeit unangetastet
+    r = client.patch(f"/api/activities/{act_id}", json={"distance_km": 6.0})
+    assert r.json()["start_time"] == "07:30:00"
+    # explizit null = Zeit löschen
+    r = client.patch(f"/api/activities/{act_id}", json={"start_time": None})
+    assert r.json()["start_time"] is None
+
+
+def test_start_time_ist_optional(client, session):
+    make_user(session)
+    cat = make_category(session)
+    login(client)
+    r = client.post("/api/activities", json={
+        "category_id": cat.id, "date": "2026-07-01", "distance_km": 5.0,
+    })
+    assert r.status_code == 201, r.text
+    assert r.json()["start_time"] is None

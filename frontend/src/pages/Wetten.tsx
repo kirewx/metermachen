@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { api, type Bet } from '../api/client'
 import BetCard, { type Spieler } from '../components/bets/BetCard'
 import BetCreateDialog from '../components/bets/BetCreateDialog'
+import Blackboard from '../components/bets/Blackboard'
 import PunkteRanking from '../components/bets/PunkteRanking'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -17,6 +18,7 @@ export default function Wetten() {
     queryKey: ['betAchievements'],
     queryFn: api.betAchievements,
   })
+  const { data: addons = [] } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
   const year = new Date().getFullYear()
   const { data: vergleich } = useQuery({
     queryKey: ['comparison', year],
@@ -28,6 +30,8 @@ export default function Wetten() {
 
   const spieler: Spieler[] =
     vergleich?.users.map((u) => ({ user_id: u.user_id, display_name: u.display_name })) ?? []
+
+  const blackboardAktiv = addons.some((a) => a.key === 'blackboard' && a.active)
 
   const wartetAufMich = (b: Bet) =>
     (b.status === 'offen' && b.params.opponent_id === me.id) ||
@@ -85,6 +89,15 @@ export default function Wetten() {
           <BetCard key={b.id} bet={b} me={me} spieler={spieler} />
         ))}
       </section>
+
+      {blackboardAktiv && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-black uppercase tracking-wider text-ink-mute">
+            Blackboard
+          </h2>
+          <Blackboard bets={wetten} spieler={spieler} />
+        </section>
+      )}
 
       <PunkteRanking />
 

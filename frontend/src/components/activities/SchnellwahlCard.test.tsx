@@ -58,6 +58,7 @@ describe('SchnellwahlCard', () => {
       distance_km: 5,
       duration_min: null,
       note: null,
+      start_time: null,
     })
   })
 
@@ -80,7 +81,19 @@ describe('SchnellwahlCard', () => {
       distance_km: 7.5,
       duration_min: 42,
       note: 'Runde am Fluss',
+      start_time: null,
     })
+  })
+
+  it('Details: Startzeit wird als HH:MM übernommen', async () => {
+    const onSubmit = vi.fn()
+    render(<SchnellwahlCard categories={categories} onSubmit={onSubmit} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }))
+    await userEvent.type(screen.getByLabelText('Startzeit'), '07:30')
+    await userEvent.click(screen.getByRole('button', { name: /Eintragen/ }))
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ start_time: '07:30' }),
+    )
   })
 
   it('füllt beim Bearbeiten die Eintragswerte vor', () => {

@@ -165,3 +165,24 @@ def test_migration_adds_user_km_factor(tmp_path):
     with engine.begin() as conn:
         val = conn.execute(text("SELECT km_factor FROM user")).scalar()
     assert val == 1.0
+
+
+def test_migration_adds_activity_start_time(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE activity (id INTEGER PRIMARY KEY, user_id INTEGER, "
+            "category_id INTEGER, date DATE, distance_km FLOAT, duration_min INTEGER, "
+            "elevation_m FLOAT, note VARCHAR, created_at DATETIME, updated_at DATETIME, "
+            "source VARCHAR, external_id VARCHAR)"
+        ))
+        conn.execute(text(
+            "INSERT INTO activity (user_id, category_id, date, distance_km, source)"
+            " VALUES (1, 1, '2026-07-01', 5.0, 'manual')"
+        ))
+    migrate(engine)
+    migrate(engine)  # zweiter Lauf: idempotent
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text('PRAGMA table_info("activity")'))]
+        assert "start_time" in cols
+        assert conn.execute(text("SELECT start_time FROM activity")).scalar() is None

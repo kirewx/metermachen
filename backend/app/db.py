@@ -93,6 +93,8 @@ def migrate(target=engine) -> None:
             act_cols = _columns(conn, "activity")
             if "elevation_m" not in act_cols:
                 conn.execute(text("ALTER TABLE activity ADD COLUMN elevation_m FLOAT"))
+            if "start_time" not in act_cols:
+                conn.execute(text("ALTER TABLE activity ADD COLUMN start_time TIME"))
 
         if _table_exists(conn, "stravaconnection"):
             sc_cols = _columns(conn, "stravaconnection")

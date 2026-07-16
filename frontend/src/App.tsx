@@ -8,6 +8,7 @@ import Datenschutz from './pages/Datenschutz'
 import Einladung from './pages/Einladung'
 import Login from './pages/Login'
 import MeineAktivitaeten from './pages/MeineAktivitaeten'
+import Regeln from './pages/Regeln'
 import Vergleich from './pages/Vergleich'
 import Wetten from './pages/Wetten'
 
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/" element={<Vergleich />} />
         <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
         <Route path="/archiv" element={<Archiv />} />
+        <Route path="/regeln" element={<Regeln />} />
         {sidebetsAktiv && <Route path="/wetten" element={<Wetten />} />}
         <Route path="/admin" element={<Admin />} />
         <Route path="/datenschutz" element={<Datenschutz />} />

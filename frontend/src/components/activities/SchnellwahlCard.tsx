@@ -36,6 +36,7 @@ export default function SchnellwahlCard({
   const [details, setDetails] = useState(Boolean(initial))
   const [date, setDate] = useState(initial?.date ?? heute())
   const [duration, setDuration] = useState(initial?.duration_min ? String(initial.duration_min) : '')
+  const [startzeit, setStartzeit] = useState(initial?.start_time?.slice(0, 5) ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
   const [pulsiert, setPulsiert] = useState(false)
   const [gesperrt, setGesperrt] = useState(false)
@@ -60,6 +61,7 @@ export default function SchnellwahlCard({
         distance_km: km,
         duration_min: duration ? parseInt(duration, 10) : null,
         note: note || null,
+        start_time: startzeit || null,
       }),
     )
       .then(() => {
@@ -74,6 +76,7 @@ export default function SchnellwahlCard({
           setDate(heute())
           setDuration('')
           setNote('')
+          setStartzeit('')
         }
       })
       .catch(() => {
@@ -136,6 +139,12 @@ export default function SchnellwahlCard({
         {details && (
           <div className="mt-3 grid gap-3 text-left sm:grid-cols-2">
             <Input label="Datum" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input
+              label="Startzeit"
+              type="time"
+              value={startzeit}
+              onChange={(e) => setStartzeit(e.target.value)}
+            />
             <Input
               label="km (frei)"
               type="text"

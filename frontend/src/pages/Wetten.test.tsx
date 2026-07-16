@@ -36,6 +36,10 @@ vi.mock('../api/client', () => ({
       id: 1, username: 'chef', display_name: 'Chef', avatar: 'icon:laufen', is_admin: true,
     }),
     points: vi.fn().mockResolvedValue({ balance: 80, transactions: [] }),
+    addons: vi.fn().mockResolvedValue([
+      { id: 1, key: 'blackboard', label: 'Blackboard', description: '', enabled: true,
+        active_from: null, active_until: null, active: true },
+    ]),
     bets: vi.fn().mockResolvedValue([duell]),
     betAchievements: vi.fn().mockResolvedValue([]),
     pointsRanking: vi.fn().mockResolvedValue([
@@ -69,7 +73,7 @@ describe('Wetten', () => {
     renderWetten()
     expect(await screen.findByText('80')).toBeInTheDocument()
     expect(screen.getByText('Offen für dich')).toBeInTheDocument()
-    expect(screen.getByText('Lisa vs. Chef')).toBeInTheDocument()
+    expect(screen.getAllByText('Lisa vs. Chef').length).toBeGreaterThan(0)
     expect(screen.getByText('Punkte-Ranking')).toBeInTheDocument()
   })
 
@@ -79,5 +83,12 @@ describe('Wetten', () => {
     await waitFor(() => {
       expect(respondBet).toHaveBeenCalledWith(1, { action: 'accept' })
     })
+  })
+
+  it('zeigt das Blackboard, wenn das Add-on aktiv ist', async () => {
+    renderWetten()
+    expect(await screen.findByText('Blackboard')).toBeInTheDocument()
+    // die offene Duell-Wette hängt an der Tafel
+    expect(screen.getAllByText('Lisa vs. Chef').length).toBeGreaterThanOrEqual(2)
   })
 })
