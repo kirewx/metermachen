@@ -41,8 +41,12 @@ export default function Blackboard({ bets, spieler }: { bets: Bet[]; spieler: Sp
   const [personId, setPersonId] = useState<number | null>(null)
   const [typ, setTyp] = useState<Bet['type'] | null>(null)
   const zeilen = filtereBlackboard(bets, { personId, typ })
-  const name = (id: number | undefined) =>
-    spieler.find((s) => s.user_id === id)?.display_name ?? `#${id}`
+  const name = (id: number | undefined) => {
+    const s = spieler.find((sp) => sp.user_id === id)
+    if (!s) return `#${id}`
+    const emojis = s.emojis ?? []
+    return emojis.length > 0 ? `${s.display_name} ${emojis.join(' ')}` : s.display_name
+  }
 
   return (
     <Card>

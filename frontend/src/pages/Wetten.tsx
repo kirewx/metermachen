@@ -29,7 +29,11 @@ export default function Wetten() {
   if (!me) return null
 
   const spieler: Spieler[] =
-    vergleich?.users.map((u) => ({ user_id: u.user_id, display_name: u.display_name })) ?? []
+    vergleich?.users.map((u) => ({
+      user_id: u.user_id,
+      display_name: u.display_name,
+      emojis: u.emojis ?? [],
+    })) ?? []
 
   const blackboardAktiv = addons.some((a) => a.key === 'blackboard' && a.active)
 
