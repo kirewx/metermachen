@@ -10,7 +10,8 @@ from datetime import date as date_type
 
 from sqlmodel import Session, func, select
 
-from ..models import Activity, Category, PointTransaction, Season, User
+from ..models import Activity, Category, PointTransaction, User
+from .season_window import current_season, season_window
 
 START_CREDIT = 100
 KM_PER_POINT = 5.0
@@ -39,21 +40,22 @@ def ensure_start_credit(session: Session, user_id: int) -> None:
 
 
 def challenge_start(session: Session) -> date_type | None:
-    season = session.exec(
-        select(Season).where(Season.year == date_type.today().year)
-    ).first()
+    season = current_season(session)
     return season.start_date if season else None
 
 
 def scaled_km_since_start(session: Session, user_id: int) -> float:
-    start = challenge_start(session)
+    season = current_season(session)
+    start = season.start_date if season else None
     if start is None or date_type.today() < start:
         return 0.0
+    _, end = season_window(season)
     user = session.get(User, user_id)
     cats = {c.id: c for c in session.exec(select(Category)).all()}
-    acts = session.exec(
-        select(Activity).where(Activity.user_id == user_id, Activity.date >= start)
-    ).all()
+    stmt = select(Activity).where(Activity.user_id == user_id, Activity.date >= start)
+    if end is not None:
+        stmt = stmt.where(Activity.date <= end)
+    acts = session.exec(stmt).all()
     return sum(
         a.distance_km * cats[a.category_id].factor * user.km_factor
         for a in acts
