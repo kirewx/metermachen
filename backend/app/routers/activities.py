@@ -6,6 +6,7 @@ from ..models import Activity, Category, User
 from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
 from ..models import utcnow
 from ..services.achievements import check_unlocks
+from ..services.season_window import in_window, window_bounds
 
 router = APIRouter(prefix="/api/activities", tags=["activities"])
 
@@ -58,7 +59,8 @@ def list_my_activities(
         .where(Activity.user_id == user.id)
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
-    return [_to_out(a, c.factor) for a, c in acts if a.date.year == year]
+    window = window_bounds(session, year)
+    return [_to_out(a, c.factor) for a, c in acts if in_window(a.date, window)]
 
 
 @router.post("", response_model=ActivityOut, status_code=201)

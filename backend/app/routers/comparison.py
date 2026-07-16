@@ -17,6 +17,7 @@ from ..models import (
     utcnow,
 )
 from ..services.achievements import EMOJIS
+from ..services.season_window import in_window, season_window
 from ..schemas import (
     CategoryShare,
     ComparisonOut,
@@ -43,7 +44,8 @@ def compute_comparison(
         .join(Category, Activity.category_id == Category.id)
         .order_by(Activity.date, Activity.id)
     ).all()
-    rows = [(a, c) for a, c in rows if a.date.year == year]
+    window = season_window(season)
+    rows = [(a, c) for a, c in rows if in_window(a.date, window)]
 
     start = season.start_date
     if phase == "warmup":

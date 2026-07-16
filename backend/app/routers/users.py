@@ -8,6 +8,7 @@ from .. import auth
 from ..deps import get_current_user, get_session, require_admin
 from ..models import Activity, Category, Invite, StravaConnection, User
 from ..schemas import ActivityOut
+from ..services.season_window import in_window, window_bounds
 from .activities import _to_out
 from .auth_router import MeOut
 
@@ -93,7 +94,8 @@ def user_activities(
         .where(Activity.user_id == user_id)
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
-    return [_to_out(a, c.factor) for a, c in rows if a.date.year == year]
+    window = window_bounds(session, year)
+    return [_to_out(a, c.factor) for a, c in rows if in_window(a.date, window)]
 
 
 @router.patch("/me", response_model=MeOut)
