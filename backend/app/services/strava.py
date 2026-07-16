@@ -3,6 +3,7 @@ import logging
 import time
 from datetime import date as date_type
 from datetime import datetime
+from datetime import time as time_type
 from urllib.parse import urlencode
 
 import httpx
@@ -96,6 +97,13 @@ def _parse_date(value: str | None) -> date_type:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
 
 
+def _parse_time(value: str | None) -> time_type | None:
+    """Zeitanteil von start_date_local — Strava liefert lokale Wanduhrzeit mit 'Z'."""
+    if not value:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).time()
+
+
 def import_activity(session: Session, conn: StravaConnection, data: dict) -> bool:
     """Importiert eine Strava-Aktivität (Summary oder Detail) idempotent.
     Gibt True zurück, wenn neu angelegt; False bei Skip/Dublette."""
@@ -119,6 +127,7 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
         return False
     elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
     act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
+    act_time = _parse_time(data.get("start_date_local") or data.get("start_date"))
     # Stichtag gilt überall — auch für nachträglich bei Strava erfasste alte
     # Aktivitäten, die per Webhook als "create" hereinkommen.
     since = config.strava_import_since()
@@ -129,6 +138,7 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
         user_id=conn.user_id,
         category_id=cat.id,
         date=act_date,
+        start_time=act_time,
         distance_km=distance_km,
         duration_min=duration_min,
         elevation_m=elevation_m,
