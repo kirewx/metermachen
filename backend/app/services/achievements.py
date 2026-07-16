@@ -92,3 +92,54 @@ EMOJIS: dict[str, str] = {
     "hattrick": "🎩",
     "wochenkoenig": "👑",
 }
+
+
+def _existing_keys(session: Session, user_id: int) -> set[str]:
+    rows = session.exec(
+        select(AchievementUnlock.key).where(AchievementUnlock.user_id == user_id)
+    ).all()
+    return set(rows)
+
+
+def _unlock(session: Session, user_id: int, key: str, context: dict | None = None) -> bool:
+    """Insert-or-ignore: Race (Webhook + Seitenaufruf) fängt der Unique-Constraint ab."""
+    session.add(AchievementUnlock(
+        user_id=user_id, key=key, context_json=json.dumps(context or {})
+    ))
+    try:
+        session.commit()
+        return True
+    except IntegrityError:
+        session.rollback()
+        return False
+
+
+def check_unlocks(session: Session, user_id: int) -> None:
+    """Prüft alle Unlock-Bedingungen für einen Nutzer und persistiert Neues.
+    Idempotent; bereits vergebene Unlocks werden nie zurückgenommen."""
+    have = _existing_keys(session, user_id)
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    acts = session.exec(select(Activity).where(Activity.user_id == user_id)).all()
+
+    # Stufen (rohe km je Bucket) + Erster-Bonus direkt nach dem Gold-Insert
+    bucket_km: dict[str, float] = defaultdict(float)
+    for act in acts:
+        cat = cats.get(act.category_id)
+        bucket = bucket_for_category(cat) if cat else None
+        if bucket is not None:
+            bucket_km[bucket] += act.distance_km
+    for bucket, ziele in STUFEN_ZIELE.items():
+        for tier in TIERS:
+            key = stufen_key(bucket, tier)
+            if key in have or bucket_km[bucket] < ziele[tier]:
+                continue
+            if _unlock(session, user_id, key, {"km": round(bucket_km[bucket], 2)}):
+                have.add(key)
+                if tier == "gold":
+                    schon_vergeben = session.exec(
+                        select(AchievementUnlock).where(
+                            AchievementUnlock.key == erster_key(bucket)
+                        )
+                    ).first()
+                    if schon_vergeben is None and _unlock(session, user_id, erster_key(bucket)):
+                        have.add(erster_key(bucket))
