@@ -165,3 +165,77 @@ def check_unlocks(session: Session, user_id: int) -> None:
             session, user_id, "hattrick", {"datum": tag.isoformat()}
         ):
             have.add("hattrick")
+
+    # Saison-abhängige Achievements — brauchen Challenge-Start
+    today = date_type.today()
+    season = session.exec(select(Season).where(Season.year == today.year)).first()
+    start = season.start_date if season else None
+    if start is None or today < start:
+        return
+
+    if "testphasen_sieger" not in have:
+        ctx = _testphasen_platz1(session, user_id, start)
+        if ctx is not None and _unlock(session, user_id, "testphasen_sieger", ctx):
+            have.add("testphasen_sieger")
+
+    if "wochenkoenig" not in have:
+        ctx = _wochenkoenig_fenster(session, user_id, start, today)
+        if ctx is not None and _unlock(session, user_id, "wochenkoenig", ctx):
+            have.add("wochenkoenig")
+
+
+def _testphasen_platz1(session: Session, user_id: int, start: date_type) -> dict | None:
+    """Gewertete km der Warm-up-Phase (Kategorie-Faktor, ohne Handicap) —
+    gleiche Rechnung wie GET /api/comparison?phase=warmup. Bei Gleichstand
+    bekommen alle Erstplatzierten das Achievement (jeweils in ihrem Lauf)."""
+    aktive = {u.id for u in session.exec(select(User).where(User.is_active)).all()}
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    sums: dict[int, float] = defaultdict(float)
+    for act in session.exec(select(Activity).where(Activity.date < start)).all():
+        if act.user_id not in aktive or act.date.year != start.year:
+            continue
+        cat = cats.get(act.category_id)
+        if cat is None:
+            continue
+        sums[act.user_id] += act.distance_km * cat.factor
+    if not sums:
+        return None
+    best = round(max(sums.values()), 2)
+    if round(sums.get(user_id, 0.0), 2) < best:
+        return None
+    return {"km": best}
+
+
+def _wochenkoenig_fenster(
+    session: Session, user_id: int, start: date_type, today: date_type
+) -> dict | None:
+    """Alleiniger Platz 1 der gewerteten km (Kategorie-Faktor × km_factor, wie
+    Rennen-Tab) an 7 aufeinanderfolgenden Kalendertagen ab Challenge-Start.
+    Geprüft gegen den aktuellen Datenstand (Spec: Randfälle)."""
+    users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
+    if user_id not in users:
+        return None
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    tages_km: dict[date_type, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+    acts = session.exec(
+        select(Activity).where(Activity.date >= start, Activity.date <= today)
+    ).all()
+    for act in acts:
+        cat, u = cats.get(act.category_id), users.get(act.user_id)
+        if cat is None or u is None:
+            continue
+        tages_km[act.date][act.user_id] += act.distance_km * cat.factor * u.km_factor
+    kum: dict[int, float] = defaultdict(float)
+    streak = 0
+    d = start
+    while d <= today:
+        for uid, km in tages_km.get(d, {}).items():
+            kum[uid] += km
+        stand = {uid: round(km, 2) for uid, km in kum.items() if km > 0}
+        best = max(stand.values(), default=0.0)
+        fuehrende = [uid for uid, km in stand.items() if km == best]
+        streak = streak + 1 if fuehrende == [user_id] else 0
+        if streak >= 7:
+            return {"von": (d - timedelta(days=6)).isoformat(), "bis": d.isoformat()}
+        d += timedelta(days=1)
+    return None

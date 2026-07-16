@@ -101,3 +101,78 @@ def test_hattrick_braucht_drei_eintraege_an_einem_tag(session):
     add_act(session, user, lauf, 5.0, d=d)
     check_unlocks(session, user.id)
     assert "hattrick" in keys_of(session, user)
+
+
+def make_season(session, start):
+    session.add(Season(year=start.year, goal_km=1000.0, start_date=start,
+                       milestones_json="[]"))
+    session.commit()
+
+
+def test_wochenkoenig_sieben_tage_allein_vorn(session):
+    heute = date.today()
+    start = heute - timedelta(days=10)
+    make_season(session, start)
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    # Erik führt ab Tag 0 allein, Lisa bleibt dahinter
+    add_act(session, erik, lauf, 50.0, d=start)
+    add_act(session, lisa, lauf, 10.0, d=start)
+    check_unlocks(session, erik.id)
+    assert "wochenkoenig" in keys_of(session, erik)
+    check_unlocks(session, lisa.id)
+    assert "wochenkoenig" not in keys_of(session, lisa)
+
+
+def test_wochenkoenig_gleichstand_zaehlt_nicht(session):
+    heute = date.today()
+    start = heute - timedelta(days=10)
+    make_season(session, start)
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    add_act(session, erik, lauf, 50.0, d=start)
+    add_act(session, lisa, lauf, 50.0, d=start)  # Gleichstand über alle Tage
+    check_unlocks(session, erik.id)
+    assert "wochenkoenig" not in keys_of(session, erik)
+
+
+def test_wochenkoenig_erst_ab_challenge_start(session):
+    heute = date.today()
+    start = heute - timedelta(days=3)  # erst 4 Tage Challenge → kein 7-Tage-Fenster
+    make_season(session, start)
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    add_act(session, erik, lauf, 50.0, d=start)
+    check_unlocks(session, erik.id)
+    assert "wochenkoenig" not in keys_of(session, erik)
+
+
+def test_testphasen_sieger_nach_start_gleichstand_alle(session):
+    heute = date.today()
+    start = heute  # Challenge startet heute → Warm-up abgeschlossen
+    make_season(session, start)
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    tom = make_user(session, username="tom")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=2.0)
+    d = start - timedelta(days=2)
+    add_act(session, erik, lauf, 50.0, d=d)  # 100 gewertet
+    add_act(session, lisa, lauf, 50.0, d=d)  # 100 gewertet — Gleichstand
+    add_act(session, tom, lauf, 10.0, d=d)   # 20 gewertet
+    for u in (erik, lisa, tom):
+        check_unlocks(session, u.id)
+    assert "testphasen_sieger" in keys_of(session, erik)
+    assert "testphasen_sieger" in keys_of(session, lisa)
+    assert "testphasen_sieger" not in keys_of(session, tom)
+
+
+def test_testphasen_sieger_nicht_vor_start(session):
+    heute = date.today()
+    make_season(session, heute + timedelta(days=5))  # Challenge noch nicht gestartet
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen")
+    add_act(session, erik, lauf, 50.0, d=heute - timedelta(days=1))
+    check_unlocks(session, erik.id)
+    assert keys_of(session, erik) == set()
