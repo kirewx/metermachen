@@ -3,9 +3,11 @@ import { api } from '../api/client'
 import Avatar from '../components/ui/Avatar'
 import Card from '../components/ui/Card'
 import Icon from '../components/ui/Icon'
+import { aktiveSeason } from '../components/ui/season'
 
 export default function Archiv() {
-  const year = new Date().getFullYear()
+  const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
+  const year = aktiveSeason(seasons)?.year ?? new Date().getFullYear()
   const { data: warmup, error } = useQuery({
     queryKey: ['comparison', year, 'warmup'],
     queryFn: () => api.comparisonWarmup(year),

@@ -5,6 +5,7 @@ import MeineAktivitaeten from './MeineAktivitaeten'
 
 vi.mock('../api/client', () => ({
   api: {
+    seasons: vi.fn().mockResolvedValue([]),
     categories: vi.fn().mockResolvedValue([
       { id: 1, name: 'Laufen', factor: 4, color: '#fff', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: ['Run'] },
     ]),

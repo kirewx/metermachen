@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { challengeStartMs, formatCountdown } from './countdown'
+import { aktiveSeason } from './season'
 
 export default function CountdownBanner() {
   const { data: seasons } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
@@ -10,7 +11,7 @@ export default function CountdownBanner() {
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [])
-  const season = seasons?.find((s) => s.year === new Date().getFullYear())
+  const season = aktiveSeason(seasons ?? [])
   if (!season?.start_date) return null
   const label = formatCountdown(challengeStartMs(season.start_date) - now)
   if (!label) return null

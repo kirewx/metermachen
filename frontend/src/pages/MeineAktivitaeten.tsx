@@ -5,10 +5,13 @@ import SchnellwahlCard from '../components/activities/SchnellwahlCard'
 import Button from '../components/ui/Button'
 import Icon from '../components/ui/Icon'
 import Modal from '../components/ui/Modal'
+import { aktiveSeason, saisonLabel } from '../components/ui/season'
 import { useToast } from '../components/ui/Toast'
 
 export default function MeineAktivitaeten() {
-  const year = new Date().getFullYear()
+  const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
+  const season = aktiveSeason(seasons)
+  const year = season?.year ?? new Date().getFullYear()
   const queryClient = useQueryClient()
   const toast = useToast()
   const [editing, setEditing] = useState<Activity | null>(null)
@@ -73,7 +76,7 @@ export default function MeineAktivitaeten() {
       />
       <div className="flex items-baseline justify-between">
         <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">
-          Meine Einträge {year}
+          Meine Einträge {saisonLabel(season)}
         </h2>
         <span className="text-sm font-black tabular-nums text-accent [text-shadow:var(--t-glow)]">
           {Math.round(gesamt)} km gewertet
