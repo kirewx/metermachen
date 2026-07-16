@@ -143,3 +143,17 @@ class ComparisonSeen(SQLModel, table=True):
     seen_at: datetime = Field(default_factory=utcnow)
     # JSON: [{"user_id": int, "scaled_km": float, "rank": int}, …]
     snapshot_json: str = "[]"
+
+
+class AchievementUnlock(SQLModel, table=True):
+    """Persistierter Achievement-Freischalt-Zeitpunkt. Einmal freigeschaltet
+    bleibt freigeschaltet, auch wenn Aktivitäten später geändert werden."""
+
+    __table_args__ = (UniqueConstraint("user_id", "key", name="uq_unlock_user_key"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    key: str
+    unlocked_at: datetime = Field(default_factory=utcnow)
+    context_json: str = "{}"  # z. B. {"km": 4003.2} oder {"von": "...", "bis": "..."}
+    showcased: bool = True  # Special-Emoji neben dem Namen zeigen (Spec §2.6)
