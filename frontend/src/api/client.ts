@@ -65,6 +65,7 @@ export type ComparisonUser = {
   by_category: CategoryShare[]
   segments: Segment[]
   cumulative: { date: string; scaled_km: number; real_km: number }[]
+  emojis?: string[]
 }
 export type Comparison = {
   year: number
@@ -134,6 +135,13 @@ export type Achievement = {
   achieved: boolean
   progress: number
   parts: AchievementPart[]
+  hidden: boolean
+  tier: 'bronze' | 'silber' | 'gold' | null
+  discipline: string | null
+  unlocked_at: string | null
+  emoji: string | null
+  showcased: boolean | null
+  claimed_by: string | null
 }
 export type Invite = {
   id: number
@@ -318,6 +326,8 @@ export const api = {
   ) => request<AddOn>(`/api/addons/${id}`, patch(b)),
   deleteAddon: (id: number) => request<void>(`/api/addons/${id}`, { method: 'DELETE' }),
   achievements: () => request<Achievement[]>('/api/achievements'),
+  patchAchievement: (key: string, showcased: boolean) =>
+    request<{ key: string; showcased: boolean }>(`/api/achievements/${key}`, patch({ showcased })),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
   lastSeenComparison: (year: number) =>
     request<LastSeen | null>(`/api/comparison/${year}/last-seen`),

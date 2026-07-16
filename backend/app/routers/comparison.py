@@ -7,7 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
-from ..models import Activity, Category, ComparisonSeen, Season, User, utcnow
+from ..models import (
+    AchievementUnlock,
+    Activity,
+    Category,
+    ComparisonSeen,
+    Season,
+    User,
+    utcnow,
+)
+from ..services.achievements import EMOJIS
 from ..schemas import (
     CategoryShare,
     ComparisonOut,
@@ -48,6 +57,15 @@ def compute_comparison(
     for a, c in rows:
         by_user[a.user_id].append((a, c))
 
+    emoji_rows = session.exec(
+        select(AchievementUnlock).where(AchievementUnlock.showcased == True)  # noqa: E712
+    ).all()
+    emojis_by_user: dict[int, list[str]] = defaultdict(list)
+    for ul in emoji_rows:
+        emoji = EMOJIS.get(ul.key)
+        if emoji:
+            emojis_by_user[ul.user_id].append(emoji)
+
     result_users = []
     for user in users:
         acts = by_user.get(user.id, [])
@@ -87,6 +105,7 @@ def compute_comparison(
                 display_name=user.display_name,
                 avatar=user.avatar,
                 km_factor=user.km_factor,
+                emojis=emojis_by_user.get(user.id, []),
                 rank=0,
                 total_scaled_km=running,
                 total_real_km=real_running,

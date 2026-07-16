@@ -35,7 +35,7 @@ function name(bet: Bet, userId: number | undefined) {
   return p?.display_name ?? `#${userId}`
 }
 
-export type Spieler = { user_id: number; display_name: string }
+export type Spieler = { user_id: number; display_name: string; emojis?: string[] }
 
 export default function BetCard({
   bet,

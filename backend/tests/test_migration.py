@@ -186,3 +186,15 @@ def test_migration_adds_activity_start_time(tmp_path):
         cols = [row[1] for row in conn.execute(text('PRAGMA table_info("activity")'))]
         assert "start_time" in cols
         assert conn.execute(text("SELECT start_time FROM activity")).scalar() is None
+
+
+def test_init_erzeugt_achievementunlock_tabelle(tmp_path):
+    from sqlmodel import SQLModel
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    # Bestands-DB-Simulation: create_all + migrate = init_db()-Ablauf
+    SQLModel.metadata.create_all(engine)
+    migrate(engine)
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text('PRAGMA table_info("achievementunlock")'))]
+    assert {"id", "user_id", "key", "unlocked_at", "context_json", "showcased"} <= set(cols)

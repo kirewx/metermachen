@@ -177,22 +177,181 @@ export default function MeineAktivitaeten() {
   )
 }
 
+const TIER_REIHE = ['bronze', 'silber', 'gold'] as const
+const TIER_LABEL = { bronze: 'Bronze', silber: 'Silber', gold: 'Gold' } as const
+
 function Achievements() {
+  const queryClient = useQueryClient()
   const { data: achievements = [] } = useQuery({
     queryKey: ['achievements'],
     queryFn: api.achievements,
   })
+  const toggle = useMutation({
+    mutationFn: ({ key, showcased }: { key: string; showcased: boolean }) =>
+      api.patchAchievement(key, showcased),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['achievements'] })
+      queryClient.invalidateQueries({ queryKey: ['comparison'] })
+    },
+  })
   if (achievements.length === 0) return null
+
+  const stufen = achievements.filter((a) => a.tier !== null)
+  const disziplinen = [...new Set(stufen.map((a) => a.discipline))] as string[]
+  const einmal = achievements.filter((a) => a.emoji !== null && !a.hidden && a.tier === null)
+  const hidden = achievements.filter((a) => a.hidden)
+  const klassisch = achievements.filter(
+    (a) => a.tier === null && !a.hidden && a.emoji === null,
+  )
+
+  const onToggle = (a: Achievement) =>
+    toggle.mutate({ key: a.key, showcased: !(a.showcased ?? true) })
+
   return (
     <div>
       <h2 className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-mute">
         Achievements
       </h2>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {achievements.map((a) => (
+        {klassisch.map((a) => (
           <AchievementBadge key={a.key} a={a} />
         ))}
+        {disziplinen.map((d) => (
+          <StufenKarte
+            key={d}
+            stufen={TIER_REIHE.map(
+              (t) => stufen.find((s) => s.discipline === d && s.tier === t)!,
+            ).filter(Boolean)}
+          />
+        ))}
+        {einmal.map((a) => (
+          <EinmalKarte key={a.key} a={a} onToggle={onToggle} />
+        ))}
+        {hidden.map((a) => (
+          <HiddenKarte key={a.key} a={a} onToggle={onToggle} />
+        ))}
       </div>
+    </div>
+  )
+}
+
+function EmojiToggle({ a, onToggle }: { a: Achievement; onToggle: (a: Achievement) => void }) {
+  if (!a.achieved || !a.emoji) return null
+  const an = a.showcased ?? true
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(a)}
+      className={`mt-2 flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+        an ? 'border-accent text-accent' : 'border-line text-ink-mute'
+      }`}
+      title="Emoji neben deinem Namen anzeigen"
+    >
+      <span className="text-sm">{a.emoji}</span>
+      {an ? 'wird getragen' : 'abgelegt'}
+    </button>
+  )
+}
+
+function StufenKarte({ stufen }: { stufen: Achievement[] }) {
+  const label = stufen[0]?.parts[0]?.label ?? ''
+  const naechste = stufen.find((s) => !s.achieved)
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        stufen.some((s) => s.achieved) ? 'border-accent shadow-glow' : 'border-line/40 opacity-60'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon name={stufen[0].icon} size={20} className="text-accent" />
+        <span className="text-sm font-bold text-ink">{label}</span>
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        {stufen.map((s) => (
+          <span
+            key={s.key}
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+              s.achieved
+                ? s.tier === 'gold'
+                  ? 'border-amber-400 text-amber-400'
+                  : s.tier === 'silber'
+                    ? 'border-slate-300 text-slate-300'
+                    : 'border-amber-700 text-amber-700'
+                : 'border-line/40 text-ink-mute'
+            }`}
+          >
+            {TIER_LABEL[s.tier as keyof typeof TIER_LABEL]}
+          </span>
+        ))}
+      </div>
+      {naechste && (
+        <>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line/40">
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${Math.round(naechste.progress * 100)}%` }}
+            />
+          </div>
+          <p className="mt-1 font-mono text-[10px] tabular-nums text-ink-mute">
+            {Math.round(naechste.parts[0]?.current_km ?? 0)}/
+            {Math.round(naechste.parts[0]?.target_km ?? 0)} km bis{' '}
+            {TIER_LABEL[naechste.tier as keyof typeof TIER_LABEL]}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function EinmalKarte({ a, onToggle }: { a: Achievement; onToggle: (a: Achievement) => void }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        a.achieved ? 'border-accent shadow-glow' : 'border-line/40 opacity-60'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-lg">{a.emoji}</span>
+        <span className={`text-sm font-bold ${a.achieved ? 'text-accent' : 'text-ink'}`}>
+          {a.title}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
+      {!a.achieved && (
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-mute">
+          {a.claimed_by ? `vergeben an ${a.claimed_by}` : 'bekommt nur die erste Person'}
+        </p>
+      )}
+      <EmojiToggle a={a} onToggle={onToggle} />
+    </div>
+  )
+}
+
+function HiddenKarte({ a, onToggle }: { a: Achievement; onToggle: (a: Achievement) => void }) {
+  if (!a.achieved) {
+    return (
+      <div className="rounded-xl border border-line/40 p-3 opacity-60">
+        <div className="flex items-center gap-2">
+          <Icon name="medaille" size={20} className="text-ink-mute" />
+          <span className="text-sm font-bold text-ink">???</span>
+        </div>
+        <p className="mt-1 text-xs text-ink-mute">Verstecktes Achievement.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-xl border border-accent p-3 shadow-glow">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">{a.emoji}</span>
+        <span className="text-sm font-bold text-accent">{a.title}</span>
+      </div>
+      <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
+      {a.unlocked_at && (
+        <p className="mt-1 font-mono text-[10px] text-ink-mute">
+          freigeschaltet am {new Date(a.unlocked_at).toLocaleDateString('de-DE')}
+        </p>
+      )}
+      <EmojiToggle a={a} onToggle={onToggle} />
     </div>
   )
 }

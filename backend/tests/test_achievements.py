@@ -42,7 +42,12 @@ def test_achievements_empty_user_nothing_achieved(client, session):
     assert r.status_code == 200
     body = r.json()
     assert {a["key"] for a in body} == {
-        "startschuss", "marathon", "aermelkanal", "transalp", "ironman", "tausender"
+        "startschuss", "marathon", "aermelkanal", "transalp", "ironman", "tausender",
+        "stufe_rad_bronze", "stufe_rad_silber", "stufe_rad_gold",
+        "stufe_lauf_bronze", "stufe_lauf_silber", "stufe_lauf_gold",
+        "stufe_schwimm_bronze", "stufe_schwimm_silber", "stufe_schwimm_gold",
+        "erster_gold_rad", "erster_gold_lauf", "erster_gold_schwimm",
+        "testphasen_sieger", "kletterkoenig", "hattrick", "wochenkoenig",
     }
     assert all(a["achieved"] is False for a in body)
 
@@ -135,3 +140,78 @@ def test_warmup_achievements_ohne_startdatum_leer(client, session):
     r = client.get("/api/achievements/warmup")
     assert r.status_code == 200
     assert r.json() == {"final": False, "start_date": None, "achievements": []}
+
+
+def test_neue_achievements_in_liste_und_maskierung(client, session):
+    make_user(session)
+    login(client)
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    # Stufen mit tier/discipline
+    assert a["stufe_rad_gold"]["tier"] == "gold"
+    assert a["stufe_rad_gold"]["discipline"] == "rad"
+    assert a["stufe_rad_gold"]["achieved"] is False
+    # Hidden maskiert: Titel ???, keine Parts, kein Fortschritt
+    assert a["kletterkoenig"]["hidden"] is True
+    assert a["kletterkoenig"]["title"] == "???"
+    assert a["kletterkoenig"]["parts"] == []
+    assert a["kletterkoenig"]["progress"] == 0.0
+    # Einmal-Achievements vorhanden, noch unvergeben
+    assert a["erster_gold_rad"]["claimed_by"] is None
+    assert a["erster_gold_rad"]["emoji"] == "🚴"
+    assert a["testphasen_sieger"]["achieved"] is False
+    # Bestands-Achievements unverändert dabei
+    assert "ironman" in a
+
+
+def test_hidden_wird_nach_unlock_aufgedeckt(client, session):
+    from app.models import Activity
+
+    user = make_user(session)
+    rad = make_category(session, name="Radfahren", icon="rad")
+    session.add(Activity(user_id=user.id, category_id=rad.id,
+                         date=date(2026, 8, 1), distance_km=30.0, elevation_m=1200.0))
+    session.commit()
+    login(client)
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    assert a["kletterkoenig"]["achieved"] is True
+    assert a["kletterkoenig"]["title"] == "Kletterkönig"
+    assert a["kletterkoenig"]["emoji"] == "🏔️"
+    assert a["kletterkoenig"]["showcased"] is True
+    assert a["kletterkoenig"]["unlocked_at"] is not None
+
+
+def test_claimed_by_zeigt_namen_der_anderen_person(client, session):
+    from app.models import Activity
+    from app.services.achievements import check_unlocks
+
+    make_user(session)
+    lisa = make_user(session, username="lisa")
+    rad = make_category(session, name="Radfahren", icon="rad")
+    session.add(Activity(user_id=lisa.id, category_id=rad.id,
+                         date=date(2026, 8, 1), distance_km=4000.0))
+    session.commit()
+    check_unlocks(session, lisa.id)
+    login(client)  # als erik
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    assert a["erster_gold_rad"]["achieved"] is False
+    assert a["erster_gold_rad"]["claimed_by"] == "Lisa"
+
+
+def test_showcase_toggle(client, session):
+    from app.models import Activity
+
+    user = make_user(session)
+    rad = make_category(session, name="Radfahren", icon="rad")
+    session.add(Activity(user_id=user.id, category_id=rad.id,
+                         date=date(2026, 8, 1), distance_km=30.0, elevation_m=1200.0))
+    session.commit()
+    login(client)
+    client.get("/api/achievements")  # löst check_unlocks aus
+    r = client.patch("/api/achievements/kletterkoenig", json={"showcased": False})
+    assert r.status_code == 200
+    assert r.json() == {"key": "kletterkoenig", "showcased": False}
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    assert a["kletterkoenig"]["showcased"] is False
+    # fremder/fehlender Unlock → 404
+    assert client.patch("/api/achievements/wochenkoenig",
+                        json={"showcased": False}).status_code == 404

@@ -41,3 +41,20 @@ def test_roundtrip_all_tables():
         assert user.avatar == "icon:laufen"
         assert user.is_admin is False
         assert cat.is_active is True
+
+
+def test_achievement_unlock_unique_pro_user_und_key(session):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import AchievementUnlock
+
+    session.add(AchievementUnlock(user_id=1, key="stufe_rad_gold"))
+    session.commit()
+    session.add(AchievementUnlock(user_id=1, key="stufe_rad_gold"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+    # gleiche Achievement-Keys für andere Nutzer sind ok
+    session.add(AchievementUnlock(user_id=2, key="stufe_rad_gold"))
+    session.commit()
