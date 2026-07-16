@@ -46,6 +46,7 @@ AchievementUnlock:
   key           str            # z. B. "stufe_rad_gold"
   unlocked_at   datetime (UTC)
   context_json  str = "{}"     # z. B. {"km": 4003.2} oder {"von": "2026-08-01", "bis": "2026-08-07"}
+  showcased     bool = true    # Emoji neben dem Namen anzeigen (§2.6)
   UNIQUE (user_id, key)
 ```
 
@@ -111,6 +112,7 @@ Normale (nicht versteckte) Karte, Anzeige wie beim Erster-Bonus.
   für die Stufen-Achievements (Frontend gruppiert damit),
 - `unlocked_at: datetime | null`,
 - `emoji: str | null` — Special-Emoji, falls das Achievement eines vergibt (§2.6),
+- `showcased: bool | null` — Anzeigestatus des eigenen Emoji-Unlocks (§2.6),
 - `claimed_by: str | null` — bei Einmal-Achievements (Erster-Bonus,
   Testphasen-Sieger) der Anzeigename der Person, die es bereits hat.
 
@@ -145,14 +147,23 @@ Besondere Achievements vergeben ein Emoji, mit dem sich die Person in der App
 (Emoji-Zuordnung ist Vorschlag, final im PR-Review.) Die normalen
 Bronze/Silber/Gold-Stufen vergeben **kein** Emoji.
 
-- **Anzeige:** alle erspielten Special-Emojis erscheinen klein neben dem
-  Anzeigenamen im Rennen-Tab (Leaderboard) und im Wetten-Blackboard.
-  Kein Opt-in/Opt-out, keine Auswahl — wer's hat, trägt's.
+- **Anzeige (anwählbar):** angewählte Special-Emojis erscheinen klein neben dem
+  Anzeigenamen im Rennen-Tab (Leaderboard) und im Wetten-Blackboard. Jede Person
+  wählt auf ihren Achievement-Karten per Toggle, welche erspielten Emojis sie
+  trägt. Neue Unlocks sind standardmäßig angewählt (abwählbar).
+- **Persistenz der Auswahl:** neues Feld `AchievementUnlock.showcased: bool = true`
+  (+ Migrationseintrag); Toggle über neuen Endpoint
+  `PATCH /api/achievements/{key}` mit `{"showcased": bool}` (nur eigener Unlock,
+  sonst 404).
 - **Daten:** abgeleitet aus `AchievementUnlock` (Key→Emoji-Mapping im Backend).
-  Die Leaderboard-Response wird pro Nutzer um `emojis: string[]` erweitert;
-  das Blackboard nutzt dieselben Daten. Kein eigener Endpoint.
+  Die Leaderboard-Response wird pro Nutzer um `emojis: string[]` erweitert
+  (nur Unlocks mit `showcased = true`); das Blackboard nutzt dieselben Daten.
+- **Profilbild:** erspielte Special-Emojis sind als Avatar wählbar —
+  `AvatarWahl.tsx` bekommt einen dritten Reiter „Erspielt“ mit den eigenen
+  Emoji-Unlocks (Daten aus `GET /api/achievements`). `User.avatar` ist ein
+  freies String-Feld, Backend-Änderung ist dafür nicht nötig.
 - Hidden-Achievement-Emojis spoilern nicht: sichtbar ist nur das Emoji am
-  Namen, nicht Titel/Bedingung des Achievements.
+  Namen/Avatar, nicht Titel/Bedingung des Achievements.
 
 ## 3. Uhrzeit-Erfassung
 
@@ -201,7 +212,8 @@ Bronze/Silber/Gold-Stufen vergeben **kein** Emoji.
   `testphasen_sieger` (Vergabe erst nach Challenge-Start, Gleichstand → alle),
   Idempotenz, Unlock bleibt nach Aktivitäts-Löschung.
 - **API:** Maskierung der Hidden Achievements, `claimed_by` bei Einmal-Achievements,
-  `emojis` in der Leaderboard-Response, `start_time` Roundtrip
+  `emojis` in der Leaderboard-Response (nur `showcased = true`), Showcase-Toggle
+  (eigener Unlock ok, fremder/fehlender → 404), `start_time` Roundtrip
   (create/patch/out), Strava-Import setzt Zeit.
 - **Frontend:** bestehende Lint-/Build-Checks; Blackboard-Filterlogik als
   Komponententest, falls im Bestand üblich (sonst manueller Check).
