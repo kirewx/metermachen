@@ -22,11 +22,15 @@ export default function Regeln() {
     <div className="mx-auto max-w-2xl space-y-4">
       <Abschnitt titel="Worum geht es">
         <p>
-          MeterMachen ist unsere gemeinsame Jahres-Challenge: Jede Person sammelt über das Jahr
-          Kilometer — beim Laufen, Radfahren, Schwimmen oder was auch immer dich bewegt. Damit
-          unterschiedliche Sportarten fair gegeneinander antreten, zählen nicht die rohen
-          Kilometer, sondern <strong className="text-ink">gewertete Kilometer (MM)</strong>.
-          Wer am Jahresende vorn liegt, gewinnt — aber eigentlich gewinnen alle, die dranbleiben.
+          MeterMachen ist unsere gemeinsame Jahres-Challenge. Das Ziel: Wer schafft es, innerhalb
+          eines Jahres die meisten Meter anzusammeln? Ob Laufen, Radfahren, Schwimmen oder was
+          auch immer dich bewegt. Damit unterschiedliche Sportarten fair gegeneinander antreten,
+          zählen nicht die rohen Kilometer, sondern{' '}
+          <strong className="text-ink">gewertete Kilometer (MM)</strong>.
+        </p>
+        <p>
+          Wer am Jahresende vorn liegt, gewinnt einen{' '}
+          <strong className="text-ink">phänomenalen Preis!!</strong>
         </p>
       </Abschnitt>
 
@@ -34,7 +38,7 @@ export default function Regeln() {
         <p>
           Die Challenge startet am <strong className="text-ink">20.07.2026</strong> und läuft bis
           zum Jahresende. Alles davor war Warm-up: Diese Kilometer zählen nicht für die
-          Hauptwertung, bleiben aber im Archiv sichtbar — inklusive der Warm-up-Auszeichnungen.
+          Hauptwertung, bleiben aber im Archiv sichtbar, inklusive der Warm-up-Auszeichnungen.
         </p>
       </Abschnitt>
 
@@ -65,20 +69,20 @@ export default function Regeln() {
           </tbody>
         </table>
         <p className="text-xs text-ink-mute">
-          Die Tabelle ist live — wenn ein Admin Faktoren anpasst, stimmt sie automatisch.
+          Die Tabelle ist live: Wenn ein Admin Faktoren anpasst, stimmt sie automatisch.
         </p>
       </Abschnitt>
 
       <Abschnitt titel="Einträge & Fairness">
         <p>
-          Aktivitäten trägst du von Hand ein oder du verbindest Strava — dann kommen sie
+          Aktivitäten trägst du von Hand ein oder du verbindest Strava, dann kommen sie
           automatisch. Es gilt Ehrlichkeit vor Ehrgeiz:
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>Nur echte, selbst zurückgelegte Kilometer eintragen.</li>
-          <li>Einträge zeitnah erfassen — Nachtragen ist ok, Fantasie-Kilometer nicht.</li>
+          <li>Einträge zeitnah erfassen. Nachtragen ist ok, Fantasie-Kilometer nicht.</li>
           <li>Bei Strava-Import gilt, was Strava gemessen hat.</li>
-          <li>Im Zweifel klärt die Gruppe — der Spaß steht über der Platzierung.</li>
+          <li>Im Zweifel klärt die Gruppe. Der Spaß steht über der Platzierung.</li>
         </ul>
       </Abschnitt>
 
@@ -87,7 +91,7 @@ export default function Regeln() {
           <p>
             Im Wetten-Tab kannst du Punkte auf sportliche Duelle, Monats-Tipps, Ziel-, Streak-
             und Über/Unter-Wetten setzen. Punkte-Nachschub gibt es über Sport: +1 Punkt je 5
-            gewertete km seit Challenge-Start. Punkte sind Spielwährung — kein Echtgeld.
+            gewertete km seit Challenge-Start. Punkte sind Spielwährung, kein Echtgeld.
           </p>
         </Abschnitt>
       )}
