@@ -74,3 +74,30 @@ def test_erster_bonus_reihenfolge_der_persistierung(session):
     assert "erster_gold_lauf" in keys_of(session, erik)
     assert "erster_gold_lauf" not in keys_of(session, lisa)
     assert "stufe_lauf_gold" in keys_of(session, lisa)
+
+
+def test_kletterkoenig_summiert_pro_kalendertag(session):
+    user = make_user(session)
+    rad = make_category(session, name="Radfahren", icon="rad")
+    d = date(2026, 8, 1)
+    add_act(session, user, rad, 20.0, d=d, elevation=600.0)
+    add_act(session, user, rad, 20.0, d=d + timedelta(days=1), elevation=600.0)
+    check_unlocks(session, user.id)
+    assert "kletterkoenig" not in keys_of(session, user)  # 600 + 600 an ZWEI Tagen
+    add_act(session, user, rad, 20.0, d=d, elevation=400.0)  # Tag 1: 600+400 = 1000
+    check_unlocks(session, user.id)
+    assert "kletterkoenig" in keys_of(session, user)
+
+
+def test_hattrick_braucht_drei_eintraege_an_einem_tag(session):
+    user = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen")
+    d = date(2026, 8, 1)
+    add_act(session, user, lauf, 5.0, d=d)
+    add_act(session, user, lauf, 5.0, d=d)
+    add_act(session, user, lauf, 5.0, d=d + timedelta(days=1))
+    check_unlocks(session, user.id)
+    assert "hattrick" not in keys_of(session, user)
+    add_act(session, user, lauf, 5.0, d=d)
+    check_unlocks(session, user.id)
+    assert "hattrick" in keys_of(session, user)

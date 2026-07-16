@@ -143,3 +143,25 @@ def check_unlocks(session: Session, user_id: int) -> None:
                     ).first()
                     if schon_vergeben is None and _unlock(session, user_id, erster_key(bucket)):
                         have.add(erster_key(bucket))
+
+    # Hidden: Tagesgrenzen über das Aktivitätsdatum (Kalendertag)
+    if "kletterkoenig" not in have:
+        hm_pro_tag: dict[date_type, float] = defaultdict(float)
+        for act in acts:
+            hm_pro_tag[act.date] += act.elevation_m or 0.0
+        tag = next((d for d, hm in sorted(hm_pro_tag.items()) if hm >= 1000.0), None)
+        if tag is not None and _unlock(
+            session, user_id, "kletterkoenig",
+            {"datum": tag.isoformat(), "hm": round(hm_pro_tag[tag], 1)},
+        ):
+            have.add("kletterkoenig")
+
+    if "hattrick" not in have:
+        eintraege_pro_tag: dict[date_type, int] = defaultdict(int)
+        for act in acts:
+            eintraege_pro_tag[act.date] += 1
+        tag = next((d for d, n in sorted(eintraege_pro_tag.items()) if n >= 3), None)
+        if tag is not None and _unlock(
+            session, user_id, "hattrick", {"datum": tag.isoformat()}
+        ):
+            have.add("hattrick")
