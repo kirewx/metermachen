@@ -7,7 +7,8 @@
 Vier Features vor bzw. kurz nach dem Challenge-Start am 20.07.2026:
 
 1. Regeln-Reiter (statisch)
-2. Achievements: Bronze/Silber/Gold-Stufen, Erster-Bonus, drei Hidden Achievements
+2. Achievements: Bronze/Silber/Gold-Stufen, Erster-Bonus, drei Hidden Achievements,
+   Testphasen-Sieger, Special-Emojis zum „Schmücken“ neben dem Namen
 3. Startzeit von Aktivitäten erfassen (Datengrundlage für spätere News-/Statistik-Auswertung)
 4. Blackboard im Wetten-Tab („wer wettet gegen wen“)
 
@@ -93,6 +94,12 @@ Vergabe im selben `check_unlocks`-Lauf direkt nach dem Gold-Insert.
 | `hattrick` | ≥ 3 Aktivitäts-Einträge an einem Kalendertag |
 | `wochenkoenig` | alleiniger Platz 1 der gewerteten km (gleiche Rangberechnung wie Rennen-Tab inkl. `km_factor`) an 7 aufeinanderfolgenden Kalendertagen, frühestens ab Challenge-Start (`Season.start_date`); Gleichstand zählt nicht; geprüft gegen den aktuellen Datenstand |
 
+**Testphasen-Sieger:** `testphasen_sieger` — erhält, wer zum Challenge-Start
+(20.07.2026) Platz 1 der gewerteten km der Warm-up-Phase ist. Vergabe einmalig
+beim ersten `check_unlocks`-Lauf nach `Season.start_date` auf Basis der
+Warm-up-Daten (Archiv-Stand); bei Gleichstand erhalten es alle Erstplatzierten.
+Normale (nicht versteckte) Karte, Anzeige wie beim Erster-Bonus.
+
 ### 2.4 API
 
 `GET /api/achievements` liefert weiterhin eine Liste, `AchievementOut` erweitert um:
@@ -102,7 +109,10 @@ Vergabe im selben `check_unlocks`-Lauf direkt nach dem Gold-Insert.
   `progress = 0`),
 - `tier: "bronze" | "silber" | "gold" | null` und `discipline: str | null`
   für die Stufen-Achievements (Frontend gruppiert damit),
-- `unlocked_at: datetime | null`.
+- `unlocked_at: datetime | null`,
+- `emoji: str | null` — Special-Emoji, falls das Achievement eines vergibt (§2.6),
+- `claimed_by: str | null` — bei Einmal-Achievements (Erster-Bonus,
+  Testphasen-Sieger) der Anzeigename der Person, die es bereits hat.
 
 ### 2.5 UI (`pages/MeineAktivitaeten.tsx`, Bereich Achievements)
 
@@ -110,12 +120,39 @@ Vergabe im selben `check_unlocks`-Lauf direkt nach dem Gold-Insert.
 - **Eine Karte pro Disziplin** für die Stufen: Bronze/Silber/Gold-Badges
   (erreicht = farbig, sonst grau) + Fortschrittsbalken zur nächsten Stufe.
 - Erster-Bonus als normale (nicht versteckte) Karte pro Disziplin mit Hinweis
-  „bekommt nur die erste Person“. Zusatzfeld `claimed: bool` in der API: ist der
-  Bonus schon an jemand anderen vergeben, zeigt die Karte „bereits vergeben“
-  (ohne Namen — der Endpoint bleibt personenbezogen).
+  „bekommt nur die erste Person“. Ist der Bonus schon an jemand anderen
+  vergeben, zeigt die Karte „vergeben an {Name}“ (`claimed_by` aus der API).
+  Gleiches Muster für den Testphasen-Sieger.
 - Hidden: graue „???“-Karte ohne Beschreibung; nach Freischaltung normale
   Karte mit Titel, Beschreibung und Datum. Freischaltung ist nur für die
   jeweilige Person sichtbar (kein globaler Spoiler).
+
+### 2.6 Special-Emojis
+
+Besondere Achievements vergeben ein Emoji, mit dem sich die Person in der App
+„schmücken“ kann:
+
+| Achievement | Emoji |
+|---|---|
+| `testphasen_sieger` | 🏆 |
+| `erster_gold_rad` | 🚴 |
+| `erster_gold_lauf` | 🏃 |
+| `erster_gold_schwimm` | 🏊 |
+| `kletterkoenig` | 🏔️ |
+| `hattrick` | 🎩 |
+| `wochenkoenig` | 👑 |
+
+(Emoji-Zuordnung ist Vorschlag, final im PR-Review.) Die normalen
+Bronze/Silber/Gold-Stufen vergeben **kein** Emoji.
+
+- **Anzeige:** alle erspielten Special-Emojis erscheinen klein neben dem
+  Anzeigenamen im Rennen-Tab (Leaderboard) und im Wetten-Blackboard.
+  Kein Opt-in/Opt-out, keine Auswahl — wer's hat, trägt's.
+- **Daten:** abgeleitet aus `AchievementUnlock` (Key→Emoji-Mapping im Backend).
+  Die Leaderboard-Response wird pro Nutzer um `emojis: string[]` erweitert;
+  das Blackboard nutzt dieselben Daten. Kein eigener Endpoint.
+- Hidden-Achievement-Emojis spoilern nicht: sichtbar ist nur das Emoji am
+  Namen, nicht Titel/Bedingung des Achievements.
 
 ## 3. Uhrzeit-Erfassung
 
@@ -161,8 +198,10 @@ Vergabe im selben `check_unlocks`-Lauf direkt nach dem Gold-Insert.
 - **Unlock-Service:** Stufen-Grenzen, Erster-Bonus (zwei Nutzer, Reihenfolge der
   Persistierung entscheidet), `kletterkoenig`/`hattrick` (Tagesgrenzen),
   `wochenkoenig` (7-Tage-Fenster, Gleichstand, Start erst ab `Season.start_date`),
+  `testphasen_sieger` (Vergabe erst nach Challenge-Start, Gleichstand → alle),
   Idempotenz, Unlock bleibt nach Aktivitäts-Löschung.
-- **API:** Maskierung der Hidden Achievements, `start_time` Roundtrip
+- **API:** Maskierung der Hidden Achievements, `claimed_by` bei Einmal-Achievements,
+  `emojis` in der Leaderboard-Response, `start_time` Roundtrip
   (create/patch/out), Strava-Import setzt Zeit.
 - **Frontend:** bestehende Lint-/Build-Checks; Blackboard-Filterlogik als
   Komponententest, falls im Bestand üblich (sonst manueller Check).
