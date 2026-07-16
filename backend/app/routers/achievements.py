@@ -6,7 +6,6 @@ Sportarten. Die Zuordnung Kategorie -> Sport-Bucket läuft über drei Signale
 oder bei selbst angelegten Kategorien greift.
 """
 
-import json
 from collections import defaultdict
 from datetime import date as date_type
 
@@ -16,32 +15,9 @@ from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
 from ..models import Activity, Category, Season, User
+from ..services.achievements import LAUF, RAD, SCHWIMM, bucket_for_category
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
-
-RAD, LAUF, SCHWIMM = "rad", "lauf", "schwimm"
-
-_BUCKET_BY_ICON = {"rad": RAD, "laufen": LAUF, "schwimmen": SCHWIMM}
-_BUCKET_BY_STRAVA = {
-    "Ride": RAD, "MountainBikeRide": RAD, "GravelRide": RAD, "EBikeRide": RAD,
-    "VirtualRide": RAD,
-    "Run": LAUF, "TrailRun": LAUF, "VirtualRun": LAUF,
-    "Swim": SCHWIMM,
-}
-_BUCKET_BY_NAME = {RAD: ("rad", "bike"), LAUF: ("lauf", "jogg"), SCHWIMM: ("schwimm",)}
-
-
-def bucket_for_category(cat: Category) -> str | None:
-    if cat.icon in _BUCKET_BY_ICON:
-        return _BUCKET_BY_ICON[cat.icon]
-    for sport in json.loads(cat.strava_sport_types or "[]"):
-        if sport in _BUCKET_BY_STRAVA:
-            return _BUCKET_BY_STRAVA[sport]
-    name = cat.name.lower()
-    for bucket, needles in _BUCKET_BY_NAME.items():
-        if any(n in name for n in needles):
-            return bucket
-    return None
 
 
 class Part(BaseModel):
