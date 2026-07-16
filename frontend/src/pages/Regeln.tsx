@@ -29,7 +29,7 @@ export default function Regeln() {
           <strong className="text-ink">gewertete Kilometer (MM)</strong>.
         </p>
         <p>
-          Wer am Jahresende vorn liegt, gewinnt einen{' '}
+          Wer am Ende vorn liegt, gewinnt einen{' '}
           <strong className="text-ink">phänomenalen Preis!!</strong>
         </p>
       </Abschnitt>
@@ -37,8 +37,9 @@ export default function Regeln() {
       <Abschnitt titel="Zeitraum">
         <p>
           Die Challenge startet am <strong className="text-ink">20.07.2026</strong> und läuft bis
-          zum Jahresende. Alles davor war Warm-up: Diese Kilometer zählen nicht für die
-          Hauptwertung, bleiben aber im Archiv sichtbar, inklusive der Warm-up-Auszeichnungen.
+          zum <strong className="text-ink">Stuttgartlauf 2027</strong>. Alles davor war Warm-up:
+          Diese Kilometer zählen nicht für die Hauptwertung, bleiben aber im Archiv sichtbar,
+          inklusive der Warm-up-Auszeichnungen.
         </p>
       </Abschnitt>
 
