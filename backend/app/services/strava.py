@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from .. import config
 from ..db import engine
 from ..models import Activity, Category, StravaConnection
+from .season_window import current_season
 
 AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
 TOKEN_URL = "https://www.strava.com/oauth/token"
@@ -183,16 +184,27 @@ def _is_importable(session: Session, data: dict) -> bool:
     return (data.get("distance") or 0) > 0
 
 
-def backfill_current_year(user_id: int) -> None:
-    """Importiert alle Aktivitäten des laufenden Kalenderjahres beim ersten Connect.
-    Läuft als BackgroundTask, eigene DB-Session, idempotent, best-effort.
-    Ein gesetzter STRAVA_IMPORT_SINCE-Stichtag verschiebt den Startpunkt nach hinten."""
-    start_date = date_type(date_type.today().year, 1, 1)
+def _backfill_from(session: Session) -> date_type:
+    """Importstart: 1. Januar des Jahres der aktiven Season — ein Neu-Connect
+    im Frühjahr 2027 muss die 2026er-km der laufenden Saison mitholen.
+    Der STRAVA_IMPORT_SINCE-Stichtag verschiebt weiterhin nach hinten."""
+    season = current_season(session)
+    jahr = season.year if season is not None else date_type.today().year
+    start_date = date_type(jahr, 1, 1)
     since = config.strava_import_since()
     if since is not None and since > start_date:
         start_date = since
-    year_start = int(datetime(start_date.year, start_date.month, start_date.day).timestamp())
+    return start_date
+
+
+def backfill_current_year(user_id: int) -> None:
+    """Importiert alle Aktivitäten der laufenden Saison beim ersten Connect.
+    Läuft als BackgroundTask, eigene DB-Session, idempotent, best-effort."""
     with Session(engine) as session:
+        start_date = _backfill_from(session)
+        year_start = int(
+            datetime(start_date.year, start_date.month, start_date.day).timestamp()
+        )
         conn = session.exec(
             select(StravaConnection).where(StravaConnection.user_id == user_id)
         ).first()
