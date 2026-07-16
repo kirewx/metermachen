@@ -62,12 +62,14 @@ class SeasonCreate(BaseModel):
     goal_km: float = Field(gt=0)
     milestones: list[Milestone] = []
     start_date: date_type | None = None
+    end_date: date_type | None = None
 
 
 class SeasonPatch(BaseModel):
     goal_km: float | None = Field(default=None, gt=0)
     milestones: list[Milestone] | None = None
     start_date: date_type | None = None  # None + gesetzt = Startdatum löschen
+    end_date: date_type | None = None  # None + gesetzt = Enddatum löschen (Fenster offen)
 
 
 class SeasonOut(BaseModel):
@@ -76,6 +78,7 @@ class SeasonOut(BaseModel):
     goal_km: float
     milestones: list[Milestone]
     start_date: date_type | None
+    end_date: date_type | None
 
     @classmethod
     def from_season(cls, season: Season) -> "SeasonOut":
@@ -85,6 +88,7 @@ class SeasonOut(BaseModel):
             goal_km=season.goal_km,
             milestones=json.loads(season.milestones_json),
             start_date=season.start_date,
+            end_date=season.end_date,
         )
 
 
