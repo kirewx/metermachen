@@ -17,6 +17,7 @@ vi.mock('../api/client', () => ({
         key: 'startschuss', title: 'Startschuss', description: 'Deine erste Aktivität ist im Kasten.',
         icon: 'fahne', achieved: true, progress: 1,
         parts: [{ label: 'Gesamt', current_km: 0.01, target_km: 0.01 }],
+        hidden: false, tier: null, discipline: null, unlocked_at: null, emoji: null, showcased: null, claimed_by: null,
       },
       {
         key: 'ironman', title: 'Ironman', description: '190 km Rad, 42 km Laufen und 4 km Schwimmen — die volle Distanz.',
@@ -26,7 +27,26 @@ vi.mock('../api/client', () => ({
           { label: 'Laufen', current_km: 30, target_km: 42 },
           { label: 'Schwimmen', current_km: 2, target_km: 4 },
         ],
+        hidden: false, tier: null, discipline: null, unlocked_at: null, emoji: null, showcased: null, claimed_by: null,
       },
+      { key: 'stufe_rad_bronze', title: 'Rad Bronze', description: '1000 km Rad insgesamt.', icon: 'rad',
+        achieved: true, progress: 1, parts: [{ label: 'Rad', current_km: 1000, target_km: 1000 }],
+        hidden: false, tier: 'bronze', discipline: 'rad', unlocked_at: '2026-08-01T10:00:00Z', emoji: null, showcased: null, claimed_by: null },
+      { key: 'stufe_rad_silber', title: 'Rad Silber', description: '2500 km Rad insgesamt.', icon: 'rad',
+        achieved: false, progress: 0.5, parts: [{ label: 'Rad', current_km: 1250, target_km: 2500 }],
+        hidden: false, tier: 'silber', discipline: 'rad', unlocked_at: null, emoji: null, showcased: null, claimed_by: null },
+      { key: 'stufe_rad_gold', title: 'Rad Gold', description: '4000 km Rad insgesamt.', icon: 'rad',
+        achieved: false, progress: 0.3125, parts: [{ label: 'Rad', current_km: 1250, target_km: 4000 }],
+        hidden: false, tier: 'gold', discipline: 'rad', unlocked_at: null, emoji: null, showcased: null, claimed_by: null },
+      { key: 'erster_gold_rad', title: 'Erster: Rad Gold', description: 'Bekommt nur, wer die Gold-Stufe Rad als erste Person knackt.', icon: 'rad',
+        achieved: false, progress: 0, parts: [], hidden: false, tier: null, discipline: null,
+        unlocked_at: null, emoji: '🚴', showcased: null, claimed_by: 'Lisa' },
+      { key: 'kletterkoenig', title: '???', description: '', icon: 'medaille',
+        achieved: false, progress: 0, parts: [], hidden: true, tier: null, discipline: null,
+        unlocked_at: null, emoji: null, showcased: null, claimed_by: null },
+      { key: 'hattrick', title: 'Hattrick', description: 'Drei Aktivitäten an einem Tag.', icon: 'blitz',
+        achieved: true, progress: 1, parts: [], hidden: true, tier: null, discipline: null,
+        unlocked_at: '2026-08-02T10:00:00Z', emoji: '🎩', showcased: true, claimed_by: null },
     ]),
   },
 }))
@@ -72,5 +92,27 @@ describe('Achievements', () => {
     // Offenes Achievement zeigt die Teil-Fortschritte, erreichtes nicht.
     expect(screen.getByText(/Rad: 95\/190 km/)).toBeInTheDocument()
     expect(screen.queryByText(/Gesamt: 0\/0 km/)).not.toBeInTheDocument()
+  })
+
+  it('gruppiert Stufen zu einer Karte pro Disziplin mit Badges', async () => {
+    renderPage()
+    expect(await screen.findByText('Rad')).toBeInTheDocument()
+    expect(screen.getByText('Bronze')).toBeInTheDocument()
+    expect(screen.getByText('Silber')).toBeInTheDocument()
+    expect(screen.getByText('Gold')).toBeInTheDocument()
+    // es gibt KEINE drei einzelnen Stufen-Karten
+    expect(screen.queryByText('Rad Silber')).not.toBeInTheDocument()
+  })
+
+  it('zeigt vergebene Einmal-Achievements mit Namen', async () => {
+    renderPage()
+    expect(await screen.findByText(/vergeben an Lisa/)).toBeInTheDocument()
+  })
+
+  it('zeigt nicht freigeschaltete Hidden als ???-Karte und freigeschaltete voll', async () => {
+    renderPage()
+    expect(await screen.findByText('???')).toBeInTheDocument()
+    expect(screen.getByText('Hattrick')).toBeInTheDocument()
+    expect(screen.getAllByText('🎩').length).toBeGreaterThan(0)
   })
 })
