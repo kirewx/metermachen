@@ -94,6 +94,9 @@ export default function Regeln() {
             und Über/Unter-Wetten setzen. Punkte-Nachschub gibt es über Sport: +1 Punkt je 5
             gewertete km seit Challenge-Start. Punkte sind Spielwährung, kein Echtgeld.
           </p>
+          <p className="text-xs text-ink-mute">
+            Der Wettenbereich ist noch in Bearbeitung. Details können sich ändern.
+          </p>
         </Abschnitt>
       )}
     </div>
