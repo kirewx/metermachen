@@ -29,6 +29,13 @@ KNOWN_ADDONS = [
         "enabled": True,
         "active_from": SIDEBETS_START,  # schaltet automatisch zum Challenge-Start scharf
     },
+    {
+        "key": "blackboard",
+        "label": "Blackboard",
+        "description": "Schwarzes Brett im Wetten-Tab: wer wettet gerade gegen wen.",
+        "enabled": True,
+        "active_from": SIDEBETS_START,  # schaltet zusammen mit den Wetten scharf
+    },
 ]
 
 

@@ -59,4 +59,17 @@ def test_seed_is_idempotent(session):
     assert len(session.exec(select(User)).all()) == 1
     assert len(session.exec(select(Category)).all()) == 7
     assert len(session.exec(select(Season)).all()) == 1
-    assert len(session.exec(select(AddOn)).all()) == 1
+    assert len(session.exec(select(AddOn)).all()) == 2
+
+
+def test_seed_registers_blackboard_addon_scheduled(session):
+    from datetime import datetime, timezone
+
+    from app.deps import addon_active
+
+    seed_all(session, admin_user="chef", admin_password="geheim", year=2026)
+    addon = session.exec(select(AddOn).where(AddOn.key == "blackboard")).one()
+    # Gleiches Fenster wie sidebets: an, aber erst ab Challenge-Start aktiv.
+    assert addon.enabled is True
+    assert addon_active(addon, datetime(2026, 7, 1, tzinfo=timezone.utc)) is False
+    assert addon_active(addon, datetime(2026, 7, 20, 12, tzinfo=timezone.utc)) is True
