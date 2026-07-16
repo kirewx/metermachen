@@ -26,6 +26,14 @@ export default function ProfilModal({ me, open, onClose }: Props) {
       query.state.data?.backfill?.state === 'running' ? 1500 : false,
   })
 
+  const { data: achievements = [] } = useQuery({
+    queryKey: ['achievements'],
+    queryFn: api.achievements,
+  })
+  const erspielt = achievements
+    .filter((a) => a.achieved && a.emoji)
+    .map((a) => a.emoji as string)
+
   // Beim Schließen den Bestätigungs-Zustand zurücksetzen — sonst löst ein
   // einzelner Klick beim Wiederöffnen versehentlich das Trennen aus.
   const close = () => {
@@ -94,7 +102,7 @@ export default function ProfilModal({ me, open, onClose }: Props) {
         <Input label="Anzeigename" value={name} onChange={(e) => setName(e.target.value)} />
         <div>
           <div className="mb-1 text-xs font-semibold text-ink-mute">Avatar</div>
-          <AvatarWahl value={avatar} onChange={setAvatar} />
+          <AvatarWahl value={avatar} onChange={setAvatar} erspielt={erspielt} />
         </div>
         <Input
           label="Neues Passwort (leer = unverändert)"

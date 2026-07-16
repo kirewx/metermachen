@@ -13,6 +13,7 @@ const toastSpy = vi.fn()
 vi.mock('../../api/client', () => ({
   api: {
     patchMe: vi.fn(),
+    achievements: vi.fn().mockResolvedValue([]),
     stravaStatus: () => stravaStatus(),
     consentStrava: () => consentStrava(),
     disconnectStrava: () => disconnectStrava(),
