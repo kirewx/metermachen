@@ -5,6 +5,7 @@ from ..deps import get_current_user, get_session
 from ..models import Activity, Category, User
 from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
 from ..models import utcnow
+from ..services.achievements import check_unlocks
 
 router = APIRouter(prefix="/api/activities", tags=["activities"])
 
@@ -71,6 +72,7 @@ def create_activity(
     session.add(act)
     session.commit()
     session.refresh(act)
+    check_unlocks(session, user.id)
     return _to_out(act, cat.factor)
 
 
@@ -95,6 +97,7 @@ def patch_activity(
     session.add(act)
     session.commit()
     session.refresh(act)
+    check_unlocks(session, user.id)
     cat = session.get(Category, act.category_id)
     return _to_out(act, cat.factor)
 

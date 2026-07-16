@@ -148,6 +148,10 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     )
     session.add(act)
     session.commit()
+
+    from .achievements import check_unlocks
+
+    check_unlocks(session, conn.user_id)
     return True
 
 

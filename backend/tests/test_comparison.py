@@ -178,3 +178,18 @@ def test_comparison_warmup_ignores_km_factor(client, session):
     login(client)
     r = client.get(f"/api/comparison/{date.today().year}?phase=warmup")
     assert r.json()["users"][0]["total_scaled_km"] == 10.0
+
+
+def test_comparison_liefert_showcased_emojis(client, session):
+    from app.models import AchievementUnlock
+
+    user = make_user(session)
+    session.add(Season(year=date.today().year, goal_km=1000.0, milestones_json="[]"))
+    session.add(AchievementUnlock(user_id=user.id, key="kletterkoenig"))
+    session.add(AchievementUnlock(user_id=user.id, key="wochenkoenig", showcased=False))
+    session.add(AchievementUnlock(user_id=user.id, key="stufe_rad_gold"))  # kein Emoji
+    session.commit()
+    login(client)
+    r = client.get(f"/api/comparison/{date.today().year}")
+    me = next(u for u in r.json()["users"] if u["user_id"] == user.id)
+    assert me["emojis"] == ["🏔️"]  # nur showcased UND mit Emoji

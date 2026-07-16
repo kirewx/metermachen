@@ -208,6 +208,7 @@ class ComparisonUser(BaseModel):
     total_scaled_km: float
     total_real_km: float = 0.0
     km_factor: float = 1.0
+    emojis: list[str] = []
     by_category: list[CategoryShare]
     segments: list[Segment]
     cumulative: list[CumulativePoint]

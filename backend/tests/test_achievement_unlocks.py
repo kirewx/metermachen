@@ -176,3 +176,34 @@ def test_testphasen_sieger_nicht_vor_start(session):
     add_act(session, erik, lauf, 50.0, d=heute - timedelta(days=1))
     check_unlocks(session, erik.id)
     assert keys_of(session, erik) == set()
+
+
+def test_activity_create_loest_unlock_aus(client, session):
+    from tests.conftest import login
+
+    make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen")
+    login(client)
+    # Datum = heute: der Endpoint lehnt Zukunftsdaten ab (422)
+    r = client.post("/api/activities", json={
+        "category_id": lauf.id, "date": date.today().isoformat(), "distance_km": 250.0,
+    })
+    assert r.status_code == 201
+    unlocks = session.exec(select(AchievementUnlock)).all()
+    assert {u.key for u in unlocks} == {"stufe_lauf_bronze"}
+
+
+def test_strava_import_loest_unlock_aus(session):
+    from app.models import StravaConnection
+    from app.services import strava
+
+    user = make_user(session)
+    make_category(session, name="Laufen", icon="laufen", strava_sport_types='["Run"]')
+    conn = StravaConnection(user_id=user.id, athlete_id=9, access_token="a",
+                            refresh_token="r", expires_at=9999999999)
+    session.add(conn)
+    session.commit()
+    data = {"id": 500, "sport_type": "Run", "distance": 250000.0,
+            "start_date_local": "2026-08-01T07:00:00Z", "name": "Ultra"}
+    assert strava.import_activity(session, conn, data) is True
+    assert "stufe_lauf_bronze" in keys_of(session, user)
