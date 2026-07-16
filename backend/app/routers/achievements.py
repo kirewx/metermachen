@@ -8,14 +8,29 @@ oder bei selbst angelegten Kategorien greift.
 
 from collections import defaultdict
 from datetime import date as date_type
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
-from ..models import Activity, Category, Season, User
-from ..services.achievements import LAUF, RAD, SCHWIMM, bucket_for_category
+from ..models import AchievementUnlock, Activity, Category, Season, User
+from ..services.achievements import (
+    DISZIPLIN_ICON,
+    DISZIPLIN_LABEL,
+    EINMAL_DEFS,
+    EMOJIS,
+    HIDDEN_DEFS,
+    LAUF,
+    RAD,
+    SCHWIMM,
+    STUFEN_ZIELE,
+    TIERS,
+    bucket_for_category,
+    check_unlocks,
+    stufen_key,
+)
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
 
@@ -34,6 +49,13 @@ class AchievementOut(BaseModel):
     achieved: bool
     progress: float  # 0..1, min über alle Teile
     parts: list[Part]
+    hidden: bool = False
+    tier: str | None = None  # "bronze" | "silber" | "gold"
+    discipline: str | None = None
+    unlocked_at: datetime | None = None
+    emoji: str | None = None
+    showcased: bool | None = None  # nur beim eigenen Emoji-Unlock gesetzt
+    claimed_by: str | None = None  # Einmal-Achievements: wer es schon hat
 
 
 # (key, title, description, icon, {bucket: ziel_km})
@@ -153,6 +175,10 @@ def warmup_achievements(session: Session = Depends(get_session)):
 def achievements(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ):
+    # „Platz 1 gehalten"/Testphasen-Sieg können ohne eigene Aktivität eintreten —
+    # deshalb wird beim Abruf für die anfragende Person geprüft (Spec §2.2).
+    check_unlocks(session, user.id)
+
     cats = {c.id: c for c in session.exec(select(Category)).all()}
     sums: dict[str, float] = defaultdict(float)
     for act in session.exec(select(Activity).where(Activity.user_id == user.id)).all():
@@ -161,6 +187,23 @@ def achievements(
         bucket = bucket_for_category(cat) if cat else None
         if bucket is not None:
             sums[bucket] += act.distance_km
+
+    own = {
+        u.key: u
+        for u in session.exec(
+            select(AchievementUnlock).where(AchievementUnlock.user_id == user.id)
+        ).all()
+    }
+    einmal_keys = [key for key, *_ in EINMAL_DEFS]
+    inhaber: dict[str, str] = {}
+    rows = session.exec(
+        select(AchievementUnlock, User)
+        .join(User, AchievementUnlock.user_id == User.id)
+        .where(AchievementUnlock.key.in_(einmal_keys))
+        .order_by(AchievementUnlock.unlocked_at)
+    ).all()
+    for ul, u in rows:
+        inhaber.setdefault(ul.key, u.display_name)
 
     _LABELS = {RAD: "Rad", LAUF: "Laufen", SCHWIMM: "Schwimmen", "gesamt": "Gesamt"}
     out = []
@@ -185,4 +228,88 @@ def achievements(
                 parts=parts,
             )
         )
+
+    # Stufen: 9 Einträge, Frontend gruppiert über tier/discipline
+    for bucket in (RAD, LAUF, SCHWIMM):
+        for tier in TIERS:
+            key = stufen_key(bucket, tier)
+            ziel = STUFEN_ZIELE[bucket][tier]
+            ul = own.get(key)
+            out.append(
+                AchievementOut(
+                    key=key,
+                    title=f"{DISZIPLIN_LABEL[bucket]} {tier.capitalize()}",
+                    description=f"{int(ziel)} km {DISZIPLIN_LABEL[bucket]} insgesamt.",
+                    icon=DISZIPLIN_ICON[bucket],
+                    achieved=ul is not None or sums[bucket] >= ziel,
+                    progress=round(min(sums[bucket] / ziel, 1.0), 4),
+                    parts=[Part(
+                        label=DISZIPLIN_LABEL[bucket],
+                        current_km=round(min(sums[bucket], ziel), 2),
+                        target_km=ziel,
+                    )],
+                    tier=tier,
+                    discipline=bucket,
+                    unlocked_at=ul.unlocked_at if ul else None,
+                )
+            )
+
+    # Einmal-Achievements: Erster-Bonus + Testphasen-Sieger
+    for key, title, description, icon in EINMAL_DEFS:
+        ul = own.get(key)
+        out.append(
+            AchievementOut(
+                key=key,
+                title=title,
+                description=description,
+                icon=icon,
+                achieved=ul is not None,
+                progress=1.0 if ul else 0.0,
+                parts=[],
+                unlocked_at=ul.unlocked_at if ul else None,
+                emoji=EMOJIS.get(key),
+                showcased=ul.showcased if ul else None,
+                claimed_by=inhaber.get(key),
+            )
+        )
+
+    # Hidden: maskiert, solange nicht freigeschaltet (Spec §2.4)
+    for key, title, description, icon in HIDDEN_DEFS:
+        ul = own.get(key)
+        if ul is None:
+            out.append(AchievementOut(
+                key=key, title="???", description="", icon="medaille",
+                achieved=False, progress=0.0, parts=[], hidden=True,
+            ))
+        else:
+            out.append(AchievementOut(
+                key=key, title=title, description=description, icon=icon,
+                achieved=True, progress=1.0, parts=[], hidden=True,
+                unlocked_at=ul.unlocked_at, emoji=EMOJIS.get(key),
+                showcased=ul.showcased,
+            ))
     return out
+
+
+class ShowcasePatch(BaseModel):
+    showcased: bool
+
+
+@router.patch("/{key}")
+def patch_showcase(
+    key: str,
+    data: ShowcasePatch,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    ul = session.exec(
+        select(AchievementUnlock).where(
+            AchievementUnlock.user_id == user.id, AchievementUnlock.key == key
+        )
+    ).first()
+    if ul is None:
+        raise HTTPException(status_code=404)
+    ul.showcased = data.showcased
+    session.add(ul)
+    session.commit()
+    return {"key": key, "showcased": ul.showcased}
