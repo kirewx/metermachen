@@ -25,7 +25,7 @@ const data: Comparison = {
   goal_km: 1000,
   milestones: [],
   users: [
-    { user_id: 1, display_name: 'Erik', avatar: 'icon:laufen', rank: 1, total_scaled_km: 300, total_real_km: 75, km_factor: 1, by_category: [], segments: [], cumulative: [] },
+    { user_id: 1, display_name: 'Erik', avatar: 'icon:laufen', rank: 1, total_scaled_km: 300, total_real_km: 75, km_factor: 1, by_category: [], segments: [], cumulative: [], emojis: ['👑', '🎩'] },
   ],
   start_date: null,
   phase: 'challenge',
@@ -65,5 +65,10 @@ describe('RaceBahnen Detailansicht', () => {
     // Exakter String: matcht nur das Balken-Label "+200" — das Banner enthält
     // "+200" ebenfalls, aber als Teil eines längeren Textes (kein exakter Match).
     expect(screen.getByText('+200')).toBeInTheDocument()
+  })
+
+  it('zeigt Special-Emojis neben dem Namen', async () => {
+    renderRace()
+    expect(await screen.findByText('👑 🎩')).toBeInTheDocument()
   })
 })

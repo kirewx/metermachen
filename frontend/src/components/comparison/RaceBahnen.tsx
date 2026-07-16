@@ -96,6 +96,11 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-ink">
                     {u.display_name}
+                    {(u.emojis ?? []).length > 0 && (
+                      <span className="ml-1.5 text-xs" title="Erspielte Auszeichnungen">
+                        {(u.emojis ?? []).join(' ')}
+                      </span>
+                    )}
                     {u.km_factor !== 1 && (
                       <span
                         title="Handicap-Faktor"
