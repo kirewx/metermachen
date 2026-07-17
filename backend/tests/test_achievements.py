@@ -48,6 +48,7 @@ def test_achievements_empty_user_nothing_achieved(client, session):
         "stufe_schwimm_bronze", "stufe_schwimm_silber", "stufe_schwimm_gold",
         "erster_gold_rad", "erster_gold_lauf", "erster_gold_schwimm",
         "testphasen_sieger", "kletterkoenig", "hattrick", "wochenkoenig",
+        "psychopath", "langstreckenguru", "kurzstreckenprofi", "fruehstarter",
     }
     assert all(a["achieved"] is False for a in body)
 
@@ -161,6 +162,43 @@ def test_neue_achievements_in_liste_und_maskierung(client, session):
     assert a["testphasen_sieger"]["achieved"] is False
     # Bestands-Achievements unverändert dabei
     assert "ironman" in a
+
+
+def test_fruehstarter_sichtbar_mit_warmup_fortschritt(client, session):
+    from datetime import timedelta
+
+    from app.models import Season
+
+    user = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=2.0)
+    start = date.today() + timedelta(days=5)  # Warm-up läuft noch
+    session.add(Season(year=start.year, goal_km=1000,
+                       start_date=start, milestones_json="[]"))
+    session.commit()
+    add_activity(session, user, lauf, 25.0, d=date.today() - timedelta(days=1))  # 50 MM
+    login(client)
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    f = a["fruehstarter"]
+    assert f["hidden"] is False
+    assert f["title"] == "Frühstarter"
+    assert f["achieved"] is False
+    assert f["progress"] == 0.5
+    assert f["parts"] == [{"label": "Warm-up", "current_km": 50.0, "target_km": 100.0}]
+    assert f["emoji"] == "🔥"
+    # über die Schwelle: Unlock beim nächsten Abruf
+    add_activity(session, user, lauf, 26.0, d=date.today())  # gesamt 102 MM
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    assert a["fruehstarter"]["achieved"] is True
+    assert a["fruehstarter"]["progress"] == 1.0
+    assert a["fruehstarter"]["unlocked_at"] is not None
+
+
+def test_fruehstarter_ohne_season_ohne_fortschritt(client, session):
+    make_user(session)
+    login(client)
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    assert a["fruehstarter"]["achieved"] is False
+    assert a["fruehstarter"]["progress"] == 0.0
 
 
 def test_hidden_wird_nach_unlock_aufgedeckt(client, session):

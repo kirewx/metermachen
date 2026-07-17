@@ -320,7 +320,20 @@ function EinmalKarte({ a, onToggle }: { a: Achievement; onToggle: (a: Achievemen
         </span>
       </div>
       <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
-      {!a.achieved && (
+      {!a.achieved && a.parts.length > 0 && (
+        <>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line/40">
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${Math.round(a.progress * 100)}%` }}
+            />
+          </div>
+          <p className="mt-1 font-mono text-[10px] tabular-nums text-ink-mute">
+            {Math.round(a.parts[0].current_km)}/{Math.round(a.parts[0].target_km)} MM
+          </p>
+        </>
+      )}
+      {!a.achieved && a.parts.length === 0 && (
         <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-mute">
           {a.claimed_by ? `vergeben an ${a.claimed_by}` : 'bekommt nur die erste Person'}
         </p>
