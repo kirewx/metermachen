@@ -8,6 +8,7 @@ Einmal freigeschaltet bleibt freigeschaltet.
 import json
 from collections import defaultdict
 from datetime import date as date_type
+from datetime import time as time_type
 from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
@@ -68,6 +69,14 @@ HIDDEN_DEFS: list[tuple[str, str, str, str]] = [
     ("hattrick", "Hattrick", "Drei Aktivitäten an einem Tag.", "blitz"),
     ("wochenkoenig", "Wochenkönig",
      "Sieben Tage am Stück alleiniger Platz 1 der Challenge.", "pokal"),
+    ("psychopath", "Psychopath",
+     "Mehr als drei Aktivitäten zwischen 0 und 3 Uhr nachts gestartet.", "blitz"),
+    ("langstreckenguru", "Langstreckenguru",
+     "Über 200 MM in einer einzigen Aktivität.", "berg"),
+    ("kurzstreckenprofi", "Kurzstreckenprofi",
+     "Mehr als fünf Aktivitäten mit jeweils weniger als 5 MM.", "fahne"),
+    ("fruehstarter", "Frühstarter",
+     "Über 100 MM in der Warm-up-Phase getrackt.", "medaille"),
 ]
 
 # (key, titel, beschreibung, icon) — bekommt genau eine Person (bzw. bei
@@ -92,7 +101,21 @@ EMOJIS: dict[str, str] = {
     "kletterkoenig": "🏔️",
     "hattrick": "🎩",
     "wochenkoenig": "👑",
+    "psychopath": "🔪",
+    "langstreckenguru": "🛣️",
+    "kurzstreckenprofi": "🐇",
+    "fruehstarter": "🔥",
 }
+
+# Nachtfenster für "Psychopath": Start zwischen 00:00 (inkl.) und 03:00 (exkl.)
+_NACHT_ENDE = time_type(3, 0)
+
+
+def _gewertete_km(act: Activity, cats: dict[int, Category]) -> float:
+    """MM einer einzelnen Aktivität: Kategorie-Faktor, ohne Admin-Handicap —
+    gleiche Rechnung wie Testphasen-Sieger/Warm-up-Vergleich."""
+    cat = cats.get(act.category_id)
+    return act.distance_km * cat.factor if cat else 0.0
 
 
 def _existing_keys(session: Session, user_id: int) -> set[str]:
@@ -167,10 +190,53 @@ def check_unlocks(session: Session, user_id: int) -> None:
         ):
             have.add("hattrick")
 
+    if "psychopath" not in have:
+        nachts = [
+            act for act in acts
+            if act.start_time is not None and act.start_time < _NACHT_ENDE
+        ]
+        if len(nachts) > 3 and _unlock(
+            session, user_id, "psychopath", {"anzahl": len(nachts)}
+        ):
+            have.add("psychopath")
+
+    if "langstreckenguru" not in have:
+        treffer = next(
+            (act for act in sorted(acts, key=lambda a: a.date)
+             if _gewertete_km(act, cats) > 200.0),
+            None,
+        )
+        if treffer is not None and _unlock(
+            session, user_id, "langstreckenguru",
+            {"datum": treffer.date.isoformat(),
+             "mm": round(_gewertete_km(treffer, cats), 2)},
+        ):
+            have.add("langstreckenguru")
+
+    if "kurzstreckenprofi" not in have:
+        kurze = [act for act in acts if _gewertete_km(act, cats) < 5.0]
+        if len(kurze) > 5 and _unlock(
+            session, user_id, "kurzstreckenprofi", {"anzahl": len(kurze)}
+        ):
+            have.add("kurzstreckenprofi")
+
     # Saison-abhängige Achievements — brauchen Challenge-Start
     today = date_type.today()
     season = current_season(session)
     start = season.start_date if season else None
+
+    # Frühstarter zählt Warm-up-MM und darf schon WÄHREND der Warm-up-Phase
+    # freischalten — deshalb vor dem today<start-Guard.
+    if "fruehstarter" not in have and start is not None:
+        warmup_mm = sum(
+            _gewertete_km(act, cats) for act in acts
+            if act.date < start and act.date.year == start.year
+        )
+        if warmup_mm > 100.0 and _unlock(
+            session, user_id, "fruehstarter", {"mm": round(warmup_mm, 2)}
+        ):
+            have.add("fruehstarter")
+
     if start is None or today < start:
         return
 

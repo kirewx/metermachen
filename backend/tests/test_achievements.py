@@ -48,6 +48,7 @@ def test_achievements_empty_user_nothing_achieved(client, session):
         "stufe_schwimm_bronze", "stufe_schwimm_silber", "stufe_schwimm_gold",
         "erster_gold_rad", "erster_gold_lauf", "erster_gold_schwimm",
         "testphasen_sieger", "kletterkoenig", "hattrick", "wochenkoenig",
+        "psychopath", "langstreckenguru", "kurzstreckenprofi", "fruehstarter",
     }
     assert all(a["achieved"] is False for a in body)
 
