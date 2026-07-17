@@ -46,11 +46,11 @@ DISZIPLIN_LABEL = {RAD: "Rad", LAUF: "Laufen", SCHWIMM: "Schwimmen"}
 DISZIPLIN_ICON = {RAD: "rad", LAUF: "laufen", SCHWIMM: "schwimmen"}
 TIERS = ("bronze", "silber", "gold")
 
-# Stufen-Ziele in rohen km. Gesenkt 07/2026: Gold = alte Bronze, denn mehr
-# als 100 km zu schwimmen ist unrealistisch; Bronze/Silber = 25 %/50 % davon.
+# Stufen-Ziele in rohen km. Gesenkt 07/2026 — mehr als 100 km zu schwimmen
+# ist unrealistisch, die anderen Disziplinen ziehen mit.
 STUFEN_ZIELE: dict[str, dict[str, float]] = {
-    RAD: {"bronze": 250.0, "silber": 500.0, "gold": 1000.0},
-    LAUF: {"bronze": 60.0, "silber": 125.0, "gold": 250.0},
+    RAD: {"bronze": 500.0, "silber": 1000.0, "gold": 2000.0},
+    LAUF: {"bronze": 100.0, "silber": 200.0, "gold": 400.0},
     SCHWIMM: {"bronze": 25.0, "silber": 50.0, "gold": 100.0},
 }
 

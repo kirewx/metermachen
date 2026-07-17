@@ -29,13 +29,13 @@ def test_stufen_grenzen(session):
     # factor=0.5: hält die gewerteten MM unter 200, damit hier nur die
     # Stufen (rohe km) feuern und nicht der Langstreckenguru
     lauf = make_category(session, name="Laufen", icon="laufen", factor=0.5)
-    add_act(session, user, lauf, 59.9)
+    add_act(session, user, lauf, 99.9)
     check_unlocks(session, user.id)
     assert keys_of(session, user) == set()
-    add_act(session, user, lauf, 0.1)  # exakt 60 → Bronze
+    add_act(session, user, lauf, 0.1)  # exakt 100 → Bronze
     check_unlocks(session, user.id)
     assert keys_of(session, user) == {"stufe_lauf_bronze"}
-    add_act(session, user, lauf, 190.0)  # 250 → Silber UND Gold in einem Lauf
+    add_act(session, user, lauf, 300.0)  # 400 → Silber UND Gold in einem Lauf
     check_unlocks(session, user.id)
     assert {"stufe_lauf_silber", "stufe_lauf_gold"} <= keys_of(session, user)
 
@@ -43,7 +43,7 @@ def test_stufen_grenzen(session):
 def test_check_unlocks_ist_idempotent(session):
     user = make_user(session)
     lauf = make_category(session, name="Laufen", icon="laufen", factor=0.5)
-    add_act(session, user, lauf, 100.0)  # nur Bronze (60 ≤ 100 < 125)
+    add_act(session, user, lauf, 100.0)  # nur Bronze (100 ≤ 100 < 200)
     check_unlocks(session, user.id)
     check_unlocks(session, user.id)
     unlocks = session.exec(
@@ -193,11 +193,10 @@ def test_activity_create_loest_unlock_aus(client, session):
     })
     assert r.status_code == 201
     unlocks = session.exec(select(AchievementUnlock)).all()
-    # 250 km = Gold-Ziel → alle drei Stufen + Erster-Bonus; ×Faktor 4.0
-    # sind es 1000 MM in einer Aktivität → auch Langstreckenguru
+    # 250 km → Bronze + Silber (Gold erst bei 400); ×Faktor 4.0 sind es
+    # 1000 MM in einer Aktivität → auch Langstreckenguru
     assert {u.key for u in unlocks} == {
-        "stufe_lauf_bronze", "stufe_lauf_silber", "stufe_lauf_gold",
-        "erster_gold_lauf", "langstreckenguru",
+        "stufe_lauf_bronze", "stufe_lauf_silber", "langstreckenguru",
     }
 
 
@@ -321,10 +320,10 @@ def test_backfill_erster_gold_nach_aktivitaetsdatum(session):
     erik = make_user(session)
     lisa = make_user(session, username="lisa")
     lauf = make_category(session, name="Laufen", icon="laufen", factor=0.5)
-    # Lisa überschreitet die Gold-Schwelle (250 km) chronologisch zuerst,
+    # Lisa überschreitet die Gold-Schwelle (400 km) chronologisch zuerst,
     # obwohl Eriks Aktivitäten später eingetragen wurden
-    add_act(session, erik, lauf, 200.0, d=date(2026, 3, 1))
-    add_act(session, lisa, lauf, 250.0, d=date(2026, 2, 1))
+    add_act(session, erik, lauf, 350.0, d=date(2026, 3, 1))
+    add_act(session, lisa, lauf, 400.0, d=date(2026, 2, 1))
     add_act(session, erik, lauf, 100.0, d=date(2026, 4, 1))
     backfill_erster_gold(session)
     assert "erster_gold_lauf" in keys_of(session, lisa)
@@ -341,9 +340,9 @@ def test_backfill_respektiert_bereits_vergebenen_bonus(session):
     erik = make_user(session)
     lisa = make_user(session, username="lisa")
     lauf = make_category(session, name="Laufen", icon="laufen", factor=0.5)
-    add_act(session, erik, lauf, 300.0, d=date(2026, 5, 1))
+    add_act(session, erik, lauf, 450.0, d=date(2026, 5, 1))
     check_unlocks(session, erik.id)  # Erik holt den Bonus regulär
-    add_act(session, lisa, lauf, 300.0, d=date(2026, 1, 1))  # älter, aber zu spät
+    add_act(session, lisa, lauf, 450.0, d=date(2026, 1, 1))  # älter, aber zu spät
     backfill_erster_gold(session)
     assert "erster_gold_lauf" in keys_of(session, erik)
     assert "erster_gold_lauf" not in keys_of(session, lisa)
