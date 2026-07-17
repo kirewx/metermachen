@@ -114,6 +114,53 @@ def migrate(target=engine) -> None:
                 ))
 
 
+def backfill_erster_gold(session) -> None:
+    """Fairer Backfill nach dem Absenken der Gold-Ziele (07/2026): Den
+    Erster-Bonus bekommt, wer die NEUE Gold-Schwelle chronologisch zuerst
+    überschritten hat — nicht, wer nach dem Deploy zufällig zuerst die Seite
+    lädt. Idempotent: läuft nur, solange der jeweilige Bonus unvergeben ist."""
+    from sqlmodel import select
+
+    from .models import AchievementUnlock, Activity, Category, User
+    from .services.achievements import (
+        STUFEN_ZIELE,
+        bucket_for_category,
+        erster_key,
+    )
+
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    aktive = {u.id for u in session.exec(select(User).where(User.is_active)).all()}
+    acts = session.exec(
+        select(Activity).order_by(Activity.date, Activity.id)
+    ).all()
+    for bucket, ziele in STUFEN_ZIELE.items():
+        key = erster_key(bucket)
+        schon_vergeben = session.exec(
+            select(AchievementUnlock).where(AchievementUnlock.key == key)
+        ).first()
+        if schon_vergeben is not None:
+            continue
+        kum: dict[int, float] = {}
+        sieger: int | None = None
+        for act in acts:  # chronologisch — die erste Person über der Schwelle
+            if act.user_id not in aktive:
+                continue
+            cat = cats.get(act.category_id)
+            if cat is None or bucket_for_category(cat) != bucket:
+                continue
+            kum[act.user_id] = kum.get(act.user_id, 0.0) + act.distance_km
+            if kum[act.user_id] >= ziele["gold"]:
+                sieger = act.user_id
+                break
+        if sieger is not None:
+            session.add(AchievementUnlock(user_id=sieger, key=key))
+    session.commit()
+
+
 def init_db() -> None:
+    from sqlmodel import Session
+
     SQLModel.metadata.create_all(engine)
     migrate(engine)
+    with Session(engine) as session:
+        backfill_erster_gold(session)
