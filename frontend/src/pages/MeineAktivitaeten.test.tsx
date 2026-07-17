@@ -42,6 +42,9 @@ vi.mock('../api/client', () => ({
       { key: 'erster_gold_rad', title: 'Erster: Rad Gold', description: 'Bekommt nur, wer die Gold-Stufe Rad als erste Person knackt.', icon: 'rad',
         achieved: false, progress: 0, parts: [], hidden: false, tier: null, discipline: null,
         unlocked_at: null, emoji: '🚴', showcased: null, claimed_by: 'Lisa' },
+      { key: 'fruehstarter', title: 'Frühstarter', description: 'Über 100 MM in der Warm-up-Phase getrackt.', icon: 'medaille',
+        achieved: false, progress: 0.5, parts: [{ label: 'Warm-up', current_km: 50, target_km: 100 }],
+        hidden: false, tier: null, discipline: null, unlocked_at: null, emoji: '🔥', showcased: null, claimed_by: null },
       { key: 'kletterkoenig', title: '???', description: '', icon: 'medaille',
         achieved: false, progress: 0, parts: [], hidden: true, tier: null, discipline: null,
         unlocked_at: null, emoji: null, showcased: null, claimed_by: null },
@@ -108,6 +111,14 @@ describe('Achievements', () => {
   it('zeigt vergebene Einmal-Achievements mit Namen', async () => {
     renderPage()
     expect(await screen.findByText(/vergeben an Lisa/)).toBeInTheDocument()
+  })
+
+  it('zeigt Frühstarter mit Warm-up-Fortschritt statt Einmal-Hinweis', async () => {
+    renderPage()
+    expect(await screen.findByText('Frühstarter')).toBeInTheDocument()
+    expect(screen.getByText(/50\/100 MM/)).toBeInTheDocument()
+    // der Einmal-Hinweis gehört nur zu Achievements ohne Fortschritt
+    expect(screen.queryByText(/bekommt nur die erste Person/)).not.toBeInTheDocument()
   })
 
   it('zeigt nicht freigeschaltete Hidden als ???-Karte und freigeschaltete voll', async () => {

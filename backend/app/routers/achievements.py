@@ -21,6 +21,8 @@ from ..services.achievements import (
     DISZIPLIN_LABEL,
     EINMAL_DEFS,
     EMOJIS,
+    FRUEHSTARTER_DEF,
+    FRUEHSTARTER_ZIEL_MM,
     HIDDEN_DEFS,
     LAUF,
     RAD,
@@ -30,6 +32,7 @@ from ..services.achievements import (
     bucket_for_category,
     check_unlocks,
     stufen_key,
+    warmup_mm,
 )
 from ..services.season_window import current_season
 
@@ -181,8 +184,11 @@ def achievements(
     check_unlocks(session, user.id)
 
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    user_acts = session.exec(
+        select(Activity).where(Activity.user_id == user.id)
+    ).all()
     sums: dict[str, float] = defaultdict(float)
-    for act in session.exec(select(Activity).where(Activity.user_id == user.id)).all():
+    for act in user_acts:
         sums["gesamt"] += act.distance_km
         cat = cats.get(act.category_id)
         bucket = bucket_for_category(cat) if cat else None
@@ -273,6 +279,32 @@ def achievements(
                 claimed_by=inhaber.get(key),
             )
         )
+
+    # Frühstarter: sichtbar, kann jede Person bekommen — Fortschritt sind die
+    # gewerteten Warm-up-MM (Kategorie-Faktor, ohne Handicap)
+    season = current_season(session)
+    start = season.start_date if season else None
+    mm = warmup_mm(user_acts, cats, start) if start is not None else 0.0
+    key, title, description, icon = FRUEHSTARTER_DEF
+    ul = own.get(key)
+    out.append(
+        AchievementOut(
+            key=key,
+            title=title,
+            description=description,
+            icon=icon,
+            achieved=ul is not None,
+            progress=1.0 if ul else round(min(mm / FRUEHSTARTER_ZIEL_MM, 1.0), 4),
+            parts=[Part(
+                label="Warm-up",
+                current_km=round(min(mm, FRUEHSTARTER_ZIEL_MM), 2),
+                target_km=FRUEHSTARTER_ZIEL_MM,
+            )],
+            unlocked_at=ul.unlocked_at if ul else None,
+            emoji=EMOJIS.get(key),
+            showcased=ul.showcased if ul else None,
+        )
+    )
 
     # Hidden: maskiert, solange nicht freigeschaltet (Spec §2.4)
     for key, title, description, icon in HIDDEN_DEFS:

@@ -75,9 +75,13 @@ HIDDEN_DEFS: list[tuple[str, str, str, str]] = [
      "Über 200 MM in einer einzigen Aktivität.", "berg"),
     ("kurzstreckenprofi", "Kurzstreckenprofi",
      "Mehr als fünf Aktivitäten mit jeweils weniger als 5 MM.", "fahne"),
-    ("fruehstarter", "Frühstarter",
-     "Über 100 MM in der Warm-up-Phase getrackt.", "medaille"),
 ]
+
+# Sichtbares Achievement, das jede Person bekommen kann (im Gegensatz zu
+# EINMAL_DEFS gibt es kein Wettrennen) — Fortschritt: MM in der Warm-up-Phase.
+FRUEHSTARTER_DEF = ("fruehstarter", "Frühstarter",
+                    "Über 100 MM in der Warm-up-Phase getrackt.", "medaille")
+FRUEHSTARTER_ZIEL_MM = 100.0
 
 # (key, titel, beschreibung, icon) — bekommt genau eine Person (bzw. bei
 # Gleichstand im Testphasen-Sieg alle Erstplatzierten)
@@ -116,6 +120,16 @@ def _gewertete_km(act: Activity, cats: dict[int, Category]) -> float:
     gleiche Rechnung wie Testphasen-Sieger/Warm-up-Vergleich."""
     cat = cats.get(act.category_id)
     return act.distance_km * cat.factor if cat else 0.0
+
+
+def warmup_mm(
+    acts: list[Activity], cats: dict[int, Category], start: date_type
+) -> float:
+    """Gewertete km der Warm-up-Phase (vor Challenge-Start, im Season-Jahr)."""
+    return sum(
+        _gewertete_km(act, cats) for act in acts
+        if act.date < start and act.date.year == start.year
+    )
 
 
 def _existing_keys(session: Session, user_id: int) -> set[str]:
@@ -228,12 +242,9 @@ def check_unlocks(session: Session, user_id: int) -> None:
     # Frühstarter zählt Warm-up-MM und darf schon WÄHREND der Warm-up-Phase
     # freischalten — deshalb vor dem today<start-Guard.
     if "fruehstarter" not in have and start is not None:
-        warmup_mm = sum(
-            _gewertete_km(act, cats) for act in acts
-            if act.date < start and act.date.year == start.year
-        )
-        if warmup_mm > 100.0 and _unlock(
-            session, user_id, "fruehstarter", {"mm": round(warmup_mm, 2)}
+        mm = warmup_mm(acts, cats, start)
+        if mm > FRUEHSTARTER_ZIEL_MM and _unlock(
+            session, user_id, "fruehstarter", {"mm": round(mm, 2)}
         ):
             have.add("fruehstarter")
 
