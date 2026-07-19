@@ -143,6 +143,8 @@ export type Achievement = {
   emoji: string | null
   showcased: boolean | null
   claimed_by: string | null
+  timer_hours?: number | null
+  timer_running?: boolean | null
 }
 export type Invite = {
   id: number

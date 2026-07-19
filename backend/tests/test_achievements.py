@@ -49,6 +49,8 @@ def test_achievements_empty_user_nothing_achieved(client, session):
         "erster_gold_rad", "erster_gold_lauf", "erster_gold_schwimm",
         "testphasen_sieger", "kletterkoenig", "hattrick", "wochenkoenig",
         "psychopath", "langstreckenguru", "kurzstreckenprofi", "fruehstarter",
+        "early_bird", "zeit_an_der_spitze",
+        "dauerbrenner_bronze", "dauerbrenner_silber", "dauerbrenner_gold",
     }
     assert all(a["achieved"] is False for a in body)
 
@@ -199,6 +201,35 @@ def test_fruehstarter_ohne_season_ohne_fortschritt(client, session):
     a = {x["key"]: x for x in client.get("/api/achievements").json()}
     assert a["fruehstarter"]["achieved"] is False
     assert a["fruehstarter"]["progress"] == 0.0
+
+
+def test_zeit_an_der_spitze_und_early_bird_im_endpoint(client, session):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import Season
+
+    user = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    start = date.today() - timedelta(days=1)
+    session.add(Season(year=start.year, goal_km=1000,
+                       start_date=start, milestones_json="[]"))
+    # Eintrag am ersten Challenge-Tag, vor 2 Stunden erfasst → seitdem Platz 1
+    session.add(Activity(
+        user_id=user.id, category_id=lauf.id, date=start, distance_km=10.0,
+        created_at=datetime.now(timezone.utc) - timedelta(hours=2),
+    ))
+    session.commit()
+    login(client)
+    a = {x["key"]: x for x in client.get("/api/achievements").json()}
+    z = a["zeit_an_der_spitze"]
+    assert z["hidden"] is False
+    assert 1.9 < z["timer_hours"] < 2.1
+    assert z["timer_running"] is True
+    assert z["achieved"] is True
+    eb = a["early_bird"]
+    assert eb["achieved"] is True
+    assert eb["emoji"] == "🐦"
+    assert eb["hidden"] is False
 
 
 def test_hidden_wird_nach_unlock_aufgedeckt(client, session):

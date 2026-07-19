@@ -45,6 +45,13 @@ vi.mock('../api/client', () => ({
       { key: 'fruehstarter', title: 'Frühstarter', description: 'Über 100 MM in der Warm-up-Phase getrackt.', icon: 'medaille',
         achieved: false, progress: 0.5, parts: [{ label: 'Warm-up', current_km: 50, target_km: 100 }],
         hidden: false, tier: null, discipline: null, unlocked_at: null, emoji: '🔥', showcased: null, claimed_by: null },
+      { key: 'early_bird', title: 'Early Bird', description: 'Schon am ersten Tag der Challenge eine Aktivität eingetragen.', icon: 'fahne',
+        achieved: false, progress: 0, parts: [], hidden: false, tier: null, discipline: null,
+        unlocked_at: null, emoji: '🐦', showcased: null, claimed_by: null },
+      { key: 'zeit_an_der_spitze', title: 'Zeit an der Spitze', description: 'Deine Gesamtzeit als alleiniger Platz 1 der Challenge.', icon: 'pokal',
+        achieved: true, progress: 1, parts: [], hidden: false, tier: null, discipline: null,
+        unlocked_at: null, emoji: null, showcased: null, claimed_by: null,
+        timer_hours: 60, timer_running: true },
       { key: 'kletterkoenig', title: '???', description: '', icon: 'medaille',
         achieved: false, progress: 0, parts: [], hidden: true, tier: null, discipline: null,
         unlocked_at: null, emoji: null, showcased: null, claimed_by: null },
@@ -118,6 +125,20 @@ describe('Achievements', () => {
     expect(await screen.findByText('Frühstarter')).toBeInTheDocument()
     expect(screen.getByText(/50\/100 MM/)).toBeInTheDocument()
     // der Einmal-Hinweis gehört nur zu Achievements ohne Fortschritt
+    expect(screen.queryByText(/bekommt nur die erste Person/)).not.toBeInTheDocument()
+  })
+
+  it('zeigt Zeit an der Spitze als Timer, ab 24 h in Tagen', async () => {
+    renderPage()
+    expect(await screen.findByText('Zeit an der Spitze')).toBeInTheDocument()
+    // 60 h → 2,5 Tage
+    expect(screen.getByText(/2,5 Tage/)).toBeInTheDocument()
+  })
+
+  it('zeigt Early Bird ohne den Einmal-Hinweis', async () => {
+    renderPage()
+    expect(await screen.findByText('Early Bird')).toBeInTheDocument()
+    // kein Wettrennen: der Hinweis erscheint hier nicht (siehe Test oben)
     expect(screen.queryByText(/bekommt nur die erste Person/)).not.toBeInTheDocument()
   })
 

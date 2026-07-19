@@ -8,13 +8,14 @@ Einmal freigeschaltet bleibt freigeschaltet.
 import json
 from collections import defaultdict
 from datetime import date as date_type
+from datetime import datetime, timezone
 from datetime import time as time_type
 from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ..models import AchievementUnlock, Activity, Category, User
+from ..models import AchievementUnlock, Activity, Category, User, utcnow
 from .season_window import current_season, season_window
 
 RAD, LAUF, SCHWIMM = "rad", "lauf", "schwimm"
@@ -76,13 +77,31 @@ HIDDEN_DEFS: list[tuple[str, str, str, str]] = [
      "Über 200 MM in einer einzigen Aktivität.", "berg"),
     ("kurzstreckenprofi", "Kurzstreckenprofi",
      "Mehr als fünf Aktivitäten mit jeweils weniger als 5 MM.", "fahne"),
+    ("dauerbrenner_bronze", "Dauerbrenner Bronze",
+     "Drei Tage in Folge eine Aktivität eingetragen.", "blitz"),
+    ("dauerbrenner_silber", "Dauerbrenner Silber",
+     "Zwei Wochen lang jeden Tag eine Aktivität eingetragen.", "blitz"),
+    ("dauerbrenner_gold", "Dauerbrenner Gold",
+     "Einen Monat lang jeden Tag eine Aktivität eingetragen.", "blitz"),
 ]
+
+# Tage in Folge mit mindestens einem Eintrag, je Stufe ein eigener Unlock
+STREAK_ZIELE: dict[str, int] = {
+    "dauerbrenner_bronze": 3,
+    "dauerbrenner_silber": 14,
+    "dauerbrenner_gold": 30,
+}
 
 # Sichtbares Achievement, das jede Person bekommen kann (im Gegensatz zu
 # EINMAL_DEFS gibt es kein Wettrennen) — Fortschritt: MM in der Warm-up-Phase.
 FRUEHSTARTER_DEF = ("fruehstarter", "Frühstarter",
                     "Über 100 MM in der Warm-up-Phase getrackt.", "medaille")
 FRUEHSTARTER_ZIEL_MM = 100.0
+
+# Sichtbar, jede Person kann es bekommen: Eintrag am ersten Challenge-Tag.
+EARLY_BIRD_DEF = ("early_bird", "Early Bird",
+                  "Schon am ersten Tag der Challenge eine Aktivität eingetragen.",
+                  "fahne")
 
 # (key, titel, beschreibung, icon) — bekommt genau eine Person (bzw. bei
 # Gleichstand im Testphasen-Sieg alle Erstplatzierten)
@@ -110,6 +129,10 @@ EMOJIS: dict[str, str] = {
     "langstreckenguru": "🛣️",
     "kurzstreckenprofi": "🐇",
     "fruehstarter": "🔥",
+    "early_bird": "🐦",
+    "dauerbrenner_bronze": "🌱",
+    "dauerbrenner_silber": "🌿",
+    "dauerbrenner_gold": "🌳",
 }
 
 # Nachtfenster für "Psychopath": Start zwischen 00:00 (inkl.) und 03:00 (exkl.)
@@ -235,6 +258,16 @@ def check_unlocks(session: Session, user_id: int) -> None:
         ):
             have.add("kurzstreckenprofi")
 
+    # Dauerbrenner: längste Kette aufeinanderfolgender Kalendertage mit Eintrag
+    if any(key not in have for key in STREAK_ZIELE):
+        serie, von, bis = _laengste_serie(sorted({act.date for act in acts}))
+        for key, ziel in STREAK_ZIELE.items():
+            if key in have or serie < ziel:
+                continue
+            ctx = {"tage": serie, "von": von.isoformat(), "bis": bis.isoformat()}
+            if _unlock(session, user_id, key, ctx):
+                have.add(key)
+
     # Saison-abhängige Achievements — brauchen Challenge-Start
     today = date_type.today()
     season = current_season(session)
@@ -252,6 +285,10 @@ def check_unlocks(session: Session, user_id: int) -> None:
     if start is None or today < start:
         return
 
+    if "early_bird" not in have and any(act.date == start for act in acts):
+        if _unlock(session, user_id, "early_bird", {"datum": start.isoformat()}):
+            have.add("early_bird")
+
     if "testphasen_sieger" not in have:
         ctx = _testphasen_platz1(session, user_id, start)
         if ctx is not None and _unlock(session, user_id, "testphasen_sieger", ctx):
@@ -263,6 +300,83 @@ def check_unlocks(session: Session, user_id: int) -> None:
         ctx = _wochenkoenig_fenster(session, user_id, start, bis)
         if ctx is not None and _unlock(session, user_id, "wochenkoenig", ctx):
             have.add("wochenkoenig")
+
+
+def _laengste_serie(
+    tage: list[date_type],
+) -> tuple[int, date_type | None, date_type | None]:
+    """Längste Kette aufeinanderfolgender Kalendertage: (länge, von, bis)."""
+    beste, beste_bis = 0, None
+    lauf, prev = 0, None
+    for d in tage:
+        lauf = lauf + 1 if prev is not None and d - prev == timedelta(days=1) else 1
+        prev = d
+        if lauf > beste:
+            beste, beste_bis = lauf, d
+    if beste_bis is None:
+        return 0, None, None
+    return beste, beste_bis - timedelta(days=beste - 1), beste_bis
+
+
+def fuehrungs_zeit(session: Session, user_id: int) -> tuple[float, bool]:
+    """Kumulierte Sekunden als alleiniger Platz 1 der Challenge (gewertete km
+    wie im Rennen-Tab), rekonstruiert über die Eintrags-Zeitpunkte (created_at).
+    Löschen/Editieren verschiebt die Historie rückwirkend — für einen
+    fortlaufenden Timer akzeptabel. Rückgabe: (sekunden, läuft gerade)."""
+    season = current_season(session)
+    start = season.start_date if season else None
+    if start is None:
+        return 0.0, False
+    start_dt = datetime.combine(start, time_type.min, tzinfo=timezone.utc)
+    jetzt = utcnow()
+    _, saison_ende = season_window(season)
+    bis = jetzt
+    if saison_ende is not None:
+        ende_dt = datetime.combine(
+            saison_ende + timedelta(days=1), time_type.min, tzinfo=timezone.utc
+        )
+        bis = min(jetzt, ende_dt)
+    if bis <= start_dt:
+        return 0.0, False
+
+    users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
+    if user_id not in users:
+        return 0.0, False
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    stmt = select(Activity).where(Activity.date >= start)
+    if saison_ende is not None:
+        stmt = stmt.where(Activity.date <= saison_ende)
+    acts = [
+        a for a in session.exec(stmt).all()
+        if a.user_id in users and a.category_id in cats
+    ]
+
+    def eintrag_zeit(a: Activity) -> datetime:
+        t = a.created_at
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return min(max(t, start_dt), bis)
+
+    acts.sort(key=eintrag_zeit)
+    kum: dict[int, float] = defaultdict(float)
+    vorn: int | None = None
+    prev = start_dt
+    sekunden = 0.0
+    for a in acts:
+        t = eintrag_zeit(a)
+        if vorn == user_id:
+            sekunden += (t - prev).total_seconds()
+        prev = t
+        kum[a.user_id] += (
+            a.distance_km * cats[a.category_id].factor * users[a.user_id].km_factor
+        )
+        stand = {uid: round(km, 2) for uid, km in kum.items() if km > 0}
+        best = max(stand.values(), default=0.0)
+        fuehrende = [uid for uid, km in stand.items() if km == best]
+        vorn = fuehrende[0] if len(fuehrende) == 1 else None
+    if vorn == user_id:
+        sekunden += (bis - prev).total_seconds()
+    return sekunden, vorn == user_id and bis == jetzt
 
 
 def _testphasen_platz1(session: Session, user_id: int, start: date_type) -> dict | None:

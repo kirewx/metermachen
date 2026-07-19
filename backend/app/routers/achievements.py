@@ -19,6 +19,7 @@ from ..models import AchievementUnlock, Activity, Category, User
 from ..services.achievements import (
     DISZIPLIN_ICON,
     DISZIPLIN_LABEL,
+    EARLY_BIRD_DEF,
     EINMAL_DEFS,
     EMOJIS,
     FRUEHSTARTER_DEF,
@@ -31,6 +32,7 @@ from ..services.achievements import (
     TIERS,
     bucket_for_category,
     check_unlocks,
+    fuehrungs_zeit,
     stufen_key,
     warmup_mm,
 )
@@ -60,6 +62,8 @@ class AchievementOut(BaseModel):
     emoji: str | None = None
     showcased: bool | None = None  # nur beim eigenen Emoji-Unlock gesetzt
     claimed_by: str | None = None  # Einmal-Achievements: wer es schon hat
+    timer_hours: float | None = None  # fortlaufend (Zeit an der Spitze)
+    timer_running: bool | None = None  # Timer tickt gerade (aktuell Platz 1)
 
 
 # (key, title, description, icon, {bucket: ziel_km})
@@ -303,6 +307,42 @@ def achievements(
             unlocked_at=ul.unlocked_at if ul else None,
             emoji=EMOJIS.get(key),
             showcased=ul.showcased if ul else None,
+        )
+    )
+
+    # Early Bird: sichtbar, jede Person — Eintrag am ersten Challenge-Tag
+    key, title, description, icon = EARLY_BIRD_DEF
+    ul = own.get(key)
+    out.append(
+        AchievementOut(
+            key=key,
+            title=title,
+            description=description,
+            icon=icon,
+            achieved=ul is not None,
+            progress=1.0 if ul else 0.0,
+            parts=[],
+            unlocked_at=ul.unlocked_at if ul else None,
+            emoji=EMOJIS.get(key),
+            showcased=ul.showcased if ul else None,
+        )
+    )
+
+    # Zeit an der Spitze: fortlaufender Timer statt Zielwert — kumulierte Zeit
+    # als alleiniger Platz 1 seit Challenge-Start
+    sekunden, laeuft = fuehrungs_zeit(session, user.id)
+    stunden = sekunden / 3600.0
+    out.append(
+        AchievementOut(
+            key="zeit_an_der_spitze",
+            title="Zeit an der Spitze",
+            description="Deine Gesamtzeit als alleiniger Platz 1 der Challenge.",
+            icon="pokal",
+            achieved=stunden > 0,
+            progress=1.0 if stunden > 0 else 0.0,
+            parts=[],
+            timer_hours=round(stunden, 2),
+            timer_running=laeuft,
         )
     )
 
