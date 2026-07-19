@@ -183,6 +183,10 @@ export default function MeineAktivitaeten() {
 const TIER_REIHE = ['bronze', 'silber', 'gold'] as const
 const TIER_LABEL = { bronze: 'Bronze', silber: 'Silber', gold: 'Gold' } as const
 
+// Persönliche Specials ohne Wettrennen — der Hinweis
+// „bekommt nur die erste Person" passt hier nicht.
+const KEIN_WETTRENNEN = new Set(['fruehstarter', 'early_bird'])
+
 function Achievements() {
   const queryClient = useQueryClient()
   const { data: achievements = [] } = useQuery({
@@ -203,8 +207,9 @@ function Achievements() {
   const disziplinen = [...new Set(stufen.map((a) => a.discipline))] as string[]
   const einmal = achievements.filter((a) => a.emoji !== null && !a.hidden && a.tier === null)
   const hidden = achievements.filter((a) => a.hidden)
+  const zeitSpitze = achievements.find((a) => a.key === 'zeit_an_der_spitze')
   const klassisch = achievements.filter(
-    (a) => a.tier === null && !a.hidden && a.emoji === null,
+    (a) => a.tier === null && !a.hidden && a.emoji === null && a.key !== 'zeit_an_der_spitze',
   )
 
   const onToggle = (a: Achievement) =>
@@ -219,6 +224,7 @@ function Achievements() {
         {klassisch.map((a) => (
           <AchievementBadge key={a.key} a={a} />
         ))}
+        {zeitSpitze && <ZeitSpitzeKarte a={zeitSpitze} />}
         {disziplinen.map((d) => (
           <StufenKarte
             key={d}
@@ -333,12 +339,52 @@ function EinmalKarte({ a, onToggle }: { a: Achievement; onToggle: (a: Achievemen
           </p>
         </>
       )}
-      {!a.achieved && a.parts.length === 0 && (
+      {!a.achieved && a.parts.length === 0 && !KEIN_WETTRENNEN.has(a.key) && (
         <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-mute">
           {a.claimed_by ? `vergeben an ${a.claimed_by}` : 'bekommt nur die erste Person'}
         </p>
       )}
       <EmojiToggle a={a} onToggle={onToggle} />
+    </div>
+  )
+}
+
+// Timer in Stunden, ab 24 h in Tagen — jeweils mit einer Nachkommastelle
+function formatFuehrung(hours: number) {
+  if (hours < 24) {
+    return `${hours.toLocaleString('de-DE', { maximumFractionDigits: 1 })} h`
+  }
+  const tage = hours / 24
+  return `${tage.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Tage`
+}
+
+function ZeitSpitzeKarte({ a }: { a: Achievement }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        a.achieved ? 'border-accent shadow-glow' : 'border-line/40 opacity-60'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon
+          name={a.icon}
+          size={20}
+          className={a.achieved ? 'text-accent' : 'text-ink-mute'}
+        />
+        <span className={`text-sm font-bold ${a.achieved ? 'text-accent' : 'text-ink'}`}>
+          {a.title}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
+      <p className="mt-2 flex items-center gap-2 font-mono text-lg font-bold tabular-nums text-ink">
+        {formatFuehrung(a.timer_hours ?? 0)}
+        {a.timer_running && (
+          <span
+            className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent"
+            title="Timer läuft — aktuell an der Spitze"
+          />
+        )}
+      </p>
     </div>
   )
 }

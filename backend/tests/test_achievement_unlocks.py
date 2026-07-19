@@ -1,9 +1,10 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
+import pytest
 from sqlmodel import select
 
 from app.models import AchievementUnlock, Activity, Season
-from app.services.achievements import check_unlocks
+from app.services.achievements import check_unlocks, fuehrungs_zeit
 from tests.conftest import make_category, make_user
 
 
@@ -312,6 +313,121 @@ def test_fruehstarter_zaehlt_keine_challenge_aktivitaeten(session):
     add_act(session, erik, lauf, 50.0, d=start - timedelta(days=1))  # Warm-up: 50 MM
     check_unlocks(session, erik.id)
     assert "fruehstarter" not in keys_of(session, erik)
+
+
+def test_dauerbrenner_stufen_und_serienabriss(session):
+    user = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    d = date(2026, 8, 1)
+    add_act(session, user, lauf, 5.0, d=d)
+    add_act(session, user, lauf, 5.0, d=d + timedelta(days=1))
+    check_unlocks(session, user.id)
+    assert "dauerbrenner_bronze" not in keys_of(session, user)  # erst 2 Tage
+    add_act(session, user, lauf, 5.0, d=d + timedelta(days=2))
+    check_unlocks(session, user.id)
+    assert "dauerbrenner_bronze" in keys_of(session, user)
+    assert "dauerbrenner_silber" not in keys_of(session, user)
+    # Tag 3 fehlt → Serie reißt ab; danach 13 Tage am Stück (Tag 4–16)
+    for i in range(4, 17):
+        add_act(session, user, lauf, 5.0, d=d + timedelta(days=i))
+    check_unlocks(session, user.id)
+    assert "dauerbrenner_silber" not in keys_of(session, user)
+    add_act(session, user, lauf, 5.0, d=d + timedelta(days=17))  # 14. Tag in Folge
+    check_unlocks(session, user.id)
+    assert "dauerbrenner_silber" in keys_of(session, user)
+    assert "dauerbrenner_gold" not in keys_of(session, user)
+
+
+def test_dauerbrenner_gold_nach_dreissig_tagen(session):
+    user = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    d = date(2026, 8, 1)
+    for i in range(30):
+        add_act(session, user, lauf, 5.0, d=d + timedelta(days=i))
+    check_unlocks(session, user.id)
+    assert {
+        "dauerbrenner_bronze", "dauerbrenner_silber", "dauerbrenner_gold"
+    } <= keys_of(session, user)
+
+
+def test_early_bird_nur_am_ersten_challenge_tag(session):
+    heute = date.today()
+    start = heute - timedelta(days=2)
+    make_season(session, start)
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    add_act(session, erik, lauf, 5.0, d=start)
+    add_act(session, lisa, lauf, 5.0, d=start + timedelta(days=1))
+    check_unlocks(session, erik.id)
+    check_unlocks(session, lisa.id)
+    assert "early_bird" in keys_of(session, erik)
+    assert "early_bird" not in keys_of(session, lisa)
+
+
+def test_early_bird_nicht_in_der_warmup_phase(session):
+    heute = date.today()
+    make_season(session, heute + timedelta(days=5))  # Challenge noch nicht gestartet
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    add_act(session, erik, lauf, 5.0, d=heute)
+    check_unlocks(session, erik.id)
+    assert "early_bird" not in keys_of(session, erik)
+
+
+def add_act_at(session, user, cat, km, d, created_at):
+    session.add(Activity(
+        user_id=user.id, category_id=cat.id, date=d, distance_km=km,
+        created_at=created_at,
+    ))
+    session.commit()
+
+
+def test_fuehrungs_zeit_wechselt_bei_ueberholung(session):
+    heute = date.today()
+    start = heute - timedelta(days=2)
+    make_season(session, start)
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    jetzt = datetime.now(timezone.utc)
+    # Erik führt ab -2 h, Lisa überholt vor 1 h und führt seitdem
+    add_act_at(session, erik, lauf, 10.0, start, jetzt - timedelta(hours=2))
+    add_act_at(session, lisa, lauf, 20.0, start, jetzt - timedelta(hours=1))
+    sek_erik, laeuft_erik = fuehrungs_zeit(session, erik.id)
+    sek_lisa, laeuft_lisa = fuehrungs_zeit(session, lisa.id)
+    assert sek_erik == pytest.approx(3600, abs=10)
+    assert laeuft_erik is False
+    assert sek_lisa == pytest.approx(3600, abs=10)
+    assert laeuft_lisa is True
+
+
+def test_fuehrungs_zeit_gleichstand_fuehrt_nicht(session):
+    heute = date.today()
+    start = heute - timedelta(days=2)
+    make_season(session, start)
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    jetzt = datetime.now(timezone.utc)
+    add_act_at(session, erik, lauf, 10.0, start, jetzt - timedelta(hours=2))
+    add_act_at(session, lisa, lauf, 10.0, start, jetzt - timedelta(hours=1))  # Gleichstand
+    sek_erik, laeuft_erik = fuehrungs_zeit(session, erik.id)
+    sek_lisa, _ = fuehrungs_zeit(session, lisa.id)
+    assert sek_erik == pytest.approx(3600, abs=10)  # nur bis zum Gleichstand
+    assert laeuft_erik is False
+    assert sek_lisa == 0.0
+
+
+def test_fuehrungs_zeit_vor_challenge_start_null(session):
+    heute = date.today()
+    make_season(session, heute + timedelta(days=5))
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    add_act(session, erik, lauf, 50.0, d=heute)  # Warm-up zählt nicht
+    sek, laeuft = fuehrungs_zeit(session, erik.id)
+    assert sek == 0.0
+    assert laeuft is False
 
 
 def test_backfill_erster_gold_nach_aktivitaetsdatum(session):
