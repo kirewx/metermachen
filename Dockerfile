@@ -8,6 +8,12 @@ RUN npm run build
 
 # Stage 2: Backend + statisches Frontend
 FROM python:3.13-slim
+# Deutsche Zeitzone: date.today() steuert Challenge-Start, Datums-Validierung
+# und Wetten-Perioden — die müssen um 00:00 deutscher Zeit umschalten, nicht UTC.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+ENV TZ=Europe/Berlin
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /srv/backend
 COPY backend/pyproject.toml backend/uv.lock* ./
