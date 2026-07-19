@@ -419,6 +419,25 @@ def test_fuehrungs_zeit_gleichstand_fuehrt_nicht(session):
     assert sek_lisa == 0.0
 
 
+def test_fuehrungs_zeit_startet_um_mitternacht_deutscher_zeit(session, monkeypatch):
+    from app.services import achievements as svc
+
+    start = date(2026, 7, 20)
+    make_season(session, start)
+    erik = make_user(session)
+    lauf = make_category(session, name="Laufen", icon="laufen", factor=1.0)
+    # "Jetzt" = 20.07. 01:00 deutscher Zeit (= 19.07. 23:00 UTC); der Eintrag
+    # existierte schon vorher → Erik führt seit Mitternacht deutscher Zeit.
+    monkeypatch.setattr(
+        svc, "utcnow", lambda: datetime(2026, 7, 19, 23, 0, tzinfo=timezone.utc)
+    )
+    add_act_at(session, erik, lauf, 10.0, start,
+               datetime(2026, 7, 19, 21, 0, tzinfo=timezone.utc))
+    sek, laeuft = svc.fuehrungs_zeit(session, erik.id)
+    assert sek == pytest.approx(3600)  # nicht 0 (UTC-Mitternacht wäre erst 02:00)
+    assert laeuft is True
+
+
 def test_fuehrungs_zeit_vor_challenge_start_null(session):
     heute = date.today()
     make_season(session, heute + timedelta(days=5))

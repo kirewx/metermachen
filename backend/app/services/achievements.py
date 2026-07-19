@@ -138,6 +138,11 @@ EMOJIS: dict[str, str] = {
 # Nachtfenster für "Psychopath": Start zwischen 00:00 (inkl.) und 03:00 (exkl.)
 _NACHT_ENDE = time_type(3, 0)
 
+# Challenge-Tage beginnen um Mitternacht deutscher Zeit. Fester Sommerzeit-
+# Offset wie in seed.py und countdown.ts — reicht, solange die Stichtage im
+# Sommer liegen.
+_MESZ = timezone(timedelta(hours=2))
+
 
 def _gewertete_km(act: Activity, cats: dict[int, Category]) -> float:
     """MM einer einzelnen Aktivität: Kategorie-Faktor, ohne Admin-Handicap —
@@ -327,13 +332,13 @@ def fuehrungs_zeit(session: Session, user_id: int) -> tuple[float, bool]:
     start = season.start_date if season else None
     if start is None:
         return 0.0, False
-    start_dt = datetime.combine(start, time_type.min, tzinfo=timezone.utc)
+    start_dt = datetime.combine(start, time_type.min, tzinfo=_MESZ)
     jetzt = utcnow()
     _, saison_ende = season_window(season)
     bis = jetzt
     if saison_ende is not None:
         ende_dt = datetime.combine(
-            saison_ende + timedelta(days=1), time_type.min, tzinfo=timezone.utc
+            saison_ende + timedelta(days=1), time_type.min, tzinfo=_MESZ
         )
         bis = min(jetzt, ende_dt)
     if bis <= start_dt:
