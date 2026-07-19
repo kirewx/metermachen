@@ -7,3 +7,6 @@
 	encode gzip
 	reverse_proxy app:8000
 }
+demo.chaima.jasperz.de {
+	reverse_proxy chaima-uni:8000
+}
