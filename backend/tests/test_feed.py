@@ -5,7 +5,7 @@ from sqlmodel import select
 
 from app.models import Activity, FeedEvent, Season
 from app.services import feed
-from tests.conftest import make_category, make_user
+from tests.conftest import login, make_category, make_user
 
 
 def _setup_saison(session, start=date(2026, 7, 20)):
@@ -105,3 +105,52 @@ def test_unlock_erzeugt_achievement_event(session):
     hat = next(json.loads(e.payload_json) for e in evs
                if json.loads(e.payload_json)["key"] == "hattrick")
     assert hat["title"] == "Hattrick" and hat["emoji"] == "🎩"
+
+
+# Abweichung vom Plan: statt "2026-08-03" wird "2026-07-24" gepostet —
+# ActivityCreate lehnt Zukunftsdaten ab (not_in_future), das Plandatum läge
+# beim Ausführungszeitpunkt in der Zukunft. 24.07. liegt im Season-Fenster.
+def test_create_activity_emittiert_events(client, session):
+    _setup_saison(session)
+    make_user(session)
+    cat = make_category(session, factor=1.0)
+    login(client)
+    r = client.post("/api/activities", json={
+        "category_id": cat.id, "date": "2026-07-24", "distance_km": 60.0,
+    })
+    assert r.status_code == 201
+    typen = {e.type for e in session.exec(select(FeedEvent)).all()}
+    assert "activity" in typen
+    assert "milestone" in typen  # 60 MM > 50-km-Meilenstein
+
+
+def test_delete_activity_entfernt_feed_eintrag(client, session):
+    _setup_saison(session)
+    make_user(session)
+    cat = make_category(session, factor=1.0)
+    login(client)
+    act_id = client.post("/api/activities", json={
+        "category_id": cat.id, "date": "2026-07-24", "distance_km": 10.0,
+    }).json()["id"]
+    client.delete(f"/api/activities/{act_id}")
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.type == "activity")
+    ).all() == []
+
+
+def test_strava_backfill_erzeugt_keine_feed_events(session):
+    _setup_saison(session)
+    user = make_user(session)
+    make_category(session, factor=1.0, strava_sport_types='["Run"]')
+    from app.models import StravaConnection
+    from app.services.strava import import_activity
+    conn = StravaConnection(user_id=user.id, athlete_id=1, access_token="t",
+                            refresh_token="r", expires_at=9999999999)
+    session.add(conn)
+    session.commit()
+    data = {"id": 42, "sport_type": "Run", "distance": 8000,
+            "start_date_local": "2026-08-03T07:00:00Z"}
+    import_activity(session, conn, data, emit_feed=False)
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.type == "activity")
+    ).all() == []

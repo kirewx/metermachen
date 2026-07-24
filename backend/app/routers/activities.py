@@ -5,6 +5,7 @@ from ..deps import get_current_user, get_session
 from ..models import Activity, Category, User
 from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
 from ..models import utcnow
+from ..services import feed
 from ..services.achievements import check_unlocks
 from ..services.season_window import in_window, window_bounds
 
@@ -70,11 +71,16 @@ def create_activity(
     session: Session = Depends(get_session),
 ):
     cat = _validate_category(session, data.category_id)
+    order_before = feed.challenge_order(session)
+    total_before = feed.challenge_total(session, user.id)
     act = Activity(user_id=user.id, **data.model_dump())
     session.add(act)
     session.commit()
     session.refresh(act)
     check_unlocks(session, user.id)
+    feed.activity_event(session, act)
+    feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
+    feed.rank_events(session, order_before, feed.challenge_order(session))
     return _to_out(act, cat.factor)
 
 
@@ -86,6 +92,8 @@ def patch_activity(
     session: Session = Depends(get_session),
 ):
     act = _own_activity(session, user, activity_id)
+    order_before = feed.challenge_order(session)
+    total_before = feed.challenge_total(session, user.id)
     changes = {
         key: value
         for key, value in data.model_dump(exclude_unset=True).items()
@@ -100,6 +108,9 @@ def patch_activity(
     session.commit()
     session.refresh(act)
     check_unlocks(session, user.id)
+    # Kein neues activity-Event beim Bearbeiten — Spec B5.
+    feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
+    feed.rank_events(session, order_before, feed.challenge_order(session))
     cat = session.get(Category, act.category_id)
     return _to_out(act, cat.factor)
 
@@ -111,5 +122,8 @@ def delete_activity(
     session: Session = Depends(get_session),
 ):
     act = _own_activity(session, user, activity_id)
+    order_before = feed.challenge_order(session)
+    feed.remove_activity_events(session, act.id)
     session.delete(act)
     session.commit()
+    feed.rank_events(session, order_before, feed.challenge_order(session))

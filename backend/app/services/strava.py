@@ -105,9 +105,12 @@ def _parse_time(value: str | None) -> time_type | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).time()
 
 
-def import_activity(session: Session, conn: StravaConnection, data: dict) -> bool:
+def import_activity(
+    session: Session, conn: StravaConnection, data: dict, emit_feed: bool = True
+) -> bool:
     """Importiert eine Strava-Aktivität (Summary oder Detail) idempotent.
-    Gibt True zurück, wenn neu angelegt; False bei Skip/Dublette."""
+    Gibt True zurück, wenn neu angelegt; False bei Skip/Dublette.
+    emit_feed=False unterdrückt Feed-Events (Backfill-Schutz)."""
     activity_id = data.get("id")
     if not activity_id:
         return False
@@ -135,6 +138,11 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     if since is not None and act_date < since:
         return False
     duration_min = round((data.get("moving_time") or 0) / 60) or None
+
+    from . import feed
+
+    order_before = feed.challenge_order(session) if emit_feed else []
+    total_before = feed.challenge_total(session, conn.user_id) if emit_feed else 0.0
     act = Activity(
         user_id=conn.user_id,
         category_id=cat.id,
@@ -153,6 +161,13 @@ def import_activity(session: Session, conn: StravaConnection, data: dict) -> boo
     from .achievements import check_unlocks
 
     check_unlocks(session, conn.user_id)
+    if emit_feed:
+        feed.activity_event(session, act)
+        feed.milestone_events(
+            session, conn.user_id, total_before,
+            feed.challenge_total(session, conn.user_id),
+        )
+        feed.rank_events(session, order_before, feed.challenge_order(session))
     return True
 
 
@@ -225,7 +240,7 @@ def backfill_current_year(user_id: int) -> None:
             for data in importable:
                 if session.get(StravaConnection, conn.id) is None:
                     return
-                if import_activity(session, conn, data):
+                if import_activity(session, conn, data, emit_feed=False):
                     conn.backfill_done += 1
                     session.add(conn)
                     session.commit()
