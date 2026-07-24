@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sichtbareTabs, type Tab } from './tabs'
+import { sichtbareTabs, TABS as ECHTE_TABS, type Tab } from './tabs'
 
 const TABS: Tab[] = [
   { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
@@ -41,5 +41,20 @@ describe('sichtbareTabs', () => {
   it('zeigt Add-on-Tab, wenn das Add-on aktiv ist', () => {
     const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set(['sidebets']) })
     expect(l).toContain('Wetten')
+  })
+
+  it('zeigt den Feed-Tab nur ab Challenge-Start', () => {
+    const vorher = sichtbareTabs(ECHTE_TABS, {
+      isAdmin: false,
+      gestartet: false,
+      aktiveAddons: new Set(),
+    }).map((t) => t.to)
+    expect(vorher).not.toContain('/feed')
+    const nachher = sichtbareTabs(ECHTE_TABS, {
+      isAdmin: false,
+      gestartet: true,
+      aktiveAddons: new Set(),
+    }).map((t) => t.to)
+    expect(nachher).toContain('/feed')
   })
 })

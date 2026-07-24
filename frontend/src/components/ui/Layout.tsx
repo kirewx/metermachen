@@ -28,6 +28,12 @@ export default function Layout({ me }: { me: Me }) {
   const gestartet = Boolean(season?.start_date && challengeLaeuft(season?.start_date))
   const aktiveAddons = new Set((addons ?? []).filter((a) => a.active).map((a) => a.key))
   const tabs = sichtbareTabs(TABS, { isAdmin: me.is_admin, gestartet, aktiveAddons })
+  const { data: feedUnseen } = useQuery({
+    queryKey: ['feed-unseen'],
+    queryFn: api.feedUnseen,
+    refetchInterval: 60_000,
+    enabled: gestartet,
+  })
 
   async function logout() {
     await api.logout()
@@ -46,6 +52,9 @@ export default function Layout({ me }: { me: Me }) {
             <NavLink key={t.to} to={t.to} end={t.end} className={pill}>
               <Icon name={t.icon} size={14} />
               {t.label}
+              {t.to === '/feed' && feedUnseen?.has_new && (
+                <span aria-label="Neue Einträge" className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+              )}
             </NavLink>
           ))}
         </div>
@@ -91,7 +100,15 @@ export default function Layout({ me }: { me: Me }) {
               }`
             }
           >
-            <Icon name={t.icon} size={20} />
+            <span className="relative">
+              <Icon name={t.icon} size={20} />
+              {t.to === '/feed' && feedUnseen?.has_new && (
+                <span
+                  aria-label="Neue Einträge"
+                  className="absolute -right-1.5 top-0 h-1.5 w-1.5 rounded-full bg-accent"
+                />
+              )}
+            </span>
             {t.label}
           </NavLink>
         ))}
