@@ -31,7 +31,7 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
                 className="flex shrink-0 items-center gap-3 rounded-lg text-left transition hover:opacity-80"
               >
                 <span className="w-7 font-mono text-sm font-bold tabular-nums text-ink-tech">
-                  P{u.rank}
+                  {u.rank}
                 </span>
                 <Avatar value={u.avatar} size="sm" />
                 <span className="w-24 truncate text-sm font-bold text-ink">{u.display_name}</span>
