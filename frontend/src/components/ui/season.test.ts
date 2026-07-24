@@ -47,8 +47,8 @@ describe('saisonLabel', () => {
     expect(saisonLabel(s({ end_date: '2026-12-31' }))).toBe('2026')
   })
 
-  it('Saison 2026/27 bei Ende im Folgejahr', () => {
-    expect(saisonLabel(s({ end_date: '2027-05-16' }))).toBe('Saison 2026/27')
+  it('zeigt jahresuebergreifende Saison als 2026/27', () => {
+    expect(saisonLabel(s({ start_date: '2026-07-20', end_date: '2027-05-16' }))).toBe('2026/27')
   })
 
   it('undefined: aktuelles Kalenderjahr', () => {
