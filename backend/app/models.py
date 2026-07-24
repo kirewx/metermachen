@@ -2,7 +2,7 @@ from datetime import date as date_type
 from datetime import datetime, timezone
 from datetime import time as time_type
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Index, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -158,3 +158,41 @@ class AchievementUnlock(SQLModel, table=True):
     unlocked_at: datetime = Field(default_factory=utcnow)
     context_json: str = "{}"  # z. B. {"km": 4003.2} oder {"von": "...", "bis": "..."}
     showcased: bool = True  # Special-Emoji neben dem Namen zeigen (Spec §2.6)
+
+
+class FeedEvent(SQLModel, table=True):
+    """Chronologisches Gruppen-Feed-Event (Spec 2026-07-25 Teil B).
+    type: "activity" | "rank_change" | "achievement" | "milestone"
+        | "recap_week" | "recap_month"."""
+
+    __table_args__ = (
+        Index("ix_feedevent_season_created", "season_year", "created_at"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    season_year: int
+    type: str
+    user_id: int | None = Field(default=None, foreign_key="user.id")
+    activity_id: int | None = Field(default=None, foreign_key="activity.id")
+    payload_json: str = "{}"
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class FeedReaction(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", "emoji", name="uq_reaction"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="feedevent.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    emoji: str
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class FeedSeen(SQLModel, table=True):
+    """Zuletzt gesehener Feed-Stand pro Nutzer (Punkt am Tab)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True)
+    seen_at: datetime = Field(default_factory=utcnow)
