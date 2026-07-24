@@ -89,3 +89,19 @@ def test_remove_activity_events(session):
     feed.activity_event(session, act)
     feed.remove_activity_events(session, act.id)
     assert session.exec(select(FeedEvent)).all() == []
+
+
+def test_unlock_erzeugt_achievement_event(session):
+    _setup_saison(session)
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    for _ in range(3):  # Hattrick: 3 Aktivitäten an einem Tag
+        _act(session, user, cat, 2.0)
+    from app.services.achievements import check_unlocks
+    check_unlocks(session, user.id)
+    evs = session.exec(select(FeedEvent).where(FeedEvent.type == "achievement")).all()
+    keys = [json.loads(e.payload_json)["key"] for e in evs]
+    assert "hattrick" in keys
+    hat = next(json.loads(e.payload_json) for e in evs
+               if json.loads(e.payload_json)["key"] == "hattrick")
+    assert hat["title"] == "Hattrick" and hat["emoji"] == "🎩"
