@@ -243,3 +243,30 @@ class LastSeenEntry(BaseModel):
 class LastSeenOut(BaseModel):
     seen_at: datetime
     entries: list[LastSeenEntry]
+
+
+class FeedReactionOut(BaseModel):
+    emoji: str
+    count: int
+    mine: bool
+    users: list[str]
+
+
+class FeedEventOut(BaseModel):
+    id: int
+    type: str
+    user_id: int | None
+    display_name: str | None
+    avatar: str | None
+    created_at: datetime
+    payload: dict
+    reactions: list[FeedReactionOut]
+
+
+class FeedPage(BaseModel):
+    events: list[FeedEventOut]
+    next_before: int | None
+
+
+class FeedReactionIn(BaseModel):
+    emoji: str

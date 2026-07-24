@@ -207,3 +207,44 @@ def test_monatsrueckblick_am_monatsersten(session):
     ).all()
     assert len(recaps) == 1
     assert json.loads(recaps[0].payload_json)["period"] == "2026-08"
+
+
+# Abweichung vom Plan: Datum "2026-07-24" statt "2026-08-03" — Zukunftsdaten
+# geben 422 (not_in_future), siehe Kommentar bei test_create_activity_emittiert_events.
+def test_feed_api_paginierung_und_reaktionen(client, session):
+    _setup_saison(session)
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    login(client)
+    for _ in range(35):
+        client.post("/api/activities", json={
+            "category_id": cat.id, "date": "2026-07-24", "distance_km": 6.0,
+        })
+    page = client.get("/api/feed?year=2026").json()
+    assert len(page["events"]) == 30
+    assert page["next_before"] is not None
+    page2 = client.get(f"/api/feed?year=2026&before={page['next_before']}").json()
+    assert 0 < len(page2["events"]) <= 30
+
+    ev_id = page["events"][0]["id"]
+    r = client.post(f"/api/feed/{ev_id}/reactions", json={"emoji": "🔥"}).json()
+    fire = next(x for x in r if x["emoji"] == "🔥")
+    assert fire["count"] == 1 and fire["mine"] is True
+    r = client.post(f"/api/feed/{ev_id}/reactions", json={"emoji": "🔥"}).json()
+    assert all(x["emoji"] != "🔥" for x in r)  # Toggle aus
+    assert client.post(
+        f"/api/feed/{ev_id}/reactions", json={"emoji": "🍕"}
+    ).status_code == 422
+
+
+def test_feed_unseen_und_seen(client, session):
+    _setup_saison(session)
+    make_user(session)
+    cat = make_category(session, factor=1.0)
+    login(client)
+    client.post("/api/activities", json={
+        "category_id": cat.id, "date": "2026-07-24", "distance_km": 6.0,
+    })
+    assert client.get("/api/feed/unseen").json() == {"has_new": True}
+    client.post("/api/feed/seen")
+    assert client.get("/api/feed/unseen").json() == {"has_new": False}

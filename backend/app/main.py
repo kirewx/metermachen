@@ -18,6 +18,7 @@ from .routers import (
     bets_router,
     categories,
     comparison,
+    feed,
     invites,
     seasons,
     strava_router,
@@ -49,6 +50,7 @@ app.include_router(bets_router.router)
 app.include_router(bets_router.points_router)
 app.include_router(categories.router)
 app.include_router(comparison.router)
+app.include_router(feed.router)
 app.include_router(invites.router)
 app.include_router(seasons.router)
 app.include_router(strava_router.router)
