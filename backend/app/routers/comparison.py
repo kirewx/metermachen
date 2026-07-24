@@ -16,7 +16,7 @@ from ..models import (
     User,
     utcnow,
 )
-from ..services.achievements import EMOJIS, SHOWCASE_INFO
+from ..services.achievements import SHOWCASE_INFO
 from ..services.season_window import in_window, season_window
 from ..schemas import (
     Auszeichnung,
