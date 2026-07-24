@@ -38,7 +38,7 @@ export default function Layout({ me }: { me: Me }) {
     <div className="min-h-screen pb-20 sm:pb-0">
       <nav className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-card/80 px-4 py-2 backdrop-blur">
         <span className="mr-2 flex items-center gap-1 font-black tracking-wide text-ink">
-          <Icon name="blitz" size={16} className="text-accent" />
+          <Icon name="logo" size={16} className="text-accent" />
           METER<span className="text-accent [text-shadow:var(--t-glow)]">MACHEN</span>
         </span>
         <div className="hidden gap-1 sm:flex">
