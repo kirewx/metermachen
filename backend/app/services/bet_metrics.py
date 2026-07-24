@@ -41,10 +41,15 @@ def group_scaled_km(
     return round(sum(scaled_km(session, uid, start, end) for uid in user_ids), 2)
 
 
+STREAK_MIN_MM = 5.0  # Tages-Minimum in MM (km × Kategorie-Faktor), Spec 2026-07-25 A7
+
+
 def longest_streak(
     session: Session, user_id: int, start: date_type, end: date_type
 ) -> int:
-    """Längste Serie von Tagen mit >= 1 km roh im Zeitraum."""
+    """Längste Serie von Tagen mit >= STREAK_MIN_MM gewerteten km (Kategorie-
+    Faktor, ohne Admin-Handicap — wie alle Wett-Metriken) im Zeitraum."""
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
     per_day: dict[date_type, float] = defaultdict(float)
     for a in session.exec(
         select(Activity).where(
@@ -53,11 +58,13 @@ def longest_streak(
             Activity.date <= end,
         )
     ).all():
-        per_day[a.date] += a.distance_km
+        cat = cats.get(a.category_id)
+        if cat is not None:
+            per_day[a.date] += a.distance_km * cat.factor
     best = run = 0
     day = start
     while day <= end:
-        run = run + 1 if per_day[day] >= 1.0 else 0
+        run = run + 1 if per_day[day] >= STREAK_MIN_MM else 0
         best = max(best, run)
         day += timedelta(days=1)
     return best

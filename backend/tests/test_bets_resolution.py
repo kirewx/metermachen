@@ -188,7 +188,7 @@ def test_ziel_ohne_gegenhalter_abgebrochen(session):
 def test_streak_erreicht(session):
     erik, lisa, cat = _setup(session)
     for i in range(3):
-        _act(session, erik, cat, 2, P_START + timedelta(days=i))
+        _act(session, erik, cat, 5, P_START + timedelta(days=i))  # >= 5 MM pro Tag
     bet = _mk_bet(
         session, erik, "streak", 10,
         {"streak_days": 3},
