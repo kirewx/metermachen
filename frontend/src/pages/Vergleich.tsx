@@ -7,6 +7,7 @@ import JahresVerlauf from '../components/comparison/JahresVerlauf'
 import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
 import { useUnitMode } from '../components/comparison/unit'
+import WarmupArchiv from '../components/comparison/WarmupArchiv'
 import Icon from '../components/ui/Icon'
 import { aktiveSeason, saisonLabel } from '../components/ui/season'
 import Select from '../components/ui/Select'
@@ -49,72 +50,82 @@ export default function Vergleich() {
   const { mode, toggle: toggleUnit } = useUnitMode()
   useStravaRedirectHinweis()
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
-  const [gewaehlt, setGewaehlt] = useState<number | null>(null)
-  const year = gewaehlt ?? aktiveSeason(seasons)?.year ?? new Date().getFullYear()
+  const [gewaehlt, setGewaehlt] = useState<number | 'archiv' | null>(null)
+  const aktive = aktiveSeason(seasons)?.year ?? new Date().getFullYear()
+  const archiv = gewaehlt === 'archiv'
+  const year = archiv || gewaehlt === null ? aktive : gewaehlt
   const { data, error } = useQuery({
     queryKey: ['comparison', year],
     queryFn: () => api.comparison(year),
+    enabled: !archiv,
   })
 
   return (
     <div className="space-y-4">
       <SchnellwahlLeiste />
       <div className="flex flex-wrap items-end gap-2">
-        {ANSICHTEN.map((a) => (
-          <button
-            key={a.key}
-            onClick={() => setAnsicht(a.key)}
-            className={`flex items-center gap-1.5 rounded-full px-4 py-1 text-sm transition ${
-              ansicht === a.key
-                ? 'border border-accent font-bold text-accent shadow-glow'
-                : 'border border-line text-ink-mute hover:text-ink'
-            }`}
-          >
-            <Icon name={a.icon} size={14} />
-            {a.label}
-          </button>
-        ))}
-        <div className="ml-auto flex overflow-hidden rounded-full border border-line text-xs">
-          <button
-            type="button"
-            onClick={() => {
-              if (mode !== 'mm') toggleUnit()
-            }}
-            className={`px-3 py-1 font-bold transition ${
-              mode === 'mm' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
-            }`}
-          >
-            MM
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (mode !== 'km') toggleUnit()
-            }}
-            className={`px-3 py-1 font-bold transition ${
-              mode === 'km' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
-            }`}
-          >
-            km
-          </button>
-        </div>
+        {!archiv &&
+          ANSICHTEN.map((a) => (
+            <button
+              key={a.key}
+              onClick={() => setAnsicht(a.key)}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-1 text-sm transition ${
+                ansicht === a.key
+                  ? 'border border-accent font-bold text-accent shadow-glow'
+                  : 'border border-line text-ink-mute hover:text-ink'
+              }`}
+            >
+              <Icon name={a.icon} size={14} />
+              {a.label}
+            </button>
+          ))}
+        {!archiv && (
+          <div className="ml-auto flex overflow-hidden rounded-full border border-line text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                if (mode !== 'mm') toggleUnit()
+              }}
+              className={`px-3 py-1 font-bold transition ${
+                mode === 'mm' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
+              }`}
+            >
+              MM
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (mode !== 'km') toggleUnit()
+              }}
+              className={`px-3 py-1 font-bold transition ${
+                mode === 'km' ? 'bg-accent text-accent-ink' : 'text-ink-mute hover:text-ink'
+              }`}
+            >
+              km
+            </button>
+          </div>
+        )}
         <Select
           label="Saison"
-          value={year}
-          onChange={(e) => setGewaehlt(Number(e.target.value))}
+          value={archiv ? 'archiv' : year}
+          onChange={(e) =>
+            setGewaehlt(e.target.value === 'archiv' ? 'archiv' : Number(e.target.value))
+          }
           className="w-24"
         >
-          {seasons.map((s) => (
+          {[...seasons].sort((a, b) => b.year - a.year).map((s) => (
             <option key={s.id} value={s.year}>
               {saisonLabel(s)}
             </option>
           ))}
+          <option value="archiv">Archiv (Warm-up)</option>
         </Select>
       </div>
-      {error && <p className="text-sm text-danger">{error.message}</p>}
-      {data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
-      {data && ansicht === 'verlauf' && <JahresVerlauf data={data} mode={mode} />}
-      {data && ansicht === 'sportmix' && <SportMix data={data} mode={mode} />}
+      {archiv && <WarmupArchiv year={aktive} />}
+      {!archiv && error && <p className="text-sm text-danger">{error.message}</p>}
+      {!archiv && data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
+      {!archiv && data && ansicht === 'verlauf' && <JahresVerlauf data={data} mode={mode} />}
+      {!archiv && data && ansicht === 'sportmix' && <SportMix data={data} mode={mode} />}
     </div>
   )
 }

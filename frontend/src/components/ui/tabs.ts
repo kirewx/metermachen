@@ -13,7 +13,6 @@ export const TABS: Tab[] = [
   { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
   { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: false, addon: 'sidebets' },
   { to: '/regeln', label: 'Regeln', icon: 'notiz', end: false, adminOnly: false, abStart: false },
-  { to: '/archiv', label: 'Archiv', icon: 'pokal', end: false, adminOnly: false, abStart: true },
   { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
 ]
 
