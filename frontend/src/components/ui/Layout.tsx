@@ -12,9 +12,9 @@ import { sichtbareTabs, TABS } from './tabs'
 import { useTheme } from './useTheme'
 
 const pill = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-1.5 rounded-full px-3 py-1 text-sm transition ${
+  `flex items-center gap-1.5 px-3 py-1 text-sm transition ${
     isActive
-      ? 'border border-accent font-bold text-accent shadow-glow'
+      ? 'font-bold text-accent [text-shadow:var(--t-glow)]'
       : 'text-ink-mute hover:text-ink'
   }`
 

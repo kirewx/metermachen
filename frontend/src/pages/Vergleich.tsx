@@ -69,10 +69,10 @@ export default function Vergleich() {
             <button
               key={a.key}
               onClick={() => setAnsicht(a.key)}
-              className={`flex items-center gap-1.5 rounded-full px-4 py-1 text-sm transition ${
+              className={`flex items-center gap-1.5 px-4 py-1 text-sm transition ${
                 ansicht === a.key
-                  ? 'border border-accent font-bold text-accent shadow-glow'
-                  : 'border border-line text-ink-mute hover:text-ink'
+                  ? 'font-bold text-accent [text-shadow:var(--t-glow)]'
+                  : 'text-ink-mute hover:text-ink'
               }`}
             >
               <Icon name={a.icon} size={14} />
