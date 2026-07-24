@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime
 
 from sqlmodel import select
 
@@ -154,3 +154,56 @@ def test_strava_backfill_erzeugt_keine_feed_events(session):
     assert session.exec(
         select(FeedEvent).where(FeedEvent.type == "activity")
     ).all() == []
+
+
+def test_wochenrueckblick_wird_einmal_erzeugt(session):
+    _setup_saison(session, start=date(2026, 7, 20))
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    # Aktivität + Event in der Vorwoche (Mo 27.07.–So 02.08.)
+    act = _act(session, user, cat, 12.0, tag=date(2026, 7, 28))
+    feed.activity_event(session, act)
+    ev = session.exec(select(FeedEvent).where(FeedEvent.type == "activity")).one()
+    ev.created_at = datetime(2026, 7, 28, 10, 0)
+    session.add(ev)
+    session.commit()
+
+    heute = date(2026, 8, 3)  # Montag danach
+    feed.ensure_recaps(session, today=heute)
+    feed.ensure_recaps(session, today=heute)  # idempotent
+    recaps = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_week")
+    ).all()
+    assert len(recaps) == 1
+    p = json.loads(recaps[0].payload_json)
+    assert p["period"] == "2026-W31"
+    assert p["total_mm"] == 12.0
+    assert p["per_user"][0]["user_id"] == user.id
+
+
+def test_kein_rueckblick_ohne_events_im_zeitraum(session):
+    _setup_saison(session, start=date(2026, 7, 20))
+    make_user(session)
+    feed.ensure_recaps(session, today=date(2026, 8, 3))
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_week")
+    ).all() == []
+
+
+def test_monatsrueckblick_am_monatsersten(session):
+    _setup_saison(session, start=date(2026, 7, 20))
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    act = _act(session, user, cat, 10.0, tag=date(2026, 8, 15))
+    feed.activity_event(session, act)
+    ev = session.exec(select(FeedEvent).where(FeedEvent.type == "activity")).one()
+    ev.created_at = datetime(2026, 8, 15, 10, 0)
+    session.add(ev)
+    session.commit()
+
+    feed.ensure_recaps(session, today=date(2026, 9, 1))
+    recaps = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_month")
+    ).all()
+    assert len(recaps) == 1
+    assert json.loads(recaps[0].payload_json)["period"] == "2026-08"

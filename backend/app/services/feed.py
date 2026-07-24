@@ -128,3 +128,109 @@ def remove_activity_events(session: Session, activity_id: int) -> None:
             session.delete(r)
         session.delete(ev)
     session.commit()
+
+
+def _german_today() -> date_type:
+    return datetime.now(tz=_MESZ).date()
+
+
+def _events_in_period(session: Session, von: date_type, bis: date_type,
+                      typen: tuple[str, ...]) -> list[FeedEvent]:
+    von_dt = datetime.combine(von, datetime.min.time(), tzinfo=_MESZ)
+    bis_dt = datetime.combine(bis + timedelta(days=1), datetime.min.time(), tzinfo=_MESZ)
+    out = []
+    for ev in session.exec(
+        select(FeedEvent).where(FeedEvent.type.in_(typen))  # type: ignore[attr-defined]
+    ).all():
+        t = ev.created_at
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        if von_dt <= t < bis_dt:
+            out.append(ev)
+    return out
+
+
+def _recap_exists(session: Session, type_: str, period: str) -> bool:
+    like = f'%"period": "{period}"%'
+    return session.exec(
+        select(FeedEvent).where(
+            FeedEvent.type == type_,
+            FeedEvent.payload_json.like(like),  # type: ignore[attr-defined]
+        )
+    ).first() is not None
+
+
+def _emit_recap(session: Session, type_: str, period: str, label: str,
+                von: date_type, bis: date_type) -> None:
+    users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    mm: dict[int, float] = {uid: 0.0 for uid in users}
+    for a in session.exec(
+        select(Activity).where(Activity.date >= von, Activity.date <= bis)
+    ).all():
+        if a.user_id in users and a.category_id in cats:
+            mm[a.user_id] += (
+                a.distance_km * cats[a.category_id].factor * users[a.user_id].km_factor
+            )
+    per_user = sorted(
+        (
+            {"user_id": uid, "name": users[uid].display_name, "mm": round(km, 1)}
+            for uid, km in mm.items()
+        ),
+        key=lambda e: -e["mm"],
+    )
+    ueberholungen = [
+        json.loads(e.payload_json)
+        for e in _events_in_period(session, von, bis, ("rank_change",))
+    ]
+    achievements = [
+        json.loads(e.payload_json) | {"user_id": e.user_id}
+        for e in _events_in_period(session, von, bis, ("achievement", "milestone"))
+    ]
+    _emit(session, type_=type_, payload={
+        "period": period, "label": label,
+        "von": von.isoformat(), "bis": bis.isoformat(),
+        "total_mm": round(sum(mm.values()), 1),
+        "per_user": per_user,
+        "ueberholungen": ueberholungen,
+        "achievements": achievements,
+    })
+
+
+def ensure_recaps(session: Session, today: date_type | None = None) -> None:
+    """Erzeugt fällige Wochen-/Monatsrückblicke (lazy, idempotent).
+    Zeitraum ohne Feed-Events (= vor Feature-Launch oder komplett leer)
+    bekommt keinen Rückblick — Spec B5."""
+    season = current_season(session)
+    if season is None or season.start_date is None:
+        return
+    heute = today or _german_today()
+    if heute < season.start_date:
+        return
+
+    # Woche: Vorwoche Mo–So, sobald der neue Montag erreicht ist
+    montag = heute - timedelta(days=heute.weekday())
+    w_von, w_bis = montag - timedelta(days=7), montag - timedelta(days=1)
+    iso = w_von.isocalendar()
+    w_period = f"{iso.year}-W{iso.week:02d}"
+    if (
+        w_von >= season.start_date
+        and not _recap_exists(session, "recap_week", w_period)
+        and _events_in_period(session, w_von, w_bis,
+                              ("activity", "rank_change", "achievement", "milestone"))
+    ):
+        _emit_recap(session, "recap_week", w_period, f"KW {iso.week}", w_von, w_bis)
+
+    # Monat: Vormonat, sobald der Monatserste erreicht ist
+    erster = heute.replace(day=1)
+    m_bis = erster - timedelta(days=1)
+    m_von = max(m_bis.replace(day=1), season.start_date)
+    m_period = m_bis.strftime("%Y-%m")
+    monat_label = m_bis.strftime("%m/%Y")
+    if (
+        m_bis >= season.start_date
+        and not _recap_exists(session, "recap_month", m_period)
+        and _events_in_period(session, m_von, m_bis,
+                              ("activity", "rank_change", "achievement", "milestone"))
+    ):
+        _emit_recap(session, "recap_month", m_period, monat_label, m_von, m_bis)
