@@ -13,7 +13,7 @@ type Typ = Exclude<Bet['type'], 'monats_tipp'>
 const TYPEN: { key: Typ; label: string; hilfe: string }[] = [
   { key: 'duell', label: 'Duell', hilfe: 'Mehr km als dein Gegner im Zeitraum — optional mit Vorsprung oder Faktor.' },
   { key: 'ziel', label: 'Ziel-Wette', hilfe: 'Du wettest, dass du dein km-Ziel schaffst. Andere können dagegenhalten.' },
-  { key: 'streak', label: 'Streak-Wette', hilfe: 'N Tage in Folge Sport (mind. 1 km pro Tag). Andere halten dagegen.' },
+  { key: 'streak', label: 'Streak-Wette', hilfe: 'N Tage in Folge Sport (mind. 5 MM pro Tag, sonst zählt der Tag nicht). Andere halten dagegen.' },
   { key: 'ueber_unter', label: 'Über/Unter', hilfe: 'Schafft die ganze Gruppe zusammen das km-Ziel? Alle setzen Über oder Unter.' },
 ]
 

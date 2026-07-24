@@ -204,6 +204,12 @@ class CumulativePoint(BaseModel):
     real_km: float = 0.0
 
 
+class Auszeichnung(BaseModel):
+    emoji: str
+    title: str
+    description: str
+
+
 class ComparisonUser(BaseModel):
     user_id: int
     display_name: str
@@ -213,6 +219,7 @@ class ComparisonUser(BaseModel):
     total_real_km: float = 0.0
     km_factor: float = 1.0
     emojis: list[str] = []
+    auszeichnungen: list[Auszeichnung] = []
     by_category: list[CategoryShare]
     segments: list[Segment]
     cumulative: list[CumulativePoint]

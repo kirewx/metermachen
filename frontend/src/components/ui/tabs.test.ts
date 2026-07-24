@@ -3,7 +3,8 @@ import { sichtbareTabs, type Tab } from './tabs'
 
 const TABS: Tab[] = [
   { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
-  { to: '/archiv', label: 'Archiv', icon: 'pokal', end: false, adminOnly: false, abStart: true },
+  // synthetischer abStart-Tab (der echte Archiv-Tab wurde entfernt, Spec 2026-07-25 A1)
+  { to: '/spaeter', label: 'Später', icon: 'pokal', end: false, adminOnly: false, abStart: true },
   { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
   { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: false, addon: 'sidebets' },
 ]
@@ -24,12 +25,12 @@ describe('sichtbareTabs', () => {
 
   it('blendet abStart-Tab vor Challenge-Start aus', () => {
     const l = labels({ isAdmin: false, gestartet: false, aktiveAddons: new Set() })
-    expect(l).not.toContain('Archiv')
+    expect(l).not.toContain('Später')
   })
 
   it('zeigt abStart-Tab ab Challenge-Start', () => {
     const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set() })
-    expect(l).toContain('Archiv')
+    expect(l).toContain('Später')
   })
 
   it('versteckt Add-on-Tab, wenn das Add-on nicht aktiv ist', () => {

@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.models import Activity, Season
+from app.models import AchievementUnlock, Activity, Season
 from tests.conftest import login, make_category, make_user
 
 
@@ -193,6 +193,23 @@ def test_comparison_liefert_showcased_emojis(client, session):
     r = client.get(f"/api/comparison/{date.today().year}")
     me = next(u for u in r.json()["users"] if u["user_id"] == user.id)
     assert me["emojis"] == ["🏔️"]  # nur showcased UND mit Emoji
+
+
+def test_comparison_liefert_auszeichnungen_mit_beschreibung(client, session):
+    user = make_user(session)
+    make_category(session)
+    session.add(Season(year=2026, goal_km=1000.0))
+    session.add(AchievementUnlock(user_id=user.id, key="hattrick"))
+    session.commit()
+    login(client)
+    data = client.get("/api/comparison/2026").json()
+    me = next(u for u in data["users"] if u["user_id"] == user.id)
+    assert me["emojis"] == ["🎩"]
+    assert me["auszeichnungen"] == [{
+        "emoji": "🎩",
+        "title": "Hattrick",
+        "description": "Drei Aktivitäten an einem Tag.",
+    }]
 
 
 def test_comparison_fenster_ueber_jahresgrenze_mit_freeze(client, session):

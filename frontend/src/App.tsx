@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { api, isUnauthorized } from './api/client'
 import Layout from './components/ui/Layout'
 import Admin from './pages/Admin'
-import Archiv from './pages/Archiv'
 import Datenschutz from './pages/Datenschutz'
 import Einladung from './pages/Einladung'
 import Login from './pages/Login'
@@ -60,7 +59,6 @@ export default function App() {
       <Route element={<Layout me={me} />}>
         <Route path="/" element={<Vergleich />} />
         <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
-        <Route path="/archiv" element={<Archiv />} />
         <Route path="/regeln" element={<Regeln />} />
         {sidebetsAktiv && <Route path="/wetten" element={<Wetten />} />}
         <Route path="/admin" element={<Admin />} />

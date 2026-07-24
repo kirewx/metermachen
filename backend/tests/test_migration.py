@@ -1,10 +1,12 @@
 import json
+from datetime import date
 
 from sqlalchemy import text
 from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
+from sqlmodel import create_engine, select
 
 from app.db import migrate
+from app.models import Season
 
 OLD_SCHEMA = """
 CREATE TABLE user (
@@ -216,4 +218,23 @@ def test_migration_adds_season_end_date(tmp_path):
     with engine.begin() as conn:
         cols = [row[1] for row in conn.execute(text('PRAGMA table_info("season")'))]
         assert "end_date" in cols
-        assert conn.execute(text("SELECT end_date FROM season")).scalar() is None
+        # Backfill (Spec 2026-07-25 A2): Season 2026 bekommt das Saisonende
+        assert conn.execute(text("SELECT end_date FROM season")).scalar() == "2027-05-16"
+
+
+def test_backfill_saisonende_2026(session):
+    session.add(Season(year=2026, goal_km=1000.0))
+    session.commit()
+    migrate(session.get_bind())
+    session.expire_all()
+    s = session.exec(select(Season).where(Season.year == 2026)).one()
+    assert s.end_date == date(2027, 5, 16)
+
+
+def test_backfill_saisonende_ueberschreibt_nicht(session):
+    session.add(Season(year=2026, goal_km=1000.0, end_date=date(2027, 6, 1)))
+    session.commit()
+    migrate(session.get_bind())
+    session.expire_all()
+    s = session.exec(select(Season).where(Season.year == 2026)).one()
+    assert s.end_date == date(2027, 6, 1)

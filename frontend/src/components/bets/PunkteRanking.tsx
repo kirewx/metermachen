@@ -25,7 +25,7 @@ export default function PunkteRanking() {
                 e.rank === 1 ? 'text-accent [text-shadow:var(--t-glow)]' : 'text-ink-mute'
               }`}
             >
-              P{e.rank}
+              {e.rank}
             </span>
             <Avatar value={e.avatar} size="sm" />
             <span className="min-w-0 flex-1 truncate font-bold text-ink">

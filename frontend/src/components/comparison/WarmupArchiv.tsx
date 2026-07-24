@@ -1,13 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../api/client'
-import Avatar from '../components/ui/Avatar'
-import Card from '../components/ui/Card'
-import Icon from '../components/ui/Icon'
-import { aktiveSeason } from '../components/ui/season'
+import { api } from '../../api/client'
+import Avatar from '../ui/Avatar'
+import Card from '../ui/Card'
+import Icon from '../ui/Icon'
 
-export default function Archiv() {
-  const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
-  const year = aktiveSeason(seasons)?.year ?? new Date().getFullYear()
+export default function WarmupArchiv({ year }: { year: number }) {
   const { data: warmup, error } = useQuery({
     queryKey: ['comparison', year, 'warmup'],
     queryFn: () => api.comparisonWarmup(year),
@@ -44,7 +41,7 @@ export default function Archiv() {
                   u.rank === 1 ? 'text-accent [text-shadow:var(--t-glow)]' : 'text-ink-mute'
                 }`}
               >
-                P{u.rank}
+                {u.rank}
               </span>
               <Avatar value={u.avatar} size="sm" />
               <span className="min-w-0 flex-1 truncate font-bold text-ink">

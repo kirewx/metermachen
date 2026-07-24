@@ -134,7 +134,7 @@ export default function MeineAktivitaeten() {
                               </span>
                             ))}
                         </p>
-                        <p className="truncate text-xs text-ink-mute">
+                        <p className="break-words text-xs text-ink-mute">
                           {a.date}
                           {a.start_time ? ` · ${a.start_time.slice(0, 5)} Uhr` : ''}
                           {a.duration_min ? ` · ${a.duration_min} min` : ''}

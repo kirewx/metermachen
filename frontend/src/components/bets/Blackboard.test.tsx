@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { Bet } from '../../api/client'
@@ -20,7 +20,14 @@ const bets: Bet[] = [
 ]
 
 const spieler = [
-  { user_id: 1, display_name: 'Erik', emojis: ['👑'] },
+  {
+    user_id: 1,
+    display_name: 'Erik',
+    emojis: ['👑'],
+    auszeichnungen: [
+      { emoji: '👑', title: 'Erster Gold', description: 'Als Erster ein Gold-Achievement geholt.' },
+    ],
+  },
   { user_id: 2, display_name: 'Lisa' },
 ]
 
@@ -44,15 +51,18 @@ describe('filtereBlackboard', () => {
 describe('Blackboard', () => {
   it('zeigt Duelle als A ⚔️ B und filtert per Dropdown', async () => {
     render(<Blackboard bets={bets} spieler={spieler} />)
-    expect(screen.getByText('Erik 👑 ⚔️ Lisa')).toBeInTheDocument()
+    expect(screen.getByText('Erik ⚔️ Lisa')).toBeInTheDocument()
     expect(screen.getByText('Lisa schafft 100')).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Wett-Typ'), 'ziel')
-    expect(screen.queryByText('Erik 👑 ⚔️ Lisa')).not.toBeInTheDocument()
+    expect(screen.queryByText('Erik ⚔️ Lisa')).not.toBeInTheDocument()
     expect(screen.getByText('Lisa schafft 100')).toBeInTheDocument()
   })
 
-  it('zeigt Special-Emojis hinter dem Namen', () => {
+  it('zeigt Special-Emojis hinter dem Namen mit Popover beim Klick', () => {
     render(<Blackboard bets={bets} spieler={spieler} />)
-    expect(screen.getByText('Erik 👑 ⚔️ Lisa')).toBeInTheDocument()
+    expect(screen.getByText('👑')).toBeInTheDocument()
+    expect(screen.queryByText('Erster Gold')).toBeNull()
+    fireEvent.click(screen.getByText('👑'))
+    expect(screen.getByText('Erster Gold')).toBeInTheDocument()
   })
 })

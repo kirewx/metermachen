@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState } from 'react'
 import type { Bet } from '../../api/client'
+import AuszeichnungsBadges from '../ui/AuszeichnungsBadges'
 import Card from '../ui/Card'
 import Select from '../ui/Select'
 import type { Spieler } from './BetCard'
@@ -41,12 +42,10 @@ export default function Blackboard({ bets, spieler }: { bets: Bet[]; spieler: Sp
   const [personId, setPersonId] = useState<number | null>(null)
   const [typ, setTyp] = useState<Bet['type'] | null>(null)
   const zeilen = filtereBlackboard(bets, { personId, typ })
-  const name = (id: number | undefined) => {
-    const s = spieler.find((sp) => sp.user_id === id)
-    if (!s) return `#${id}`
-    const emojis = s.emojis ?? []
-    return emojis.length > 0 ? `${s.display_name} ${emojis.join(' ')}` : s.display_name
-  }
+  const name = (id: number | undefined) =>
+    spieler.find((sp) => sp.user_id === id)?.display_name ?? `#${id}`
+  const auszeichnungenVon = (id: number | undefined) =>
+    spieler.find((sp) => sp.user_id === id)?.auszeichnungen ?? []
 
   return (
     <Card>
@@ -85,9 +84,22 @@ export default function Blackboard({ bets, spieler }: { bets: Bet[]; spieler: Sp
         {zeilen.map((b) => (
           <li key={b.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 text-sm">
             <span className="font-bold text-ink">
-              {b.type === 'duell'
-                ? `${name(b.creator_id)} ⚔️ ${name(b.params.opponent_id)}`
-                : beteiligte(b).map((id) => name(id)).join(', ')}
+              {b.type === 'duell' ? (
+                <>
+                  {name(b.creator_id)}
+                  <AuszeichnungsBadges liste={auszeichnungenVon(b.creator_id)} /> ⚔️{' '}
+                  {name(b.params.opponent_id)}
+                  <AuszeichnungsBadges liste={auszeichnungenVon(b.params.opponent_id)} />
+                </>
+              ) : (
+                beteiligte(b).map((id, i) => (
+                  <span key={id}>
+                    {i > 0 && ', '}
+                    {name(id)}
+                    <AuszeichnungsBadges liste={auszeichnungenVon(id)} />
+                  </span>
+                ))
+              )}
             </span>
             <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-tech">
               {TYP_LABEL[b.type]}

@@ -81,6 +81,12 @@ def migrate(target=engine) -> None:
                 ))
             if "end_date" not in season_cols:
                 conn.execute(text("ALTER TABLE season ADD COLUMN end_date DATE"))
+            # Einmaliger Backfill (Spec 2026-07-25 A2): Saisonende 2026/27 =
+            # Stuttgartlauf 16.05.2027. Nur wenn der Admin nichts gesetzt hat.
+            conn.execute(text(
+                "UPDATE season SET end_date = '2027-05-16' "
+                "WHERE year = 2026 AND end_date IS NULL"
+            ))
             for id_, raw in conn.execute(text("SELECT id, milestones_json FROM season")).fetchall():
                 milestones = json.loads(raw or "[]")
                 if any("emoji" in m for m in milestones):

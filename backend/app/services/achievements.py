@@ -135,6 +135,23 @@ EMOJIS: dict[str, str] = {
     "dauerbrenner_gold": "🌳",
 }
 
+
+def _showcase_info() -> dict[str, tuple[str, str, str]]:
+    """key -> (emoji, titel, beschreibung) für alle Emoji-Achievements."""
+    titel_desc = {
+        key: (titel, desc)
+        for key, titel, desc, _icon in
+        (*HIDDEN_DEFS, *EINMAL_DEFS, FRUEHSTARTER_DEF, EARLY_BIRD_DEF)
+    }
+    return {
+        key: (emoji, *titel_desc[key])
+        for key, emoji in EMOJIS.items()
+        if key in titel_desc
+    }
+
+
+SHOWCASE_INFO = _showcase_info()
+
 # Nachtfenster für "Psychopath": Start zwischen 00:00 (inkl.) und 03:00 (exkl.)
 _NACHT_ENDE = time_type(3, 0)
 

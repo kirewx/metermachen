@@ -33,7 +33,7 @@ export default function PersonDetail({
         <Avatar value={user.avatar} size="sm" />
         <div>
           <p className="text-sm font-bold text-ink">
-            P{user.rank} · {Math.round(user.total_scaled_km)} km gewertet
+            Platz {user.rank} · {Math.round(user.total_scaled_km)} km gewertet
           </p>
           <p className="text-xs text-ink-mute">{activities?.length ?? 0} Einträge {year}</p>
         </div>
@@ -51,7 +51,7 @@ export default function PersonDetail({
                 {kurzDatum(a.date)}
               </span>
               {cat && <Icon name={cat.icon} size={16} className="shrink-0 text-accent" />}
-              <span className="min-w-0 flex-1 truncate text-ink">
+              <span className="min-w-0 flex-1 break-words text-ink">
                 {cat?.name ?? 'Aktivität'}
                 {a.note ? <span className="text-ink-mute"> · {a.note}</span> : null}
                 {a.elevation_m ? (

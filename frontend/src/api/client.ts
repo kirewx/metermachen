@@ -55,6 +55,7 @@ export type CategoryShare = {
   real_km: number
 }
 export type Segment = { date: string; category_id: number; color: string; scaled_km: number }
+export type Auszeichnung = { emoji: string; title: string; description: string }
 export type ComparisonUser = {
   user_id: number
   display_name: string
@@ -67,6 +68,7 @@ export type ComparisonUser = {
   segments: Segment[]
   cumulative: { date: string; scaled_km: number; real_km: number }[]
   emojis?: string[]
+  auszeichnungen?: Auszeichnung[]
 }
 export type Comparison = {
   year: number

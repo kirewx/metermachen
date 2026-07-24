@@ -28,5 +28,5 @@ export function saisonLabel(season: Season | undefined): string {
   if (!season) return String(new Date().getFullYear())
   const endJahr = season.end_date ? Number(season.end_date.slice(0, 4)) : season.year
   if (endJahr === season.year) return String(season.year)
-  return `Saison ${season.year}/${String(endJahr).slice(2)}`
+  return `${season.year}/${String(endJahr).slice(2)}`
 }

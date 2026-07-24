@@ -16,9 +16,10 @@ from ..models import (
     User,
     utcnow,
 )
-from ..services.achievements import EMOJIS
+from ..services.achievements import SHOWCASE_INFO
 from ..services.season_window import in_window, season_window
 from ..schemas import (
+    Auszeichnung,
     CategoryShare,
     ComparisonOut,
     ComparisonUser,
@@ -63,10 +64,16 @@ def compute_comparison(
         select(AchievementUnlock).where(AchievementUnlock.showcased == True)  # noqa: E712
     ).all()
     emojis_by_user: dict[int, list[str]] = defaultdict(list)
+    auszeichnungen_by_user: dict[int, list[Auszeichnung]] = defaultdict(list)
     for ul in emoji_rows:
-        emoji = EMOJIS.get(ul.key)
-        if emoji:
-            emojis_by_user[ul.user_id].append(emoji)
+        info = SHOWCASE_INFO.get(ul.key)
+        if info is None:
+            continue
+        emoji, titel, desc = info
+        emojis_by_user[ul.user_id].append(emoji)
+        auszeichnungen_by_user[ul.user_id].append(
+            Auszeichnung(emoji=emoji, title=titel, description=desc)
+        )
 
     result_users = []
     for user in users:
@@ -108,6 +115,7 @@ def compute_comparison(
                 avatar=user.avatar,
                 km_factor=user.km_factor,
                 emojis=emojis_by_user.get(user.id, []),
+                auszeichnungen=auszeichnungen_by_user.get(user.id, []),
                 rank=0,
                 total_scaled_km=running,
                 total_real_km=real_running,
