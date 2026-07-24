@@ -29,6 +29,7 @@ const data: Comparison = {
       { emoji: '👑', title: 'Erster Gold', description: 'Als Erster ein Gold-Achievement geholt.' },
       { emoji: '🎩', title: 'Hattrick', description: 'Drei Aktivitäten an einem Tag.' },
     ] },
+    { user_id: 2, display_name: 'Mara', avatar: 'icon:rad', rank: 2, total_scaled_km: 111, total_real_km: 37, km_factor: 1, by_category: [], segments: [], cumulative: [], emojis: [], auszeichnungen: [] },
   ],
   start_date: null,
   phase: 'challenge',
@@ -68,6 +69,15 @@ describe('RaceBahnen Detailansicht', () => {
     // Exakter String: matcht nur das Balken-Label "+200" — das Banner enthält
     // "+200" ebenfalls, aber als Teil eines längeren Textes (kein exakter Match).
     expect(screen.getByText('+200')).toBeInTheDocument()
+  })
+
+  it('zeigt Platzierungen als nackte Zahl ohne P-Präfix und ohne Rückstand-Zeile', () => {
+    renderRace()
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.queryByText('P1')).toBeNull()
+    expect(screen.queryByText('P2')).toBeNull()
+    expect(screen.queryByText(/auf P1/)).toBeNull()
   })
 
   it('zeigt Special-Emojis neben dem Namen mit Popover beim Klick', async () => {

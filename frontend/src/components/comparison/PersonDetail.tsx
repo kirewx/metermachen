@@ -33,7 +33,7 @@ export default function PersonDetail({
         <Avatar value={user.avatar} size="sm" />
         <div>
           <p className="text-sm font-bold text-ink">
-            P{user.rank} · {Math.round(user.total_scaled_km)} km gewertet
+            Platz {user.rank} · {Math.round(user.total_scaled_km)} km gewertet
           </p>
           <p className="text-xs text-ink-mute">{activities?.length ?? 0} Einträge {year}</p>
         </div>

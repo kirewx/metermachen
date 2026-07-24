@@ -44,7 +44,7 @@ export default function Archiv() {
                   u.rank === 1 ? 'text-accent [text-shadow:var(--t-glow)]' : 'text-ink-mute'
                 }`}
               >
-                P{u.rank}
+                {u.rank}
               </span>
               <Avatar value={u.avatar} size="sm" />
               <span className="min-w-0 flex-1 truncate font-bold text-ink">

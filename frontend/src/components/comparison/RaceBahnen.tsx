@@ -39,7 +39,6 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
   const maxKm = Math.max(data.goal_km, ...data.users.map((u) => u.total_scaled_km))
   const pct = (km: number) => `${(km / maxKm) * 100}%`
   const ids = data.users.map((u) => u.user_id)
-  const fuehrend = data.users.find((u) => u.rank === 1)
 
   return (
     <Card className="overflow-x-auto">
@@ -76,8 +75,6 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
         {data.users.map((u) => {
           const farbe = userColor(u.user_id, ids)
           const fuehrt = u.rank === 1
-          const abstand =
-            fuehrend && !fuehrt ? Math.round(fuehrend.total_scaled_km - u.total_scaled_km) : 0
           return (
             <div key={u.user_id} className="flex items-center gap-3">
               <button
@@ -91,7 +88,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                     fuehrt ? 'text-accent [text-shadow:var(--t-glow)]' : 'text-ink-mute'
                   }`}
                 >
-                  P{u.rank}
+                  {u.rank}
                 </span>
                 <Avatar value={u.avatar} size="sm" />
                 <div className="min-w-0">
@@ -107,9 +104,6 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                       </span>
                     )}
                   </p>
-                  {!fuehrt && (
-                    <p className="text-[10px] text-ink-mute">−{abstand} km auf P1</p>
-                  )}
                 </div>
               </button>
               <div className="relative h-5 flex-1 overflow-hidden rounded-full border border-line bg-surface">
