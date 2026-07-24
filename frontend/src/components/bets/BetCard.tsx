@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, type Bet, type Me } from '../../api/client'
+import { api, type Auszeichnung, type Bet, type Me } from '../../api/client'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Input from '../ui/Input'
@@ -35,7 +35,12 @@ function name(bet: Bet, userId: number | undefined) {
   return p?.display_name ?? `#${userId}`
 }
 
-export type Spieler = { user_id: number; display_name: string; emojis?: string[] }
+export type Spieler = {
+  user_id: number
+  display_name: string
+  emojis?: string[]
+  auszeichnungen?: Auszeichnung[]
+}
 
 export default function BetCard({
   bet,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import type { Comparison, ComparisonUser } from '../../api/client'
+import AuszeichnungsBadges from '../ui/AuszeichnungsBadges'
 import Avatar from '../ui/Avatar'
 import Card from '../ui/Card'
 import Icon from '../ui/Icon'
@@ -96,11 +97,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-ink">
                     {u.display_name}
-                    {(u.emojis ?? []).length > 0 && (
-                      <span className="ml-1.5 text-xs" title="Erspielte Auszeichnungen">
-                        {(u.emojis ?? []).join(' ')}
-                      </span>
-                    )}
+                    <AuszeichnungsBadges liste={u.auszeichnungen ?? []} />
                     {u.km_factor !== 1 && (
                       <span
                         title="Handicap-Faktor"

@@ -35,6 +35,7 @@ export default function Wetten() {
       user_id: u.user_id,
       display_name: u.display_name,
       emojis: u.emojis ?? [],
+      auszeichnungen: u.auszeichnungen ?? [],
     })) ?? []
 
   const blackboardAktiv = addons.some((a) => a.key === 'blackboard' && a.active)
