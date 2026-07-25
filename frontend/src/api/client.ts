@@ -250,6 +250,40 @@ export type BetAchievement = {
   achieved: boolean
   progress: number
 }
+export type FeedReaction = { emoji: string; count: number; mine: boolean; users: string[] }
+export type FeedEvent = {
+  id: number
+  type: 'activity' | 'rank_change' | 'achievement' | 'milestone' | 'recap_week' | 'recap_month'
+  user_id: number | null
+  display_name: string | null
+  avatar: string | null
+  created_at: string
+  payload: {
+    category?: { name: string; icon: string; color: string }
+    distance_km?: number
+    mm?: number
+    titel?: string | null
+    datum?: string
+    name?: string
+    ueberholt_name?: string
+    neuer_rang?: number
+    key?: string
+    title?: string
+    emoji?: string | null
+    km?: number
+    label?: string
+    icon?: string
+    period?: string
+    von?: string
+    bis?: string
+    total_mm?: number
+    per_user?: { user_id: number; name: string; mm: number }[]
+    ueberholungen?: { name: string; ueberholt_name: string; neuer_rang: number }[]
+    achievements?: { user_id: number | null; title?: string; emoji?: string | null; label?: string }[]
+  }
+  reactions: FeedReaction[]
+}
+export type FeedPage = { events: FeedEvent[]; next_before: number | null }
 
 /** Fehler mit HTTP-Status, damit Aufrufer 401 (Session weg) von Netz-/Serverfehlern trennen können. */
 export class ApiError extends Error {
@@ -370,4 +404,10 @@ export const api = {
   points: () => request<PointsInfo>('/api/points'),
   pointsRanking: () => request<PointsRankingEntry[]>('/api/points/ranking'),
   betAchievements: () => request<BetAchievement[]>('/api/bets/achievements'),
+  feed: (year: number, before?: number) =>
+    request<FeedPage>(`/api/feed?year=${year}${before ? `&before=${before}` : ''}`),
+  toggleFeedReaction: (eventId: number, emoji: string) =>
+    request<FeedReaction[]>(`/api/feed/${eventId}/reactions`, post({ emoji })),
+  feedUnseen: () => request<{ has_new: boolean }>('/api/feed/unseen'),
+  markFeedSeen: () => request<void>('/api/feed/seen', { method: 'POST' }),
 }

@@ -159,12 +159,16 @@ Drei neue Tabellen (`models.py`):
 - **Meilensteine:** Beim Aktivitäts-Schreiben wird geprüft, ob die
   Gesamt-MM des Nutzers einen Meilenstein aus `milestones_json` überschritten
   haben → `milestone`-Event.
-- **Rückblicke (lazy, kein Cron):** Beim ersten `GET /api/feed` nach
-  Montag 00:00 **deutscher Zeit** wird der `recap_week` der Vorwoche
-  (Mo–So) erzeugt, falls er fehlt; am Monatsersten zusätzlich `recap_month`
-  des Vormonats. Gleiches Muster wie `ensure_monthly_tip`
-  (`services/bets.py`). Zeitzonen-Handling wie beim Challenge-Start
-  (00:00 deutscher Zeit).
+- **Rückblicke (lazy, kein Cron):** Der `recap_week` einer Woche (Mo–So)
+  wird fällig am **Sonntag dieser Woche um 19:00 deutscher Zeit** und beim
+  nächsten `GET /api/feed` danach erzeugt (Snapshot: Einträge nach 19:00
+  fehlen in den Zahlen, erscheinen aber als normale Feed-Events). Der
+  `recap_month` des Vormonats wird weiterhin am **Monatsersten** fällig.
+  `ensure_recaps` füllt dabei ALLE fälligen, noch fehlenden
+  Wochen/Monate seit Saisonstart auf (nicht nur den letzten Zeitraum) —
+  Wochen ohne einzigen Feed-Aufruf werden so nachgeholt. Gleiches Muster
+  wie `ensure_monthly_tip` (`services/bets.py`). Rückblick-Events tragen
+  als `created_at` ihren Fälligkeitszeitpunkt.
 
 ### B3. API (`routers/feed.py`)
 
@@ -215,10 +219,16 @@ keine Neugestaltung. Die validierten Mockups sind maßgeblich.
 - Aktivität bearbeitet → Event bleibt wie gepostet (Zahlen im Payload werden
   nicht nachgezogen); Rangfolge wird neu geprüft.
 - Reaktionen auf gelöschte Events verschwinden mit (FK-Cascade).
-- Erster Feed-Aufruf nach Launch: Es gibt keine rückwirkenden Events für
-  die Zeit vor dem Feature — der Feed beginnt ab Deployment; Rückblicke
-  werden erst ab der ersten vollen Woche/dem ersten vollen Monat nach
-  Launch erzeugt.
+- **Einmaliger Feed-Backfill beim Backend-Start** (Entscheidung Rick,
+  25.07.): Läuft nur, solange die `FeedEvent`-Tabelle leer ist (Muster
+  `backfill_erster_gold`). Alle Challenge-Aktivitäten seit Saisonstart
+  werden chronologisch nach sportlichem Zeitpunkt (Datum + `start_time`,
+  fehlt sie: 12:00 deutscher Zeit) durchgespielt: `activity`-Events,
+  Meilenstein-Überschreitungen und Top-5-Überholungen werden dabei
+  rekonstruiert; `achievement`-Events bekommen ihren echten
+  `unlocked_at`-Zeitpunkt. Warm-up bleibt draußen, Reaktionen gibt es
+  rückwirkend keine. Vergangene Rückblicke entstehen danach automatisch
+  über die `ensure_recaps`-Auffüll-Logik.
 
 ### B6. Skalierung / Multi-Gruppen
 

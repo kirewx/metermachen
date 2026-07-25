@@ -5,6 +5,7 @@ import Layout from './components/ui/Layout'
 import Admin from './pages/Admin'
 import Datenschutz from './pages/Datenschutz'
 import Einladung from './pages/Einladung'
+import Feed from './pages/Feed'
 import Login from './pages/Login'
 import MeineAktivitaeten from './pages/MeineAktivitaeten'
 import Regeln from './pages/Regeln'
@@ -58,6 +59,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout me={me} />}>
         <Route path="/" element={<Vergleich />} />
+        <Route path="/feed" element={<Feed />} />
         <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
         <Route path="/regeln" element={<Regeln />} />
         {sidebetsAktiv && <Route path="/wetten" element={<Wetten />} />}

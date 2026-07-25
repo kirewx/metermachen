@@ -522,7 +522,7 @@ def test_backfill_stops_when_connection_removed_midway(session, monkeypatch, bin
     monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
     monkeypatch.setattr(strava, "fetch_athlete_activities", lambda tok, after: activities)
     calls = {"n": 0}
-    def fake_import(s, c, data):
+    def fake_import(s, c, data, emit_feed=True):
         calls["n"] += 1
         # Beim ersten Import trennt der Nutzer die Verbindung
         s.delete(s.get(StravaConnection, c.id))

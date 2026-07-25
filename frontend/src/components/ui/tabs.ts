@@ -10,6 +10,7 @@ export type Tab = {
 
 export const TABS: Tab[] = [
   { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
+  { to: '/feed', label: 'Feed', icon: 'chart', end: false, adminOnly: false, abStart: true },
   { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
   { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: false, addon: 'sidebets' },
   { to: '/regeln', label: 'Regeln', icon: 'notiz', end: false, adminOnly: false, abStart: false },

@@ -152,6 +152,19 @@ def _showcase_info() -> dict[str, tuple[str, str, str]]:
 
 SHOWCASE_INFO = _showcase_info()
 
+
+def achievement_info(key: str) -> tuple[str, str | None]:
+    """(titel, emoji|None) für jeden Unlock-Key — auch Stufen ohne Emoji."""
+    info = SHOWCASE_INFO.get(key)
+    if info is not None:
+        emoji, titel, _desc = info
+        return titel, emoji
+    for bucket, label in DISZIPLIN_LABEL.items():
+        for tier in TIERS:
+            if key == stufen_key(bucket, tier):
+                return f"{label} {tier.capitalize()}", None
+    return key, None
+
 # Nachtfenster für "Psychopath": Start zwischen 00:00 (inkl.) und 03:00 (exkl.)
 _NACHT_ENDE = time_type(3, 0)
 
@@ -192,6 +205,13 @@ def _unlock(session: Session, user_id: int, key: str, context: dict | None = Non
     ))
     try:
         session.commit()
+
+        from .feed import _emit
+
+        titel, emoji = achievement_info(key)
+        _emit(session, type_="achievement", user_id=user_id, payload={
+            "key": key, "title": titel, "emoji": emoji, "context": context or {},
+        })
         return True
     except IntegrityError:
         session.rollback()

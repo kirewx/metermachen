@@ -58,3 +58,20 @@ def test_achievement_unlock_unique_pro_user_und_key(session):
     # gleiche Achievement-Keys für andere Nutzer sind ok
     session.add(AchievementUnlock(user_id=2, key="stufe_rad_gold"))
     session.commit()
+
+
+def test_feed_reaction_unique_pro_user_und_emoji(session):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import FeedEvent, FeedReaction
+
+    ev = FeedEvent(season_year=2026, type="activity", user_id=1)
+    session.add(ev)
+    session.commit()
+    session.add(FeedReaction(event_id=ev.id, user_id=1, emoji="🔥"))
+    session.commit()
+    session.add(FeedReaction(event_id=ev.id, user_id=1, emoji="🔥"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
