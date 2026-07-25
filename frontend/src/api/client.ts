@@ -266,7 +266,11 @@ export type FeedEvent = {
     datum?: string
     name?: string
     ueberholt_name?: string
+    ueberholte?: { user_id: number; name: string }[]
+    alter_rang?: number
     neuer_rang?: number
+    description?: string
+    strava_url?: string | null
     key?: string
     title?: string
     emoji?: string | null
@@ -278,7 +282,13 @@ export type FeedEvent = {
     bis?: string
     total_mm?: number
     per_user?: { user_id: number; name: string; mm: number }[]
-    ueberholungen?: { name: string; ueberholt_name: string; neuer_rang: number }[]
+    ueberholungen?: {
+      name: string
+      ueberholt_name?: string
+      ueberholte?: { user_id: number; name: string }[]
+      alter_rang?: number
+      neuer_rang: number
+    }[]
     achievements?: { user_id: number | null; title?: string; emoji?: string | null; label?: string }[]
   }
   reactions: FeedReaction[]

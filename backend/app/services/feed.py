@@ -46,12 +46,18 @@ def _emit(session: Session, *, type_: str, user_id: int | None = None,
 
 
 def _activity_payload(act: Activity, cat: Category) -> dict:
+    strava_url = (
+        f"https://www.strava.com/activities/{act.external_id}"
+        if act.source == "strava" and act.external_id
+        else None
+    )
     return {
         "category": {"name": cat.name, "icon": cat.icon, "color": cat.color},
         "distance_km": act.distance_km,
         "mm": round(act.distance_km * cat.factor, 2),
         "titel": act.note,
         "datum": act.date.isoformat(),
+        "strava_url": strava_url,
     }
 
 
@@ -115,13 +121,16 @@ def _rank_change_payloads(
             o for o in pos_b
             if o != uid and pos_b[o] < pos_b[uid] and pos_a.get(o, len(pos_a)) > neu
         ]
-        for o in ueberholte:
-            out.append((uid, {
-                "name": name(uid),
-                "ueberholt_user_id": o,
-                "ueberholt_name": name(o),
-                "neuer_rang": neu + 1,
-            }))
+        if not ueberholte:
+            continue
+        # EIN gebündeltes Event pro Aufsteiger, Überholte in neuer Reihenfolge
+        ueberholte.sort(key=lambda o: pos_a.get(o, len(pos_a)))
+        out.append((uid, {
+            "name": name(uid),
+            "alter_rang": pos_b[uid] + 1,
+            "neuer_rang": neu + 1,
+            "ueberholte": [{"user_id": o, "name": name(o)} for o in ueberholte],
+        }))
     return out
 
 
@@ -280,6 +289,27 @@ def ensure_recaps(session: Session, now: datetime | None = None) -> None:
         erster = naechster
 
 
+def rebuild_feed_events(session: Session) -> None:
+    """Einmalige Bereinigung (07/2026): Überholungen wurden anfangs als ein
+    Event PRO überholter Person gespeichert (Payload-Feld ueberholt_user_id).
+    Liegen solche Alt-Events vor, wird der Feed komplett geleert (inkl.
+    Reaktionen) und anschließend vom Backfill mit gebündelten Events und
+    aktuellen Payloads (Strava-Link, Beschreibung) neu aufgebaut."""
+    alt = session.exec(
+        select(FeedEvent).where(
+            FeedEvent.type == "rank_change",
+            FeedEvent.payload_json.like('%"ueberholt_user_id"%'),  # type: ignore[attr-defined]
+        )
+    ).first()
+    if alt is None:
+        return
+    for r in session.exec(select(FeedReaction)).all():
+        session.delete(r)
+    for e in session.exec(select(FeedEvent)).all():
+        session.delete(e)
+    session.commit()
+
+
 def backfill_feed_events(session: Session) -> None:
     """Einmaliger Feed-Backfill beim Backend-Start (Spec B5): Läuft nur,
     solange die FeedEvent-Tabelle komplett leer ist. Spielt alle
@@ -342,12 +372,13 @@ def backfill_feed_events(session: Session) -> None:
     for unlock in session.exec(select(AchievementUnlock)).all():
         if unlock.user_id not in users:
             continue
-        titel, emoji = achievement_info(unlock.key)
+        titel, emoji, beschreibung = achievement_info(unlock.key)
         session.add(FeedEvent(
             season_year=season.year, type="achievement", user_id=unlock.user_id,
             created_at=unlock.unlocked_at,
             payload_json=json.dumps({
                 "key": unlock.key, "title": titel, "emoji": emoji,
+                "description": beschreibung,
                 "context": json.loads(unlock.context_json or "{}"),
             }),
         ))

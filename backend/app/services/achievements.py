@@ -153,17 +153,23 @@ def _showcase_info() -> dict[str, tuple[str, str, str]]:
 SHOWCASE_INFO = _showcase_info()
 
 
-def achievement_info(key: str) -> tuple[str, str | None]:
-    """(titel, emoji|None) für jeden Unlock-Key — auch Stufen ohne Emoji."""
+def achievement_info(key: str) -> tuple[str, str | None, str]:
+    """(titel, emoji|None, beschreibung) für jeden Unlock-Key — auch Stufen
+    ohne Emoji."""
     info = SHOWCASE_INFO.get(key)
     if info is not None:
-        emoji, titel, _desc = info
-        return titel, emoji
+        emoji, titel, desc = info
+        return titel, emoji, desc
     for bucket, label in DISZIPLIN_LABEL.items():
         for tier in TIERS:
             if key == stufen_key(bucket, tier):
-                return f"{label} {tier.capitalize()}", None
-    return key, None
+                ziel = STUFEN_ZIELE[bucket][tier]
+                return (
+                    f"{label} {tier.capitalize()}",
+                    None,
+                    f"{ziel:g} km {label} insgesamt gesammelt.",
+                )
+    return key, None, ""
 
 # Nachtfenster für "Psychopath": Start zwischen 00:00 (inkl.) und 03:00 (exkl.)
 _NACHT_ENDE = time_type(3, 0)
@@ -208,9 +214,10 @@ def _unlock(session: Session, user_id: int, key: str, context: dict | None = Non
 
         from .feed import _emit
 
-        titel, emoji = achievement_info(key)
+        titel, emoji, beschreibung = achievement_info(key)
         _emit(session, type_="achievement", user_id=user_id, payload={
-            "key": key, "title": titel, "emoji": emoji, "context": context or {},
+            "key": key, "title": titel, "emoji": emoji,
+            "description": beschreibung, "context": context or {},
         })
         return True
     except IntegrityError:

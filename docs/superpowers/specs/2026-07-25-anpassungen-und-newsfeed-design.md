@@ -136,11 +136,15 @@ Drei neue Tabellen (`models.py`):
 `payload_json` je Typ:
 
 - `activity`: Kategorie-Key/-Name/-Icon, `distance_km`, `scaled_km`, Titel
-  (`note`), Datum/Uhrzeit der Aktivität.
-- `rank_change`: Überholer (`user_id`, Name), Überholte(r), neuer Rang.
-  Nur bei Änderungen der Reihenfolge in den **Top 5**.
-- `achievement` / `milestone`: Key, Name, Emoji/Icon, ggf. Kontext
-  (z. B. „150 MM gesamt").
+  (`note`), Datum/Uhrzeit der Aktivität, Strava-Link (falls importiert;
+  im Feed als „View on Strava" verlinkt).
+- `rank_change`: **EIN gebündeltes Event pro Aufsteiger** — Aufsteiger
+  (`user_id`, Name), Liste der Überholten, alter und neuer Rang
+  (angezeigt als „Anna überholt Ben und Clara · Platz 4 → 2"). Nur bei
+  Änderungen der Reihenfolge in den **Top 5**.
+- `achievement` / `milestone`: Key, Name, Emoji/Icon, Beschreibung
+  (im Feed per Hover/Tap als Popover — wie die Badge-Tooltips aus A6),
+  ggf. Kontext (z. B. „150 MM gesamt").
 - `recap_week` / `recap_month`: Zeitraum (KW bzw. Monat), Gruppen-Summe MM,
   pro Person MM des Zeitraums (sortiert), Überholungs-Liste,
   Achievement-Liste des Zeitraums.
@@ -229,6 +233,11 @@ keine Neugestaltung. Die validierten Mockups sind maßgeblich.
   `unlocked_at`-Zeitpunkt. Warm-up bleibt draußen, Reaktionen gibt es
   rückwirkend keine. Vergangene Rückblicke entstehen danach automatisch
   über die `ensure_recaps`-Auffüll-Logik.
+- **Einmaliger Rebuild (Nachtrag 25.07.):** Liegen noch Alt-Events mit
+  Einzel-Überholungen vor (Payload-Feld `ueberholt_user_id`), leert
+  `rebuild_feed_events` beim Backend-Start den Feed (inkl. Reaktionen —
+  von Rick abgesegnet) und der Backfill baut ihn mit gebündelten
+  Events und aktuellen Payloads neu auf.
 
 ### B6. Skalierung / Multi-Gruppen
 

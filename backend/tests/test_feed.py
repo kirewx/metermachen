@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timezone
 
 from sqlmodel import select
 
-from app.models import AchievementUnlock, Activity, FeedEvent, Season
+from app.models import AchievementUnlock, Activity, FeedEvent, FeedReaction, Season
 from app.services import feed
 from tests.conftest import login, make_category, make_user
 
@@ -33,6 +33,36 @@ def test_activity_event_mit_kategorie_und_mm(session):
     p = json.loads(ev.payload_json)
     assert ev.user_id == user.id and ev.activity_id == act.id
     assert p["mm"] == 40.0 and p["category"]["name"] == cat.name
+    assert p["strava_url"] is None
+
+
+def test_activity_event_mit_strava_link(session):
+    _setup_saison(session)
+    user = make_user(session)
+    cat = make_category(session)
+    act = Activity(user_id=user.id, category_id=cat.id, date=date(2026, 7, 24),
+                   distance_km=8.0, source="strava", external_id="1234567")
+    session.add(act)
+    session.commit()
+    session.refresh(act)
+    feed.activity_event(session, act)
+    ev = session.exec(select(FeedEvent).where(FeedEvent.type == "activity")).one()
+    p = json.loads(ev.payload_json)
+    assert p["strava_url"] == "https://www.strava.com/activities/1234567"
+
+
+def test_unlock_payload_hat_beschreibung(session):
+    _setup_saison(session)
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    for _ in range(3):  # Hattrick
+        _act(session, user, cat, 2.0, tag=date(2026, 7, 24))
+    from app.services.achievements import check_unlocks
+    check_unlocks(session, user.id)
+    evs = session.exec(select(FeedEvent).where(FeedEvent.type == "achievement")).all()
+    hat = next(json.loads(e.payload_json) for e in evs
+               if json.loads(e.payload_json)["key"] == "hattrick")
+    assert hat["description"] == "Drei Aktivitäten an einem Tag."
 
 
 def test_rank_events_nur_top5_aufsteiger(session):
@@ -45,7 +75,53 @@ def test_rank_events_nur_top5_aufsteiger(session):
     ev = session.exec(select(FeedEvent).where(FeedEvent.type == "rank_change")).one()
     p = json.loads(ev.payload_json)
     assert ev.user_id == a.id
-    assert p["ueberholt_user_id"] == b.id and p["neuer_rang"] == 1
+    assert p["neuer_rang"] == 1 and p["alter_rang"] == 2
+    assert p["ueberholte"] == [{"user_id": b.id, "name": "Ben"}]
+
+
+def test_rank_events_buendelt_mehrere_ueberholte(session):
+    _setup_saison(session)
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    c = make_user(session, username="clara")
+    before = [b.id, c.id, a.id]
+    after = [a.id, b.id, c.id]
+    feed.rank_events(session, before, after)
+    evs = session.exec(select(FeedEvent).where(FeedEvent.type == "rank_change")).all()
+    assert len(evs) == 1
+    p = json.loads(evs[0].payload_json)
+    assert evs[0].user_id == a.id and p["neuer_rang"] == 1 and p["alter_rang"] == 3
+    assert p["ueberholte"] == [
+        {"user_id": b.id, "name": "Ben"},
+        {"user_id": c.id, "name": "Clara"},
+    ]
+
+
+def test_rebuild_leert_alt_events_mit_einzel_ueberholungen(session):
+    _setup_saison(session)
+    user = make_user(session)
+    alt = FeedEvent(season_year=2026, type="rank_change", user_id=user.id,
+                    payload_json=json.dumps({
+                        "name": "Erik", "ueberholt_user_id": 99,
+                        "ueberholt_name": "X", "neuer_rang": 1,
+                    }))
+    session.add(alt)
+    session.commit()
+    session.add(FeedReaction(event_id=alt.id, user_id=user.id, emoji="🔥"))
+    session.commit()
+    feed.rebuild_feed_events(session)
+    assert session.exec(select(FeedEvent)).all() == []
+    assert session.exec(select(FeedReaction)).all() == []
+
+
+def test_rebuild_noop_ohne_alt_events(session):
+    _setup_saison(session)
+    user = make_user(session)
+    cat = make_category(session)
+    act = _act(session, user, cat, 10.0)
+    feed.activity_event(session, act)
+    feed.rebuild_feed_events(session)
+    assert len(session.exec(select(FeedEvent)).all()) == 1
 
 
 def test_rank_events_keine_events_ohne_aenderung(session):
@@ -338,7 +414,9 @@ def test_backfill_erzeugt_events_mit_zeitstempeln(session):
         (b.id, datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)),  # Ben überholt Anna
         (a.id, datetime(2026, 7, 23, 16, 0, tzinfo=timezone.utc)),  # Anna zurück
     ]
-    assert json.loads(ranks[0].payload_json)["ueberholt_user_id"] == a.id
+    assert json.loads(ranks[0].payload_json)["ueberholte"] == [
+        {"user_id": a.id, "name": "Anna"}
+    ]
 
     ach = session.exec(
         select(FeedEvent).where(FeedEvent.type == "achievement")
