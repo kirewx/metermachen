@@ -166,7 +166,10 @@ def backfill_erster_gold(session) -> None:
 def init_db() -> None:
     from sqlmodel import Session
 
+    from .services.feed import backfill_feed_events
+
     SQLModel.metadata.create_all(engine)
     migrate(engine)
     with Session(engine) as session:
         backfill_erster_gold(session)
+        backfill_feed_events(session)

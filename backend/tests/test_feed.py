@@ -1,9 +1,9 @@
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time, timezone
 
 from sqlmodel import select
 
-from app.models import Activity, FeedEvent, Season
+from app.models import AchievementUnlock, Activity, FeedEvent, Season
 from app.services import feed
 from tests.conftest import login, make_category, make_user
 
@@ -156,21 +156,34 @@ def test_strava_backfill_erzeugt_keine_feed_events(session):
     ).all() == []
 
 
+def _utc(dt):
+    """DB-Zeitstempel normalisieren: SQLite liefert naive UTC-Zeiten."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+def _act_mit_event(session, user, cat, km, tag):
+    """Aktivität + activity-Event mit created_at am Aktivitätstag 10:00."""
+    act = _act(session, user, cat, km, tag=tag)
+    feed.activity_event(session, act)
+    ev = session.exec(
+        select(FeedEvent).where(FeedEvent.activity_id == act.id)
+    ).one()
+    ev.created_at = datetime(tag.year, tag.month, tag.day, 10, 0)
+    session.add(ev)
+    session.commit()
+    return act
+
+
 def test_wochenrueckblick_wird_einmal_erzeugt(session):
     _setup_saison(session, start=date(2026, 7, 20))
     user = make_user(session)
     cat = make_category(session, factor=1.0)
     # Aktivität + Event in der Vorwoche (Mo 27.07.–So 02.08.)
-    act = _act(session, user, cat, 12.0, tag=date(2026, 7, 28))
-    feed.activity_event(session, act)
-    ev = session.exec(select(FeedEvent).where(FeedEvent.type == "activity")).one()
-    ev.created_at = datetime(2026, 7, 28, 10, 0)
-    session.add(ev)
-    session.commit()
+    _act_mit_event(session, user, cat, 12.0, tag=date(2026, 7, 28))
 
-    heute = date(2026, 8, 3)  # Montag danach
-    feed.ensure_recaps(session, today=heute)
-    feed.ensure_recaps(session, today=heute)  # idempotent
+    jetzt = datetime(2026, 8, 3, 8, 0, tzinfo=feed._MESZ)  # Montag danach
+    feed.ensure_recaps(session, now=jetzt)
+    feed.ensure_recaps(session, now=jetzt)  # idempotent
     recaps = session.exec(
         select(FeedEvent).where(FeedEvent.type == "recap_week")
     ).all()
@@ -179,12 +192,56 @@ def test_wochenrueckblick_wird_einmal_erzeugt(session):
     assert p["period"] == "2026-W31"
     assert p["total_mm"] == 12.0
     assert p["per_user"][0]["user_id"] == user.id
+    # created_at = Fälligkeitszeitpunkt So 02.08. 19:00 MESZ (= 17:00 UTC)
+    assert _utc(recaps[0].created_at) == datetime(2026, 8, 2, 17, 0, tzinfo=timezone.utc)
+
+
+def test_wochenrueckblick_erst_ab_sonntag_19_uhr(session):
+    _setup_saison(session, start=date(2026, 7, 20))
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    _act_mit_event(session, user, cat, 8.0, tag=date(2026, 7, 22))
+
+    feed.ensure_recaps(session, now=datetime(2026, 7, 26, 18, 59, tzinfo=feed._MESZ))
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_week")
+    ).all() == []
+
+    feed.ensure_recaps(session, now=datetime(2026, 7, 26, 19, 1, tzinfo=feed._MESZ))
+    recaps = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_week")
+    ).all()
+    assert len(recaps) == 1
+    p = json.loads(recaps[0].payload_json)
+    assert p["period"] == "2026-W30"
+    assert p["von"] == "2026-07-20"  # erste Woche beginnt am Saisonstart
+    assert p["bis"] == "2026-07-26"
+
+
+def test_zwei_verpasste_wochen_werden_aufgefuellt(session):
+    _setup_saison(session, start=date(2026, 7, 20))
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    _act_mit_event(session, user, cat, 8.0, tag=date(2026, 7, 22))  # KW 30
+    _act_mit_event(session, user, cat, 5.0, tag=date(2026, 7, 29))  # KW 31
+
+    feed.ensure_recaps(session, now=datetime(2026, 8, 4, 12, 0, tzinfo=feed._MESZ))
+    recaps = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_week")
+    ).all()
+    periods = sorted(json.loads(r.payload_json)["period"] for r in recaps)
+    assert periods == ["2026-W30", "2026-W31"]
+    faellig = sorted(_utc(r.created_at) for r in recaps)
+    assert faellig == [
+        datetime(2026, 7, 26, 17, 0, tzinfo=timezone.utc),  # So 26.07. 19:00 MESZ
+        datetime(2026, 8, 2, 17, 0, tzinfo=timezone.utc),  # So 02.08. 19:00 MESZ
+    ]
 
 
 def test_kein_rueckblick_ohne_events_im_zeitraum(session):
     _setup_saison(session, start=date(2026, 7, 20))
     make_user(session)
-    feed.ensure_recaps(session, today=date(2026, 8, 3))
+    feed.ensure_recaps(session, now=datetime(2026, 8, 3, 8, 0, tzinfo=feed._MESZ))
     assert session.exec(
         select(FeedEvent).where(FeedEvent.type == "recap_week")
     ).all() == []
@@ -194,19 +251,16 @@ def test_monatsrueckblick_am_monatsersten(session):
     _setup_saison(session, start=date(2026, 7, 20))
     user = make_user(session)
     cat = make_category(session, factor=1.0)
-    act = _act(session, user, cat, 10.0, tag=date(2026, 8, 15))
-    feed.activity_event(session, act)
-    ev = session.exec(select(FeedEvent).where(FeedEvent.type == "activity")).one()
-    ev.created_at = datetime(2026, 8, 15, 10, 0)
-    session.add(ev)
-    session.commit()
+    _act_mit_event(session, user, cat, 10.0, tag=date(2026, 8, 15))
 
-    feed.ensure_recaps(session, today=date(2026, 9, 1))
+    feed.ensure_recaps(session, now=datetime(2026, 9, 1, 0, 5, tzinfo=feed._MESZ))
     recaps = session.exec(
         select(FeedEvent).where(FeedEvent.type == "recap_month")
     ).all()
     assert len(recaps) == 1
     assert json.loads(recaps[0].payload_json)["period"] == "2026-08"
+    # created_at = Fälligkeit Monatserster 00:00 MESZ (= 31.08. 22:00 UTC)
+    assert _utc(recaps[0].created_at) == datetime(2026, 8, 31, 22, 0, tzinfo=timezone.utc)
 
 
 # Abweichung vom Plan: Datum "2026-07-24" statt "2026-08-03" — Zukunftsdaten
@@ -235,6 +289,93 @@ def test_feed_api_paginierung_und_reaktionen(client, session):
     assert client.post(
         f"/api/feed/{ev_id}/reactions", json={"emoji": "🍕"}
     ).status_code == 422
+
+
+def _backfill_szenario(session):
+    """Zwei User, drei Aktivitäten + ein Achievement-Unlock vor dem Backfill."""
+    _setup_saison(session)  # Meilenstein bei 50 km
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    cat = make_category(session, factor=1.0)
+    session.add(Activity(user_id=a.id, category_id=cat.id, date=date(2026, 7, 21),
+                         start_time=time(7, 30), distance_km=30.0))
+    session.add(Activity(user_id=b.id, category_id=cat.id, date=date(2026, 7, 22),
+                         distance_km=40.0))  # ohne start_time → 12:00
+    session.add(Activity(user_id=a.id, category_id=cat.id, date=date(2026, 7, 23),
+                         start_time=time(18, 0), distance_km=25.0))  # 55 > 50-Meilenstein
+    session.add(AchievementUnlock(user_id=a.id, key="hattrick",
+                                  unlocked_at=datetime(2026, 7, 23, 18, 30,
+                                                       tzinfo=timezone.utc)))
+    session.commit()
+    return a, b
+
+
+def test_backfill_erzeugt_events_mit_zeitstempeln(session):
+    a, b = _backfill_szenario(session)
+    feed.backfill_feed_events(session)
+
+    acts = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "activity")
+    ).all()
+    assert [_utc(e.created_at) for e in acts] == [
+        datetime(2026, 7, 21, 5, 30, tzinfo=timezone.utc),  # 07:30 MESZ
+        datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc),  # 12:00 MESZ (Default)
+        datetime(2026, 7, 23, 16, 0, tzinfo=timezone.utc),  # 18:00 MESZ
+    ]
+    assert json.loads(acts[0].payload_json)["mm"] == 30.0
+
+    mile = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "milestone")
+    ).one()
+    assert mile.user_id == a.id
+    assert _utc(mile.created_at) == datetime(2026, 7, 23, 16, 0, tzinfo=timezone.utc)
+    assert json.loads(mile.payload_json)["label"] == "Ärmelkanal"
+
+    ranks = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "rank_change")
+    ).all()
+    assert [(r.user_id, _utc(r.created_at)) for r in ranks] == [
+        (b.id, datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)),  # Ben überholt Anna
+        (a.id, datetime(2026, 7, 23, 16, 0, tzinfo=timezone.utc)),  # Anna zurück
+    ]
+    assert json.loads(ranks[0].payload_json)["ueberholt_user_id"] == a.id
+
+    ach = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "achievement")
+    ).one()
+    assert ach.user_id == a.id
+    assert _utc(ach.created_at) == datetime(2026, 7, 23, 18, 30, tzinfo=timezone.utc)
+    p = json.loads(ach.payload_json)
+    assert p["key"] == "hattrick" and p["title"] == "Hattrick" and p["emoji"] == "🎩"
+
+
+def test_backfill_zweiter_aufruf_erzeugt_nichts_neues(session):
+    _backfill_szenario(session)
+    feed.backfill_feed_events(session)
+    anzahl = len(session.exec(select(FeedEvent)).all())
+    feed.backfill_feed_events(session)
+    assert len(session.exec(select(FeedEvent)).all()) == anzahl
+
+
+def test_backfill_tut_nichts_bei_nicht_leerer_tabelle(session):
+    a, _ = _backfill_szenario(session)
+    act = session.exec(select(Activity)).first()
+    feed.activity_event(session, act)  # Tabelle nicht mehr leer
+    feed.backfill_feed_events(session)
+    assert len(session.exec(select(FeedEvent)).all()) == 1
+
+
+def test_backfill_dann_ensure_recaps_fuellt_wochen_auf(session):
+    _backfill_szenario(session)
+    feed.backfill_feed_events(session)
+    feed.ensure_recaps(session, now=datetime(2026, 7, 27, 9, 0, tzinfo=feed._MESZ))
+    recaps = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "recap_week")
+    ).all()
+    assert len(recaps) == 1
+    p = json.loads(recaps[0].payload_json)
+    assert p["period"] == "2026-W30"
+    assert p["total_mm"] == 95.0  # 30 + 40 + 25
 
 
 def test_feed_unseen_und_seen(client, session):
