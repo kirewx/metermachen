@@ -82,8 +82,9 @@ def test_guard_ok_when_addon_active(session):
 # --- CRUD-API ----------------------------------------------------------------
 
 
-def test_list_requires_login(client, session):
-    assert client.get("/api/addons").status_code == 401
+def test_list_ist_oeffentlich(client, session):
+    # Kein Login: Die Regeln-Seite braucht die Add-on-Flags auch anonym.
+    assert client.get("/api/addons").status_code == 200
 
 
 def test_create_requires_admin(client, session):

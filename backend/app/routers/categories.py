@@ -3,16 +3,16 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from ..deps import get_current_user, get_session, require_admin
+from ..deps import get_session, require_admin
 from ..models import Category
 from ..schemas import CategoryCreate, CategoryOut, CategoryPatch
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
 
-@router.get(
-    "", response_model=list[CategoryOut], dependencies=[Depends(get_current_user)]
-)
+# Öffentlich (kein Login): Die Regeln-Seite zeigt die Faktor-Tabelle auch
+# ohne Anmeldung an.
+@router.get("", response_model=list[CategoryOut])
 def list_categories(session: Session = Depends(get_session)):
     cats = session.exec(select(Category).order_by(Category.id)).all()
     return [CategoryOut.from_category(c) for c in cats]

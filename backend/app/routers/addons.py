@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from ..deps import get_current_user, get_session, require_admin
+from ..deps import get_session, require_admin
 from ..models import AddOn
 from ..schemas import AddOnCreate, AddOnOut, AddOnPatch
 
 router = APIRouter(prefix="/api/addons", tags=["addons"])
 
 
-@router.get("", response_model=list[AddOnOut], dependencies=[Depends(get_current_user)])
+# Öffentlich (kein Login): Die Regeln-Seite braucht die Add-on-Flags (Wetten-
+# Abschnitt) auch ohne Anmeldung.
+@router.get("", response_model=list[AddOnOut])
 def list_addons(session: Session = Depends(get_session)):
     addons = session.exec(select(AddOn).order_by(AddOn.key)).all()
     return [AddOnOut.from_addon(a) for a in addons]

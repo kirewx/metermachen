@@ -1,9 +1,12 @@
 from tests.conftest import login, make_category, make_user
 
 
-def test_list_categories_requires_login(client, session):
+def test_list_categories_ist_oeffentlich(client, session):
+    # Kein Login: Die Regeln-Seite zeigt die Faktor-Tabelle auch anonym.
     make_category(session)
-    assert client.get("/api/categories").status_code == 401
+    r = client.get("/api/categories")
+    assert r.status_code == 200
+    assert [c["name"] for c in r.json()] == ["Joggen"]
 
 
 def test_list_categories(client, session):
