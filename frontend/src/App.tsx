@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { api, isUnauthorized } from './api/client'
 import Layout from './components/ui/Layout'
 import Admin from './pages/Admin'
@@ -11,6 +11,21 @@ import MeineAktivitaeten from './pages/MeineAktivitaeten'
 import Regeln from './pages/Regeln'
 import Vergleich from './pages/Vergleich'
 import Wetten from './pages/Wetten'
+
+// Regeln ohne Login: Die Seite selbst bringt kein Padding mit (das liefert
+// sonst das Layout), daher hier Wrapper + Link zurück zur Anmeldung.
+function RegelnOeffentlich() {
+  return (
+    <div className="p-4">
+      <Regeln />
+      <p className="mx-auto mt-6 max-w-2xl text-xs">
+        <Link to="/" className="text-accent hover:underline">
+          ← Zur Anmeldung
+        </Link>
+      </p>
+    </div>
+  )
+}
 
 export default function App() {
   const {
@@ -52,6 +67,7 @@ export default function App() {
       <Routes>
         <Route path="/einladung/:token" element={<Einladung />} />
         <Route path="/datenschutz" element={<Datenschutz />} />
+        <Route path="/regeln" element={<RegelnOeffentlich />} />
         <Route path="*" element={<Login />} />
       </Routes>
     )

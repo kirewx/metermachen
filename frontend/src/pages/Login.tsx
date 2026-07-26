@@ -50,7 +50,11 @@ export default function Login() {
             Los geht's
           </Button>
         </Card>
-        <p className="mt-4 text-center text-[11px] text-ink-mute">
+        <p className="mt-4 flex justify-center gap-3 text-center text-[11px] text-ink-mute">
+          <Link to="/regeln" className="hover:text-accent">
+            Regeln
+          </Link>
+          <span>·</span>
           <Link to="/datenschutz" className="hover:text-accent">
             Datenschutz
           </Link>
