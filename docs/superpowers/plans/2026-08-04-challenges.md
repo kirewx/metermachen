@@ -2525,7 +2525,7 @@ git commit -m "feat(challenges): API-Typen und -Methoden im Frontend-Client"
 - Create: `frontend/src/components/challenges/wertung.ts`
 - Test: `frontend/src/components/challenges/wertung.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Neue Datei `frontend/src/components/challenges/wertung.test.ts`:
 
@@ -2581,12 +2581,12 @@ describe('wertung', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/challenges/wertung.test.ts`
 Expected: FAIL — `Failed to resolve import "./wertung"`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Neue Datei `frontend/src/components/challenges/wertung.ts`:
 
@@ -2634,12 +2634,12 @@ export function fortschritt(ch: Challenge, wert: number): number {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/components/challenges/wertung.test.ts`
 Expected: PASS (6 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/challenges/wertung.ts frontend/src/components/challenges/wertung.test.ts
