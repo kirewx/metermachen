@@ -57,4 +57,15 @@ describe('sichtbareTabs', () => {
     }).map((t) => t.to)
     expect(nachher).toContain('/feed')
   })
+
+  it('zeigt den Challenges-Tab nur bei aktivem Add-on', () => {
+    const ohne = sichtbareTabs(ECHTE_TABS, {
+      isAdmin: false, gestartet: true, aktiveAddons: new Set<string>(),
+    })
+    expect(ohne.find((t) => t.to === '/challenges')).toBeUndefined()
+    const mit = sichtbareTabs(ECHTE_TABS, {
+      isAdmin: false, gestartet: true, aktiveAddons: new Set(['challenges']),
+    })
+    expect(mit.find((t) => t.to === '/challenges')?.label).toBe('Challenges')
+  })
 })

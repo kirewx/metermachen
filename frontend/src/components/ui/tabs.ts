@@ -12,6 +12,7 @@ export const TABS: Tab[] = [
   { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
   { to: '/feed', label: 'Feed', icon: 'chart', end: false, adminOnly: false, abStart: true },
   { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
+  { to: '/challenges', label: 'Challenges', icon: 'pokal', end: false, adminOnly: false, abStart: false, addon: 'challenges' },
   { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: false, addon: 'sidebets' },
   { to: '/regeln', label: 'Regeln', icon: 'notiz', end: false, adminOnly: false, abStart: false },
   { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },

@@ -2656,7 +2656,7 @@ git commit -m "feat(challenges): Formatierhelfer fuer Wertungstext und Fortschri
 
 Die Seite `pages/Challenges.tsx` entsteht erst in Task 16 — lege in diesem Task einen minimalen Platzhalter an, damit der Build durchläuft, und fülle ihn dort.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `frontend/src/components/ui/tabs.test.ts` (innerhalb des bestehenden `describe`-Blocks):
 
@@ -2673,12 +2673,12 @@ Ans Ende von `frontend/src/components/ui/tabs.test.ts` (innerhalb des bestehende
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/ui/tabs.test.ts`
 Expected: FAIL — `expected undefined to be 'Challenges'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `frontend/src/components/ui/tabs.ts` einen Eintrag in `TABS` einfügen, direkt vor dem Wetten-Eintrag:
 
@@ -2706,12 +2706,12 @@ und im eingeloggten `<Routes>`-Block nach der `/aktivitaeten`-Route:
         <Route path="/challenges" element={<Challenges />} />
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/components/ui/tabs.test.ts && npx tsc -b`
 Expected: PASS und keine Typfehler
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/ui/tabs.ts frontend/src/components/ui/tabs.test.ts frontend/src/App.tsx frontend/src/pages/Challenges.tsx
