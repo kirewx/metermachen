@@ -1136,7 +1136,7 @@ git commit -m "feat(challenges): Lebenszyklus und Einfrieren nach Karenz"
 - Modify: `backend/app/main.py`
 - Test: `backend/tests/test_challenges_api.py` (neu)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Neue Datei `backend/tests/test_challenges_api.py`:
 
@@ -1220,12 +1220,12 @@ def test_detail_404_bei_unbekannter_id(session, client):
     assert client.get("/api/challenges/999").status_code == 404
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -v`
 Expected: FAIL — alle Requests liefern 404 (Route existiert nicht)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Neue Datei `backend/app/routers/challenges.py`:
 
@@ -1408,12 +1408,12 @@ und bei den `include_router`-Aufrufen nach `categories.router`:
 app.include_router(challenges.router)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -v`
 Expected: PASS (5 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/routers/challenges.py backend/app/main.py backend/tests/test_challenges_api.py

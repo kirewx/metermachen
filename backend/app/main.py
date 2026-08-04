@@ -17,6 +17,7 @@ from .routers import (
     auth_router,
     bets_router,
     categories,
+    challenges,
     comparison,
     feed,
     invites,
@@ -49,6 +50,7 @@ app.include_router(addons.router)
 app.include_router(bets_router.router)
 app.include_router(bets_router.points_router)
 app.include_router(categories.router)
+app.include_router(challenges.router)
 app.include_router(comparison.router)
 app.include_router(feed.router)
 app.include_router(invites.router)
