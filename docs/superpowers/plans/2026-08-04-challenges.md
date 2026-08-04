@@ -3325,7 +3325,7 @@ git commit -m "feat(challenges): Detailansicht mit Teilnehmerliste und Zustands-
 - Modify: `frontend/src/components/challenges/ChallengeDetail.tsx`
 - Test: `frontend/src/components/challenges/ChallengeDetail.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `frontend/src/components/challenges/ChallengeDetail.test.tsx`, und den `vi.mock`-Block oben um `setChallengeSieger: vi.fn().mockResolvedValue({})` erweitern:
 
@@ -3393,12 +3393,12 @@ Der Import in der Testdatei muss `fireEvent` mit aufnehmen:
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/challenges/ChallengeDetail.test.tsx`
 Expected: FAIL — `Unable to find an accessible element with the role "button" and name "Sieger eintragen"`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `frontend/src/components/challenges/ChallengeDetail.tsx` den Import von `useState` und `Select` ergänzen:
 
@@ -3487,12 +3487,12 @@ durch
               </span>
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/components/challenges/ChallengeDetail.test.tsx`
 Expected: PASS (3 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/challenges/ChallengeDetail.tsx frontend/src/components/challenges/ChallengeDetail.test.tsx

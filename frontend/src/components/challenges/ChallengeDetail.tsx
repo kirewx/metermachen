@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { Challenge, ChallengeStanding } from '../../api/client'
 import Avatar from '../ui/Avatar'
+import Select from '../ui/Select'
 import { einheit, fortschritt, wertungText } from './wertung'
 
 function Chip({ ch, s }: { ch: Challenge; s: ChallengeStanding }) {
@@ -59,6 +61,14 @@ export default function ChallengeDetail() {
       queryClient.invalidateQueries({ queryKey: ['challenges'] })
     },
   })
+  const [wahl, setWahl] = useState<number | null>(null)
+  const siegerSetzen = useMutation({
+    mutationFn: (userId: number) => api.setChallengeSieger(challengeId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] })
+      queryClient.invalidateQueries({ queryKey: ['challenges'] })
+    },
+  })
 
   if (error) return <p className="text-sm text-danger">{error.message}</p>
   if (!ch) return <p className="p-8 text-sm text-ink-mute">Lädt…</p>
@@ -99,6 +109,52 @@ export default function ChallengeDetail() {
         )}
       </header>
 
+      {ch.status === 'beendet' && ch.mode === 'ziel' && (
+        <section className="rounded-2xl border border-accent bg-card p-3">
+          {ch.sieger_id !== null ? (
+            <p className="text-sm font-bold text-ink">
+              🏆 Sieger:{' '}
+              {ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ??
+                'unbekannt'}
+              {ch.prize && (
+                <span className="font-normal text-ink-mute"> — {ch.prize}</span>
+              )}
+            </p>
+          ) : ch.kann_sieger_setzen ? (
+            <div className="flex items-end gap-2">
+              <Select
+                label="Sieger"
+                className="flex-1"
+                value={wahl === null ? '' : String(wahl)}
+                onChange={(e) => setWahl(Number(e.target.value))}
+              >
+                <option value="">– bitte wählen –</option>
+                {ch.standings
+                  .filter((s) => ch.gewinner_ids.includes(s.user_id))
+                  .map((s) => (
+                    <option key={s.user_id} value={s.user_id}>
+                      {s.display_name}
+                    </option>
+                  ))}
+              </Select>
+              <button
+                onClick={() => wahl !== null && siegerSetzen.mutate(wahl)}
+                disabled={wahl === null || siegerSetzen.isPending}
+                className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
+              >
+                Sieger eintragen
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-mute">
+              {ch.gewinner_ids.length > 0
+                ? 'Sieger wird noch ausgelost.'
+                : 'Niemand hat das Ziel erreicht.'}
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="space-y-1.5">
         {ch.standings.map((s) => (
           <div
@@ -111,6 +167,7 @@ export default function ChallengeDetail() {
               <Avatar value={s.avatar} size="sm" />
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                 {s.display_name}
+                {s.user_id === ch.sieger_id && ' 🏆'}
               </span>
               <Chip ch={ch} s={s} />
               <span className="shrink-0 text-xs font-extrabold text-ink">
