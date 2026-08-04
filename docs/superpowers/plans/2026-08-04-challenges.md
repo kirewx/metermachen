@@ -2731,7 +2731,7 @@ git commit -m "feat(challenges): Tab und Route hinter dem Add-on challenges"
 
 Vier Abschnitte in dieser Reihenfolge: „Du bist dabei" (wischbare Hero-Karten, nach `period_end` aufsteigend), „Mitmachen?" (gestrichelter Einladungsblock), „Geplant", „Beendet".
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Neue Datei `frontend/src/pages/Challenges.test.tsx`:
 
@@ -2835,12 +2835,12 @@ describe('Challenges', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/pages/Challenges.test.tsx`
 Expected: FAIL — `Unable to find an element with the text: August bis Stuttgartlauf`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Neue Datei `frontend/src/components/challenges/ChallengeHeroCard.tsx`:
 
@@ -3054,12 +3054,12 @@ export default function Challenges() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/pages/Challenges.test.tsx`
 Expected: PASS (3 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/pages/Challenges.tsx frontend/src/pages/Challenges.test.tsx frontend/src/components/challenges
