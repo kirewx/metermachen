@@ -725,7 +725,7 @@ git commit -m "feat(challenges): Streak-Abbruch sobald das Ziel unerreichbar ist
 Ein Standings-Eintrag ist ein Dict mit genau diesen Schlüsseln:
 `user_id`, `value`, `rank`, `geschafft`, `nicht_mehr_schaffbar`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Neue Datei `backend/tests/test_challenges_lifecycle.py`:
 
@@ -846,12 +846,12 @@ def test_standings_markiert_nicht_mehr_schaffbar(session):
     assert stand[0]["geschafft"] is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_lifecycle.py -v`
 Expected: FAIL — `AttributeError: module 'app.services.challenges' has no attribute 'teilnehmer_ids'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/services/challenges.py` den Import um `ChallengeParticipant` und `User` erweitern:
 
@@ -918,12 +918,12 @@ def standings(
     return eintraege
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_lifecycle.py -v`
 Expected: PASS (6 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/challenges.py backend/tests/test_challenges_lifecycle.py

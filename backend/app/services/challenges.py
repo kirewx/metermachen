@@ -16,7 +16,7 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Activity, Category, Challenge
+from ..models import Activity, Category, Challenge, ChallengeParticipant, User
 
 
 def category_ids(ch: Challenge) -> list[int]:
@@ -136,3 +136,59 @@ def streak_noch_moeglich(
     )
     resttage = max((ch.period_end - heute).days + 1, 0)
     return laufend + resttage >= ch.target
+
+
+def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
+    """Bei 'auto' alle aktiven User, bei 'opt_in' die Beigetretenen.
+    Inaktive User fallen in beiden Faellen raus."""
+    aktive = {
+        u.id for u in session.exec(select(User).where(User.is_active)).all()
+    }
+    if ch.join_mode == "auto":
+        return sorted(aktive)
+    rows = session.exec(
+        select(ChallengeParticipant).where(
+            ChallengeParticipant.challenge_id == ch.id
+        )
+    ).all()
+    return sorted(r.user_id for r in rows if r.user_id in aktive)
+
+
+def standings(
+    session: Session, ch: Challenge, heute: date_type | None = None
+) -> list[dict]:
+    """Aktueller Stand, absteigend nach Wert. Gleichstand teilt sich den Rang,
+    der Folgerang wird uebersprungen (1, 2, 2, 4)."""
+    heute = heute or date_type.today()
+    eintraege = [
+        {
+            "user_id": uid,
+            "value": metric_value(session, uid, ch, heute),
+            "rank": 0,
+            "geschafft": False,
+            "nicht_mehr_schaffbar": False,
+        }
+        for uid in teilnehmer_ids(session, ch)
+    ]
+    eintraege.sort(key=lambda e: (-e["value"], e["user_id"]))
+
+    letzter_wert = None
+    letzter_rang = 0
+    for i, e in enumerate(eintraege, start=1):
+        if letzter_wert is not None and e["value"] == letzter_wert:
+            e["rank"] = letzter_rang
+        else:
+            e["rank"] = i
+            letzter_rang = i
+            letzter_wert = e["value"]
+
+    for e in eintraege:
+        if ch.mode == "ziel":
+            e["geschafft"] = ch.target is not None and e["value"] >= ch.target
+            if not e["geschafft"]:
+                e["nicht_mehr_schaffbar"] = not streak_noch_moeglich(
+                    session, e["user_id"], ch, heute
+                )
+        else:
+            e["geschafft"] = e["rank"] <= ch.top_n
+    return eintraege
