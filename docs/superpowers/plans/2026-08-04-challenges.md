@@ -3922,7 +3922,7 @@ git commit -m "feat(challenges): Admin-Bereich zum Anlegen und Abbrechen"
 
 **Code-Bezeichner bleiben unverändert** (`phase="challenge"`, `points.challenge_start()`, `SIDEBETS_START`). Nur deutsche Anzeigetexte werden angefasst.
 
-- [ ] **Step 1: Frontend-Texte ersetzen**
+- [x] **Step 1: Frontend-Texte ersetzen**
 
 | Datei:Zeile | Alt | Neu |
 | --- | --- | --- |
@@ -3936,7 +3936,7 @@ git commit -m "feat(challenges): Admin-Bereich zum Anlegen und Abbrechen"
 | `pages/Admin.tsx:395` | `label="Challenge-Start"` | `label="Saison-Start"` |
 | `pages/Admin.tsx:402` | `label="Challenge-Ende (leer = offen)"` | `label="Saison-Ende (leer = offen)"` |
 
-- [ ] **Step 2: Backend-Texte ersetzen**
+- [x] **Step 2: Backend-Texte ersetzen**
 
 | Datei:Zeile | Alt | Neu |
 | --- | --- | --- |
@@ -3945,7 +3945,7 @@ git commit -m "feat(challenges): Admin-Bereich zum Anlegen und Abbrechen"
 | `services/achievements.py:116` | „Warm-up-Phase zum Challenge-Start." | „Warm-up-Phase zum Saison-Start." |
 | `routers/achievements.py:339` | „alleiniger Platz 1 der Challenge." | „alleiniger Platz 1 der Saison." |
 
-- [ ] **Step 3: Klarstellende Kommentare setzen**
+- [x] **Step 3: Klarstellende Kommentare setzen**
 
 Über `def compute_comparison` in `backend/app/routers/comparison.py:35`:
 
@@ -3957,21 +3957,21 @@ git commit -m "feat(challenges): Admin-Bereich zum Anlegen und Abbrechen"
 
 Über `def challenge_start` in `backend/app/services/points.py:42` derselbe Kommentar.
 
-- [ ] **Step 4: Tests nachziehen**
+- [x] **Step 4: Tests nachziehen**
 
 In `frontend/src/pages/MeineAktivitaeten.test.tsx:48,51` die erwarteten Beschreibungstexte auf „Saison" anpassen. In `frontend/src/components/ui/tabs.test.ts:26,31,46` die Testnamen von „Challenge-Start" auf „Saison-Start" ändern (nur Namen, keine Logik).
 
-- [ ] **Step 5: Prüfen, dass nichts übersehen wurde**
+- [x] **Step 5: Prüfen, dass nichts übersehen wurde**
 
 Run: `grep -rn "Challenge" frontend/src backend/app --include=*.tsx --include=*.ts --include=*.py | grep -v "challenges" | grep -v "Challenges"`
 Expected: nur noch Code-Kommentare und Bezeichner (`phase="challenge"`, `challenge_start`, `SIDEBETS_START`), keine Anzeigetexte mehr.
 
-- [ ] **Step 6: Gesamtlauf**
+- [x] **Step 6: Gesamtlauf**
 
 Run: `cd backend && uv run pytest && cd ../frontend && npm test && npx tsc -b`
 Expected: alles grün
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
