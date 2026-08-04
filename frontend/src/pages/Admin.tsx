@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api, type AddOn, type AdminUser, type Invite, type Milestone, type Season } from '../api/client'
+import ChallengesAdmin from '../components/admin/ChallengesAdmin'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
 import Collapsible from '../components/ui/Collapsible'
@@ -37,6 +38,7 @@ export default function Admin() {
       <StravaMapping />
       <Jahr />
       <AddOns />
+      <ChallengesAdmin />
       <Mitglieder />
       <Einladungen />
     </div>

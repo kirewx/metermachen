@@ -3662,7 +3662,7 @@ git commit -m "feat(challenges): Feed-Darstellung fuer Start, Qualifikation und 
 
 `Admin.tsx` hat bereits 709 Zeilen — der Abschnitt bekommt deshalb eine eigene Datei, `Admin.tsx` nur Import und Aufruf.
 
-- [ ] **Step 1: Komponente anlegen**
+- [x] **Step 1: Komponente anlegen**
 
 Neue Datei `frontend/src/components/admin/ChallengesAdmin.tsx`:
 
@@ -3880,7 +3880,7 @@ Die verwendeten Signaturen (verifiziert in `frontend/src/components/ui/`):
 - `Button`: `React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' }`.
 - `useToast()` liefert **eine Funktion** `(text: string, kind?: 'fehler' | 'ok') => void`. Ohne zweites Argument gilt `'fehler'` — bei Erfolgsmeldungen also `'ok'` mitgeben.
 
-- [ ] **Step 2: In Admin.tsx einhängen**
+- [x] **Step 2: In Admin.tsx einhängen**
 
 In `frontend/src/pages/Admin.tsx` den Import ergänzen:
 
@@ -3894,12 +3894,12 @@ und in der `Admin`-Komponente nach `<AddOns />`:
       <ChallengesAdmin />
 ```
 
-- [ ] **Step 3: Typecheck und Testlauf**
+- [x] **Step 3: Typecheck und Testlauf**
 
 Run: `cd frontend && npx tsc -b && npm test`
 Expected: keine Typfehler, alle Tests grün
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/admin/ChallengesAdmin.tsx frontend/src/pages/Admin.tsx
