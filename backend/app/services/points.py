@@ -39,6 +39,9 @@ def ensure_start_credit(session: Session, user_id: int) -> None:
         session.commit()
 
 
+# Hinweis: "challenge" meint hier die SAISON (Jahreswertung), nicht das
+# Challenges-Feature aus Spec 2026-08-04. Bezeichner bleiben aus
+# Kompatibilitaetsgruenden unveraendert, nur die Anzeigetexte heissen "Saison".
 def challenge_start(session: Session) -> date_type | None:
     season = current_season(session)
     return season.start_date if season else None

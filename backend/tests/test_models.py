@@ -75,3 +75,52 @@ def test_feed_reaction_unique_pro_user_und_emoji(session):
     with pytest.raises(IntegrityError):
         session.commit()
     session.rollback()
+
+
+def test_challenge_defaults(session):
+    from datetime import date
+
+    from app.models import Challenge
+
+    ch = Challenge(
+        title="August bis Stuttgartlauf",
+        creator_id=1,
+        mode="ziel",
+        target=300.0,
+        metric="mm",
+        join_mode="auto",
+        period_start=date(2026, 8, 4),
+        period_end=date(2026, 8, 31),
+    )
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    assert ch.status == "geplant"
+    assert ch.category_ids_json == "[]"
+    assert ch.streak_min_mm == 5.0
+    assert ch.top_n == 1
+    assert ch.result_json == "{}"
+    assert ch.prize is None
+    assert ch.resolved_at is None
+
+
+def test_challenge_participant_unique(session):
+    from datetime import date
+
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import Challenge, ChallengeParticipant
+
+    ch = Challenge(
+        title="X", creator_id=1, mode="ziel", target=1.0, metric="mm",
+        join_mode="opt_in", period_start=date(2026, 8, 1), period_end=date(2026, 8, 2),
+    )
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    session.add(ChallengeParticipant(challenge_id=ch.id, user_id=7))
+    session.commit()
+    session.add(ChallengeParticipant(challenge_id=ch.id, user_id=7))
+    with pytest.raises(IntegrityError):
+        session.commit()

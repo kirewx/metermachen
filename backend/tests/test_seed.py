@@ -59,7 +59,7 @@ def test_seed_is_idempotent(session):
     assert len(session.exec(select(User)).all()) == 1
     assert len(session.exec(select(Category)).all()) == 7
     assert len(session.exec(select(Season)).all()) == 1
-    assert len(session.exec(select(AddOn)).all()) == 2
+    assert len(session.exec(select(AddOn)).all()) == 3
 
 
 def test_seed_registers_blackboard_addon_scheduled(session):
@@ -82,3 +82,17 @@ def test_seed_legt_keine_zweite_season_an(session):
     seed_all(session, admin_user="chef", admin_password="geheim", year=2027)
     seasons = session.exec(select(Season)).all()
     assert [s.year for s in seasons] == [2026]
+
+
+def test_seed_legt_challenges_addon_aus_an(session):
+    from sqlmodel import select
+
+    from app.models import AddOn
+    from app.seed import seed_all
+
+    seed_all(session, admin_user="admin", admin_password="pw123456", year=2026)
+    addon = session.exec(select(AddOn).where(AddOn.key == "challenges")).first()
+    assert addon is not None
+    # Bewusst aus: erst befuellen, dann scharfschalten.
+    assert addon.enabled is False
+    assert addon.active_from is None

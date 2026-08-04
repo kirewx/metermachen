@@ -70,7 +70,7 @@ HIDDEN_DEFS: list[tuple[str, str, str, str]] = [
     ("kletterkoenig", "Kletterkönig", "1000 Höhenmeter an einem Tag.", "berg"),
     ("hattrick", "Hattrick", "Drei Aktivitäten an einem Tag.", "blitz"),
     ("wochenkoenig", "Wochenkönig",
-     "Sieben Tage am Stück alleiniger Platz 1 der Challenge.", "pokal"),
+     "Sieben Tage am Stück alleiniger Platz 1 der Saison.", "pokal"),
     ("psychopath", "Psychopath",
      "Mehr als drei Aktivitäten zwischen 0 und 3 Uhr nachts gestartet.", "blitz"),
     ("langstreckenguru", "Langstreckenguru",
@@ -100,7 +100,7 @@ FRUEHSTARTER_ZIEL_MM = 100.0
 
 # Sichtbar, jede Person kann es bekommen: Eintrag am ersten Challenge-Tag.
 EARLY_BIRD_DEF = ("early_bird", "Early Bird",
-                  "Schon am ersten Tag der Challenge eine Aktivität eingetragen.",
+                  "Schon am ersten Tag der Saison eine Aktivität eingetragen.",
                   "fahne")
 
 # (key, titel, beschreibung, icon) — bekommt genau eine Person (bzw. bei
@@ -113,7 +113,7 @@ EINMAL_DEFS: list[tuple[str, str, str, str]] = [
     ("erster_gold_schwimm", "Erster: Schwimmen Gold",
      "Bekommt nur, wer die Gold-Stufe Schwimmen als erste Person knackt.", "schwimmen"),
     ("testphasen_sieger", "Testphasen-Sieger",
-     "Platz 1 der Warm-up-Phase zum Challenge-Start.", "pokal"),
+     "Platz 1 der Warm-up-Phase zum Saison-Start.", "pokal"),
 ]
 
 # Special-Emojis (Spec §2.6). Stufen vergeben bewusst KEIN Emoji.

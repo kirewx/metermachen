@@ -16,6 +16,10 @@ const TYP_FARBE: Record<string, string> = {
   milestone: '#fbbf24',
   recap_week: '#fbbf24',
   recap_month: '#fbbf24',
+  challenge_start: '#34d399',
+  challenge_qualified: '#34d399',
+  challenge_end: '#34d399',
+  challenge_sieger: '#fbbf24',
 }
 
 function borderColor(ev: FeedEvent): string {
@@ -116,6 +120,57 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
               <>
                 hat den Meilenstein <b>{ev.payload.label}</b> erreicht ({ev.payload.km} km)
               </>
+            )}
+          </span>
+          <Zeit iso={ev.created_at} />
+        </div>
+      )}
+      {ev.type === 'challenge_start' && (
+        <div className="flex items-baseline gap-2 text-sm">
+          <span>🏁</span>
+          <span className="text-ink">
+            Neue Challenge: <b>{ev.payload.title}</b>
+            {ev.payload.prize && (
+              <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
+            )}
+          </span>
+          <Zeit iso={ev.created_at} />
+        </div>
+      )}
+      {ev.type === 'challenge_qualified' && (
+        <div className="flex items-baseline gap-2 text-sm">
+          <span>✅</span>
+          <span className="text-ink">
+            <b>{ev.display_name}</b> hat das Ziel geknackt —{' '}
+            <b className="text-accent">{ev.payload.title}</b>
+          </span>
+          <Zeit iso={ev.created_at} />
+        </div>
+      )}
+      {ev.type === 'challenge_sieger' && (
+        <div className="flex items-baseline gap-2 text-sm">
+          <span>🏆</span>
+          <span className="text-ink">
+            <b>{ev.display_name}</b> gewinnt <b>{ev.payload.title}</b>
+            {ev.payload.prize && (
+              <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
+            )}
+          </span>
+          <Zeit iso={ev.created_at} />
+        </div>
+      )}
+      {ev.type === 'challenge_end' && (
+        <div className="flex items-baseline gap-2 text-sm">
+          <span>🏆</span>
+          <span className="text-ink">
+            <b>{ev.payload.title}</b> ist vorbei —{' '}
+            {ev.payload.gewinner_namen && ev.payload.gewinner_namen.length > 0 ? (
+              <>
+                <b>{undListe(ev.payload.gewinner_namen)}</b>
+                {ev.payload.prize ? ` gewinnt: ${ev.payload.prize}` : ' vorn'}
+              </>
+            ) : (
+              'niemand hat es geschafft'
             )}
           </span>
           <Zeit iso={ev.created_at} />

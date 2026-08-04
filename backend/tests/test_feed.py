@@ -467,3 +467,59 @@ def test_feed_unseen_und_seen(client, session):
     assert client.get("/api/feed/unseen").json() == {"has_new": True}
     client.post("/api/feed/seen")
     assert client.get("/api/feed/unseen").json() == {"has_new": False}
+
+
+def test_challenge_events_start_qualifiziert_ende(session):
+    import json
+    from datetime import date, datetime, timedelta, timezone
+
+    from sqlmodel import select
+
+    from app.models import Activity, Challenge, FeedEvent, Season
+    from app.services import challenges as svc
+    from tests.conftest import make_category, make_user
+
+    anna = make_user(session, username="anna")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20)))
+    session.commit()
+
+    ch = Challenge(
+        title="August-Ziel", creator_id=anna.id, mode="ziel", target=100.0,
+        metric="mm", join_mode="auto", period_start=date(2026, 8, 1),
+        period_end=date(2026, 8, 31), status="geplant",
+    )
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+
+    svc.resolve_due(session, datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc))
+    typen = [e.type for e in session.exec(select(FeedEvent)).all()]
+    assert "challenge_start" in typen
+
+    session.add(
+        Activity(
+            user_id=anna.id, category_id=lauf.id,
+            date=date(2026, 8, 5), distance_km=120.0,
+        )
+    )
+    session.commit()
+    session.refresh(ch)
+    eintraege = svc.standings(session, ch, date(2026, 8, 6))
+    svc.emit_qualified(session, ch, eintraege)
+    svc.emit_qualified(session, ch, eintraege)  # zweiter Aufruf darf nichts anlegen
+    qualifiziert = [
+        e for e in session.exec(select(FeedEvent)).all()
+        if e.type == "challenge_qualified"
+    ]
+    assert len(qualifiziert) == 1
+    assert json.loads(qualifiziert[0].payload_json)["challenge_id"] == ch.id
+
+    svc.resolve_due(session, datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc))
+    ende = [
+        e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_end"
+    ]
+    assert len(ende) == 1
+    assert json.loads(ende[0].payload_json)["gewinner_ids"] == [anna.id]
+
+    assert timedelta(0) == timedelta(0)  # Import bleibt genutzt

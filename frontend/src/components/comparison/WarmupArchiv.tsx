@@ -28,7 +28,7 @@ export default function WarmupArchiv({ year }: { year: number }) {
           Warm-up-Phase <span className="text-ink-mute">(bis {startFormatiert})</span>
         </h2>
         <p className="mt-1 text-sm text-ink-mute">
-          Diese Kilometer zählen nicht für die Challenge — Ehre, wem Ehre gebührt.
+          Diese Kilometer zählen nicht für die Saison — Ehre, wem Ehre gebührt.
         </p>
         <ul className="mt-4">
           {warmup.users.map((u) => (

@@ -16,6 +16,7 @@ from ..models import (
     AchievementUnlock,
     Activity,
     Category,
+    Challenge,
     FeedEvent,
     FeedReaction,
     User,
@@ -383,3 +384,68 @@ def backfill_feed_events(session: Session) -> None:
             }),
         ))
     session.commit()
+
+
+def challenge_start_event(session: Session, ch: Challenge) -> None:
+    _emit(
+        session,
+        type_="challenge_start",
+        payload={"challenge_id": ch.id, "title": ch.title, "prize": ch.prize},
+    )
+
+
+def challenge_qualified_event(session: Session, ch: Challenge, user_id: int) -> None:
+    """Entsteht in einer Lesefunktion und muss deshalb idempotent sein:
+    pro (Challenge, User) hoechstens ein Event."""
+    for ev in session.exec(
+        select(FeedEvent).where(
+            FeedEvent.type == "challenge_qualified", FeedEvent.user_id == user_id
+        )
+    ).all():
+        if json.loads(ev.payload_json or "{}").get("challenge_id") == ch.id:
+            return
+    _emit(
+        session,
+        type_="challenge_qualified",
+        user_id=user_id,
+        payload={"challenge_id": ch.id, "title": ch.title},
+    )
+
+
+def challenge_end_event(session: Session, ch: Challenge, gewinner_ids: list[int]) -> None:
+    _emit(
+        session,
+        type_="challenge_end",
+        payload={
+            "challenge_id": ch.id,
+            "title": ch.title,
+            "prize": ch.prize,
+            "gewinner_ids": gewinner_ids,
+            "gewinner_namen": [
+                u.display_name
+                for u in session.exec(select(User)).all()
+                if u.id in gewinner_ids
+            ],
+        },
+    )
+
+
+def challenge_sieger_event(session: Session, ch: Challenge, user_id: int) -> None:
+    """Bei einer Korrektur wird das vorhandene Event umgeschrieben statt ein
+    zweites anzulegen — sonst staenden zwei widersprechende Meldungen im Feed."""
+    payload = {
+        "challenge_id": ch.id,
+        "title": ch.title,
+        "prize": ch.prize,
+        "user_id": user_id,
+    }
+    for ev in session.exec(
+        select(FeedEvent).where(FeedEvent.type == "challenge_sieger")
+    ).all():
+        if json.loads(ev.payload_json or "{}").get("challenge_id") == ch.id:
+            ev.user_id = user_id
+            ev.payload_json = json.dumps(payload)
+            session.add(ev)
+            session.commit()
+            return
+    _emit(session, type_="challenge_sieger", user_id=user_id, payload=payload)

@@ -196,3 +196,46 @@ class FeedSeen(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", unique=True, index=True)
     seen_at: datetime = Field(default_factory=utcnow)
+
+
+class Challenge(SQLModel, table=True):
+    """Zeitlich begrenzter Wettbewerb (Spec 2026-08-04). Der Stand wird zur
+    Lesezeit aus den Activities gerechnet; persistiert wird nur das am Ende
+    eingefrorene Ergebnis in result_json."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    title: str
+    description: str = ""
+    creator_id: int = Field(foreign_key="user.id", index=True)
+    prize: str | None = None  # freier Text, optional
+
+    mode: str  # "ziel" | "rangliste"
+    target: float | None = None  # mode="ziel": Schwelle
+    top_n: int = 1  # mode="rangliste": gewertete Plaetze
+
+    metric: str  # "mm" | "streak" | "anzahl"
+    category_ids_json: str = "[]"  # leer = alle Kategorien
+    streak_min_mm: float = 5.0  # nur metric="streak"
+
+    join_mode: str  # "auto" | "opt_in"
+    period_start: date_type
+    period_end: date_type
+
+    status: str = "geplant"  # "geplant" | "laufend" | "beendet" | "abgebrochen"
+    result_json: str = "{}"  # bei Abschluss eingefroren
+    created_at: datetime = Field(default_factory=utcnow)
+    resolved_at: datetime | None = None
+
+
+class ChallengeParticipant(SQLModel, table=True):
+    """Nur fuer join_mode='opt_in'. Bei 'auto' sind alle aktiven User dabei,
+    ohne dass Zeilen entstehen."""
+
+    __table_args__ = (
+        UniqueConstraint("challenge_id", "user_id", name="uq_challenge_user"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    challenge_id: int = Field(foreign_key="challenge.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    joined_at: datetime = Field(default_factory=utcnow)

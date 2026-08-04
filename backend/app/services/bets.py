@@ -100,7 +100,7 @@ def create_bet(
         raise ValueError("Zeitraum-Ende liegt vor dem Start")
     start = _season_start(session)
     if start is not None and period_start < start:
-        raise ValueError("Wetten gibt es erst ab dem Challenge-Start")
+        raise ValueError("Wetten gibt es erst ab dem Saison-Start")
     ende = _season_end(session)
     if ende is not None and period_start > ende:
         raise ValueError("Wetten gibt es nur bis zum Saisonende")
