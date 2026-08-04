@@ -144,3 +144,95 @@ def test_austreten_aus_beendeter_challenge_ist_409(session, client):
     )
     login(client)
     assert client.delete(f"/api/challenges/{ch.id}/join").status_code == 409
+
+
+def _basis(**kw) -> dict:
+    heute = date.today()
+    daten = {
+        "title": "August bis Stuttgartlauf",
+        "mode": "ziel",
+        "target": 300.0,
+        "metric": "mm",
+        "join_mode": "auto",
+        "period_start": (heute + timedelta(days=1)).isoformat(),
+        "period_end": (heute + timedelta(days=20)).isoformat(),
+    }
+    daten.update(kw)
+    return daten
+
+
+def test_anlegen_nur_als_admin(session, client):
+    make_user(session, username="erik")
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    login(client)
+    assert client.post("/api/challenges", json=_basis()).status_code == 403
+
+
+def test_admin_legt_challenge_an(session, client):
+    make_user(session, username="erik", is_admin=True)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    login(client)
+    r = client.post("/api/challenges", json=_basis(prize="Startplatz"))
+    assert r.status_code == 201, r.text
+    assert r.json()["status"] == "geplant"
+    assert r.json()["prize"] == "Startplatz"
+
+
+def test_anlegen_validiert(session, client):
+    heute = date.today()
+    make_user(session, username="erik", is_admin=True)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    login(client)
+
+    faelle = [
+        _basis(period_start=(heute + timedelta(days=9)).isoformat(),
+               period_end=(heute + timedelta(days=2)).isoformat()),
+        _basis(period_start=(heute - timedelta(days=9)).isoformat(),
+               period_end=(heute - timedelta(days=2)).isoformat()),
+        _basis(mode="ziel", target=None),
+        _basis(mode="rangliste", target=None, top_n=0),
+        _basis(metric="quatsch"),
+        _basis(metric="streak", streak_min_mm=0.0),
+        _basis(category_ids=[lauf.id, 9999]),
+        _basis(mode="quatsch"),
+        _basis(join_mode="quatsch"),
+    ]
+    for daten in faelle:
+        assert client.post("/api/challenges", json=daten).status_code == 422, daten
+
+
+def test_patch_aendert_titel_immer_regeln_nur_geplant(session, client):
+    make_user(session, username="erik", is_admin=True)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(session, status="laufend")
+    login(client)
+    r = client.patch(f"/api/challenges/{ch.id}", json={"title": "Neuer Titel"})
+    assert r.status_code == 200
+    assert r.json()["title"] == "Neuer Titel"
+    r = client.patch(f"/api/challenges/{ch.id}", json={"target": 50.0})
+    assert r.status_code == 409
+
+
+def test_patch_regeln_bei_geplanter_challenge_erlaubt(session, client):
+    heute = date.today()
+    make_user(session, username="erik", is_admin=True)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(
+        session, status="geplant",
+        period_start=heute + timedelta(days=3), period_end=heute + timedelta(days=9),
+    )
+    login(client)
+    r = client.patch(f"/api/challenges/{ch.id}", json={"target": 50.0})
+    assert r.status_code == 200
+    assert r.json()["target"] == 50.0
+
+
+def test_delete_bricht_ab_statt_zu_loeschen(session, client):
+    make_user(session, username="erik", is_admin=True)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(session)
+    login(client)
+    assert client.delete(f"/api/challenges/{ch.id}").status_code == 204
+    session.expire_all()
+    assert session.get(Challenge, ch.id).status == "abgebrochen"

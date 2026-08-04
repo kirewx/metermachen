@@ -1592,7 +1592,7 @@ git commit -m "feat(challenges): Beitreten und Austreten"
 - Modify: `backend/app/routers/challenges.py`
 - Test: `backend/tests/test_challenges_api.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_challenges_api.py`:
 
@@ -1689,12 +1689,12 @@ def test_delete_bricht_ab_statt_zu_loeschen(session, client):
     assert session.get(Challenge, ch.id).status == "abgebrochen"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -k "anlegen or patch or delete" -v`
 Expected: FAIL — 405 Method Not Allowed
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/routers/challenges.py` den deps-Import um `require_admin` erweitern:
 
@@ -1892,12 +1892,12 @@ def cancel_challenge(challenge_id: int, session: Session = Depends(get_session))
         session.commit()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -v`
 Expected: PASS (17 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/routers/challenges.py backend/tests/test_challenges_api.py
