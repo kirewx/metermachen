@@ -2122,7 +2122,7 @@ git commit -m "feat(challenges): Feed-Events fuer Start, Qualifikation und Ende"
 
 Die Auslosung passiert **außerhalb der App** (Glücksrad, Los). Der Admin trägt danach nur ein, wer gewonnen hat. Deshalb kein Zufall im Code — und der Eintrag ist korrigierbar, weil ein Vertipper sich beheben lassen muss.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_challenges_api.py`:
 
@@ -2243,12 +2243,12 @@ def test_sieger_korrektur_erzeugt_kein_zweites_feed_event(session, client):
     assert events[0].user_id == ben.id
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -k sieger -v`
 Expected: FAIL — 405 Method Not Allowed (Route fehlt)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/services/challenges.py` ans Dateiende:
 
@@ -2361,12 +2361,12 @@ Dafür oben in `routers/challenges.py` den Import erweitern:
 from datetime import datetime, timezone
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -v`
 Expected: PASS (23 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/challenges.py backend/app/services/feed.py backend/app/routers/challenges.py backend/tests/test_challenges_api.py

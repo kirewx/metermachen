@@ -6,7 +6,7 @@ gleiches Muster wie bets_router.
 
 import json
 from datetime import date as date_type
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -55,6 +55,8 @@ class ChallengeOut(BaseModel):
     standings: list[StandingEntryOut]
     mein_stand: StandingEntryOut | None  # eigener Eintrag, fuer die Hero-Karte
     gewinner_ids: list[int]
+    sieger_id: int | None
+    kann_sieger_setzen: bool
     created_at: datetime
     resolved_at: datetime | None
 
@@ -87,6 +89,10 @@ class ChallengePatchIn(BaseModel):
     join_mode: str | None = None
     period_start: date_type | None = None
     period_end: date_type | None = None
+
+
+class SiegerIn(BaseModel):
+    user_id: int
 
 
 # Felder, die nur solange status="geplant" geaendert werden duerfen —
@@ -157,6 +163,13 @@ def _challenge_out(
         standings=liste,
         mein_stand=next((e for e in liste if e.user_id == me.id), None),
         gewinner_ids=gewinner,
+        sieger_id=svc.sieger_id(ch),
+        kann_sieger_setzen=(
+            me.is_admin
+            and ch.mode == "ziel"
+            and ch.status == "beendet"
+            and len(gewinner) > 0
+        ),
         created_at=ch.created_at,
         resolved_at=ch.resolved_at,
     )
@@ -381,3 +394,24 @@ def cancel_challenge(challenge_id: int, session: Session = Depends(get_session))
         ch.status = "abgebrochen"  # nie loeschen, Historie bleibt
         session.add(ch)
         session.commit()
+
+
+@router.put(
+    "/{challenge_id}/sieger", response_model=ChallengeOut,
+    dependencies=[Depends(require_admin)],
+)
+def set_sieger(
+    challenge_id: int,
+    data: SiegerIn,
+    me: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    ch = _geladene_challenge(session, challenge_id)
+    try:
+        svc.setze_sieger(session, ch, data.user_id, datetime.now(timezone.utc))
+    except svc.NichtQualifiziert as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    session.refresh(ch)
+    return _challenge_out(session, ch, me, date_type.today())

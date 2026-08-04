@@ -428,3 +428,24 @@ def challenge_end_event(session: Session, ch: Challenge, gewinner_ids: list[int]
             ],
         },
     )
+
+
+def challenge_sieger_event(session: Session, ch: Challenge, user_id: int) -> None:
+    """Bei einer Korrektur wird das vorhandene Event umgeschrieben statt ein
+    zweites anzulegen — sonst staenden zwei widersprechende Meldungen im Feed."""
+    payload = {
+        "challenge_id": ch.id,
+        "title": ch.title,
+        "prize": ch.prize,
+        "user_id": user_id,
+    }
+    for ev in session.exec(
+        select(FeedEvent).where(FeedEvent.type == "challenge_sieger")
+    ).all():
+        if json.loads(ev.payload_json or "{}").get("challenge_id") == ch.id:
+            ev.user_id = user_id
+            ev.payload_json = json.dumps(payload)
+            session.add(ev)
+            session.commit()
+            return
+    _emit(session, type_="challenge_sieger", user_id=user_id, payload=payload)

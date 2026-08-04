@@ -264,3 +264,31 @@ def emit_qualified(session: Session, ch: Challenge, eintraege: list[dict]) -> No
     for e in eintraege:
         if e["geschafft"]:
             feed.challenge_qualified_event(session, ch, e["user_id"])
+
+
+class NichtQualifiziert(ValueError):
+    """Sieger steht nicht auf der Liste der Qualifizierten — 422, nicht 409."""
+
+
+def sieger_id(ch: Challenge) -> int | None:
+    return json.loads(ch.result_json or "{}").get("sieger", {}).get("user_id")
+
+
+def setze_sieger(
+    session: Session, ch: Challenge, user_id: int, jetzt: datetime
+) -> None:
+    """Traegt den offline ermittelten Preistraeger ein. Ueberschreibbar —
+    anders als eine Auslosung ist das ein festgehaltener Fakt, und ein
+    Vertipper muss sich korrigieren lassen."""
+    if ch.mode != "ziel":
+        raise ValueError("Ranglisten haben ihren Sieger bereits")
+    if ch.status != "beendet":
+        raise ValueError("Erst nach dem Ende der Challenge")
+    ergebnis = json.loads(ch.result_json or "{}")
+    if user_id not in ergebnis.get("gewinner_ids", []):
+        raise NichtQualifiziert("Diese Person hat das Ziel nicht erreicht")
+    ergebnis["sieger"] = {"user_id": user_id, "gesetzt_am": jetzt.isoformat()}
+    ch.result_json = json.dumps(ergebnis)
+    session.add(ch)
+    session.commit()
+    feed.challenge_sieger_event(session, ch, user_id)

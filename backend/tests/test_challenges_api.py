@@ -236,3 +236,119 @@ def test_delete_bricht_ab_statt_zu_loeschen(session, client):
     assert client.delete(f"/api/challenges/{ch.id}").status_code == 204
     session.expire_all()
     assert session.get(Challenge, ch.id).status == "abgebrochen"
+
+
+def _beendete_mit_qualifizierten(session):
+    """Beendete Ziel-Challenge, in der anna qualifiziert ist und ben nicht."""
+    import json
+
+    from app.models import Challenge
+
+    heute = date.today()
+    anna = make_user(session, username="anna", is_admin=True)
+    ben = make_user(session, username="ben")
+    ch = Challenge(
+        title="August-Ziel", creator_id=anna.id, mode="ziel", target=100.0,
+        metric="mm", join_mode="auto",
+        period_start=heute - timedelta(days=20), period_end=heute - timedelta(days=10),
+        status="beendet",
+        result_json=json.dumps(
+            {
+                "entries": [
+                    {"user_id": anna.id, "value": 120.0, "rank": 1, "geschafft": True},
+                    {"user_id": ben.id, "value": 40.0, "rank": 2, "geschafft": False},
+                ],
+                "gewinner_ids": [anna.id],
+            }
+        ),
+    )
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    return ch, anna, ben
+
+
+def test_sieger_eintragen_und_korrigieren(session, client):
+    import json
+
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, ben = _beendete_mit_qualifizierten(session)
+    login(client, username="anna")
+
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 200, r.text
+    assert r.json()["sieger_id"] == anna.id
+
+    # Korrektur ist erlaubt — ein Eintrag ist eine Tatsache, keine Ziehung.
+    ch.result_json = json.dumps(
+        {**json.loads(ch.result_json), "gewinner_ids": [anna.id, ben.id]}
+    )
+    session.add(ch)
+    session.commit()
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    assert r.status_code == 200
+    assert r.json()["sieger_id"] == ben.id
+
+
+def test_sieger_nur_aus_den_qualifizierten(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, _anna, ben = _beendete_mit_qualifizierten(session)
+    login(client, username="anna")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    assert r.status_code == 422
+
+
+def test_sieger_nur_als_admin(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, _ben = _beendete_mit_qualifizierten(session)
+    login(client, username="ben")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 403
+
+
+def test_sieger_erst_nach_dem_einfrieren(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, _ben = _beendete_mit_qualifizierten(session)
+    ch.status = "laufend"
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 409
+
+
+def test_sieger_nicht_bei_rangliste(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, _ben = _beendete_mit_qualifizierten(session)
+    ch.mode = "rangliste"
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 409
+
+
+def test_sieger_korrektur_erzeugt_kein_zweites_feed_event(session, client):
+    import json
+
+    from sqlmodel import select
+
+    from app.models import FeedEvent, Season
+
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, ben = _beendete_mit_qualifizierten(session)
+    session.add(Season(year=date.today().year, goal_km=1000.0, start_date=date.today()))
+    ch.result_json = json.dumps(
+        {**json.loads(ch.result_json), "gewinner_ids": [anna.id, ben.id]}
+    )
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+
+    client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    events = [
+        e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_sieger"
+    ]
+    assert len(events) == 1
+    assert events[0].user_id == ben.id
