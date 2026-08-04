@@ -2662,16 +2662,18 @@ Ans Ende von `frontend/src/components/ui/tabs.test.ts` (innerhalb des bestehende
 
 ```ts
   it('zeigt den Challenges-Tab nur bei aktivem Add-on', () => {
-    const ohne = sichtbareTabs(TABS, {
+    const ohne = sichtbareTabs(ECHTE_TABS, {
       isAdmin: false, gestartet: true, aktiveAddons: new Set<string>(),
     })
     expect(ohne.find((t) => t.to === '/challenges')).toBeUndefined()
-    const mit = sichtbareTabs(TABS, {
+    const mit = sichtbareTabs(ECHTE_TABS, {
       isAdmin: false, gestartet: true, aktiveAddons: new Set(['challenges']),
     })
     expect(mit.find((t) => t.to === '/challenges')?.label).toBe('Challenges')
   })
 ```
+
+> **Achtung:** `tabs.test.ts` deklariert oben ein **lokales, synthetisches** `TABS`-Array und importiert das echte als `ECHTE_TABS`. Dieser Test muss gegen `ECHTE_TABS` prüfen — gegen das lokale `TABS` könnte er nie grün werden, weil die Änderung in `tabs.ts` dort nicht ankommt. Der Nachbartest „zeigt den Feed-Tab nur ab Challenge-Start" macht es genauso.
 
 - [x] **Step 2: Run test to verify it fails**
 
