@@ -2400,7 +2400,7 @@ git commit -m "fix(challenges): Regressionen aus dem Gesamtlauf behoben"
 
 Reiner Typ- und Methoden-Zuwachs, kein eigener Test — die Nutzung wird in Task 16/17 getestet.
 
-- [ ] **Step 1: Typen ergänzen**
+- [x] **Step 1: Typen ergänzen**
 
 In `frontend/src/api/client.ts` vor `export class ApiError` einfügen:
 
@@ -2482,7 +2482,7 @@ und im `payload`-Objekt ergänzen:
     gewinner_namen?: string[]
 ```
 
-- [ ] **Step 2: API-Methoden ergänzen**
+- [x] **Step 2: API-Methoden ergänzen**
 
 Im `api`-Objekt nach `betAchievements:` einfügen:
 
@@ -2505,12 +2505,12 @@ Im `api`-Objekt nach `betAchievements:` einfügen:
     }),
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `cd frontend && npx tsc -b`
 Expected: keine Fehler
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/api/client.ts

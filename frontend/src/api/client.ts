@@ -253,7 +253,17 @@ export type BetAchievement = {
 export type FeedReaction = { emoji: string; count: number; mine: boolean; users: string[] }
 export type FeedEvent = {
   id: number
-  type: 'activity' | 'rank_change' | 'achievement' | 'milestone' | 'recap_week' | 'recap_month'
+  type:
+    | 'activity'
+    | 'rank_change'
+    | 'achievement'
+    | 'milestone'
+    | 'recap_week'
+    | 'recap_month'
+    | 'challenge_start'
+    | 'challenge_qualified'
+    | 'challenge_end'
+    | 'challenge_sieger'
   user_id: number | null
   display_name: string | null
   avatar: string | null
@@ -290,10 +300,65 @@ export type FeedEvent = {
       neuer_rang: number
     }[]
     achievements?: { user_id: number | null; title?: string; emoji?: string | null; label?: string }[]
+    challenge_id?: number
+    prize?: string | null
+    gewinner_ids?: number[]
+    gewinner_namen?: string[]
   }
   reactions: FeedReaction[]
 }
 export type FeedPage = { events: FeedEvent[]; next_before: number | null }
+
+export type ChallengeStanding = {
+  user_id: number
+  display_name: string
+  avatar: string
+  value: number
+  rank: number
+  geschafft: boolean
+  nicht_mehr_schaffbar: boolean
+}
+export type Challenge = {
+  id: number
+  title: string
+  description: string
+  prize: string | null
+  creator_id: number
+  mode: 'ziel' | 'rangliste'
+  target: number | null
+  top_n: number
+  metric: 'mm' | 'streak' | 'anzahl'
+  category_ids: number[]
+  streak_min_mm: number
+  join_mode: 'auto' | 'opt_in'
+  period_start: string
+  period_end: string
+  status: 'geplant' | 'laufend' | 'beendet' | 'abgebrochen'
+  vorlaeufig: boolean
+  bin_dabei: boolean
+  kann_beitreten: boolean
+  standings: ChallengeStanding[]
+  mein_stand: ChallengeStanding | null
+  gewinner_ids: number[]
+  sieger_id: number | null
+  kann_sieger_setzen: boolean
+  created_at: string
+  resolved_at: string | null
+}
+export type ChallengeInput = {
+  title: string
+  description?: string
+  prize?: string | null
+  mode: Challenge['mode']
+  target?: number | null
+  top_n?: number
+  metric: Challenge['metric']
+  category_ids?: number[]
+  streak_min_mm?: number
+  join_mode: Challenge['join_mode']
+  period_start: string
+  period_end: string
+}
 
 /** Fehler mit HTTP-Status, damit Aufrufer 401 (Session weg) von Netz-/Serverfehlern trennen können. */
 export class ApiError extends Error {
@@ -414,6 +479,22 @@ export const api = {
   points: () => request<PointsInfo>('/api/points'),
   pointsRanking: () => request<PointsRankingEntry[]>('/api/points/ranking'),
   betAchievements: () => request<BetAchievement[]>('/api/bets/achievements'),
+  challenges: () => request<Challenge[]>('/api/challenges'),
+  challenge: (id: number) => request<Challenge>(`/api/challenges/${id}`),
+  joinChallenge: (id: number) =>
+    request<Challenge>(`/api/challenges/${id}/join`, { method: 'POST' }),
+  leaveChallenge: (id: number) =>
+    request<Challenge>(`/api/challenges/${id}/join`, { method: 'DELETE' }),
+  createChallenge: (b: ChallengeInput) => request<Challenge>('/api/challenges', post(b)),
+  patchChallenge: (id: number, b: Partial<ChallengeInput>) =>
+    request<Challenge>(`/api/challenges/${id}`, patch(b)),
+  cancelChallenge: (id: number) =>
+    request<void>(`/api/challenges/${id}`, { method: 'DELETE' }),
+  setChallengeSieger: (id: number, userId: number) =>
+    request<Challenge>(`/api/challenges/${id}/sieger`, {
+      method: 'PUT',
+      body: JSON.stringify({ user_id: userId }),
+    }),
   feed: (year: number, before?: number) =>
     request<FeedPage>(`/api/feed?year=${year}${before ? `&before=${before}` : ''}`),
   toggleFeedReaction: (eventId: number, emoji: string) =>
