@@ -3555,8 +3555,13 @@ Und ans Ende des `describe`-Blocks:
       expect(screen.getByText(/Neue Challenge/)).toBeInTheDocument(),
     )
     expect(screen.getByText(/hat das Ziel geknackt/)).toBeInTheDocument()
-    expect(screen.getByText(/Juli-Sprint ist vorbei/)).toBeInTheDocument()
-    expect(screen.getByText(/gewinnt/)).toBeInTheDocument()
+    // getByText fasst nur DIREKTE Textknoten eines Elements zusammen. "Juli-Sprint"
+    // steckt in einem <b>, "ist vorbei" ist ein Geschwisterknoten — eine Regex ueber
+    // beide zusammen matcht nie. Deshalb zwei getrennte Assertions.
+    expect(screen.getByText('Juli-Sprint')).toBeInTheDocument()
+    expect(screen.getByText(/ist vorbei/)).toBeInTheDocument()
+    // /gewinnt/ trifft sowohl challenge_sieger als auch challenge_end.
+    expect(screen.getAllByText(/gewinnt/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Ben/).length).toBeGreaterThan(0)
   })
 ```
