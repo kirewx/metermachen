@@ -17,7 +17,7 @@ export default function CountdownBanner() {
   if (!label) return null
   return (
     <div className="border-b border-accent/30 bg-card/60 px-4 py-1.5 text-center text-sm">
-      <span className="text-ink-mute">Testphase — Challenge startet in </span>
+      <span className="text-ink-mute">Testphase — Saison startet in </span>
       <span className="font-mono font-bold tabular-nums text-accent [text-shadow:var(--t-glow)]">
         {label}
       </span>

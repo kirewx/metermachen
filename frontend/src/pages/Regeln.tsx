@@ -22,7 +22,7 @@ export default function Regeln() {
     <div className="mx-auto max-w-2xl space-y-4">
       <Abschnitt titel="Worum geht es">
         <p>
-          MeterMachen ist unsere gemeinsame Jahres-Challenge. Das Ziel: Wer schafft es, innerhalb
+          MeterMachen ist unsere gemeinsame Saison. Das Ziel: Wer schafft es, innerhalb
           eines Jahres die meisten Meter anzusammeln? Ob Laufen, Radfahren, Schwimmen oder was
           auch immer dich bewegt. Damit unterschiedliche Sportarten fair gegeneinander antreten,
           zählen nicht die rohen Kilometer, sondern{' '}
@@ -36,7 +36,7 @@ export default function Regeln() {
 
       <Abschnitt titel="Zeitraum">
         <p>
-          Die Challenge startet am <strong className="text-ink">20.07.2026</strong> und läuft bis
+          Die Saison startet am <strong className="text-ink">20.07.2026</strong> und läuft bis
           zum <strong className="text-ink">Stuttgartlauf 2027</strong>. Alles davor war Warm-up:
           Diese Kilometer zählen nicht für die Hauptwertung, bleiben aber im Archiv sichtbar,
           inklusive der Warm-up-Auszeichnungen.
@@ -92,7 +92,7 @@ export default function Regeln() {
           <p>
             Im Wetten-Tab kannst du Punkte auf sportliche Duelle, Monats-Tipps, Ziel-, Streak-
             und Über/Unter-Wetten setzen. Punkte-Nachschub gibt es über Sport: +1 Punkt je 5
-            gewertete km seit Challenge-Start. Punkte sind Spielwährung, kein Echtgeld.
+            gewertete km seit Saison-Start. Punkte sind Spielwährung, kein Echtgeld.
           </p>
           <p className="text-xs text-ink-mute">
             Der Wettenbereich ist noch in Bearbeitung. Details können sich ändern.

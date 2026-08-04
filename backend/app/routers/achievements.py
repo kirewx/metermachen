@@ -336,7 +336,7 @@ def achievements(
         AchievementOut(
             key="zeit_an_der_spitze",
             title="Zeit an der Spitze",
-            description="Deine Gesamtzeit als alleiniger Platz 1 der Challenge.",
+            description="Deine Gesamtzeit als alleiniger Platz 1 der Saison.",
             icon="pokal",
             achieved=stunden > 0,
             progress=1.0 if stunden > 0 else 0.0,

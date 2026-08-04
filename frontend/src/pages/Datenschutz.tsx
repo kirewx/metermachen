@@ -11,7 +11,7 @@ export default function Datenschutz() {
       <div>
         <h1 className="text-xl font-black tracking-wide text-ink">Datenschutz</h1>
         <p className="mt-1 text-xs text-ink-mute">
-          MeterMachen — private Fitness-Challenge im Freundeskreis (nur per Einladung)
+          MeterMachen — private Fitness-Saison im Freundeskreis (nur per Einladung)
         </p>
       </div>
 
@@ -46,7 +46,7 @@ export default function Datenschutz() {
           <li>deine Strava-Athleten-ID sowie die Zugriffs-/Erneuerungs-Token (Access/Refresh Token)</li>
         </ul>
         <p>
-          Die Token brauchen wir, um deine neuen Aktivitäten für die Challenge abzurufen.
+          Die Token brauchen wir, um deine neuen Aktivitäten für die Saison abzurufen.
           Sie werden auf unserem Server gespeichert und nicht an Dritte weitergegeben.
         </p>
         <p>

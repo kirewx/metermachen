@@ -63,7 +63,7 @@ export default function Wetten() {
           </p>
         </div>
         <p className="max-w-56 text-xs text-ink-mute">
-          Nachschub gibt's über Sport: +1 Punkt je 5 gewertete km seit Challenge-Start.
+          Nachschub gibt's über Sport: +1 Punkt je 5 gewertete km seit Saison-Start.
         </p>
         <Button className="ml-auto" onClick={() => setDialogOffen(true)}>
           <span className="flex items-center gap-1.5">

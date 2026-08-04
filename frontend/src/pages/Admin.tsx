@@ -394,14 +394,14 @@ function Jahr() {
       />
       <div className="mt-3 flex flex-wrap gap-3">
         <Input
-          label="Challenge-Start"
+          label="Saison-Start"
           type="date"
           className="w-40"
           defaultValue={season.start_date ?? ''}
           onChange={(e) => setStartDatum(e.target.value)}
         />
         <Input
-          label="Challenge-Ende (leer = offen)"
+          label="Saison-Ende (leer = offen)"
           type="date"
           className="w-40"
           defaultValue={season.end_date ?? ''}

@@ -32,6 +32,9 @@ from ..schemas import (
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
 
 
+# Hinweis: "challenge" meint hier die SAISON (Jahreswertung), nicht das
+# Challenges-Feature aus Spec 2026-08-04. Bezeichner bleiben aus
+# Kompatibilitaetsgruenden unveraendert, nur die Anzeigetexte heissen "Saison".
 def compute_comparison(
     session: Session, year: int, phase: Literal["challenge", "warmup"] = "challenge"
 ) -> ComparisonOut:

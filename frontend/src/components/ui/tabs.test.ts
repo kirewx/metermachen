@@ -23,12 +23,12 @@ describe('sichtbareTabs', () => {
     expect(l).toContain('Admin')
   })
 
-  it('blendet abStart-Tab vor Challenge-Start aus', () => {
+  it('blendet abStart-Tab vor Saison-Start aus', () => {
     const l = labels({ isAdmin: false, gestartet: false, aktiveAddons: new Set() })
     expect(l).not.toContain('Später')
   })
 
-  it('zeigt abStart-Tab ab Challenge-Start', () => {
+  it('zeigt abStart-Tab ab Saison-Start', () => {
     const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set() })
     expect(l).toContain('Später')
   })
@@ -43,7 +43,7 @@ describe('sichtbareTabs', () => {
     expect(l).toContain('Wetten')
   })
 
-  it('zeigt den Feed-Tab nur ab Challenge-Start', () => {
+  it('zeigt den Feed-Tab nur ab Saison-Start', () => {
     const vorher = sichtbareTabs(ECHTE_TABS, {
       isAdmin: false,
       gestartet: false,
