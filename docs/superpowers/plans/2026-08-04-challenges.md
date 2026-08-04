@@ -3074,7 +3074,7 @@ git commit -m "feat(challenges): Uebersichtsseite mit Hero-Karten und Einladunge
 - Create: `frontend/src/components/challenges/ChallengeDetail.tsx`, `ChallengeDetail.test.tsx`
 - Modify: `frontend/src/App.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Neue Datei `frontend/src/components/challenges/ChallengeDetail.test.tsx`:
 
@@ -3135,12 +3135,12 @@ describe('ChallengeDetail', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/challenges/ChallengeDetail.test.tsx`
 Expected: FAIL — `Failed to resolve import "./ChallengeDetail"`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Neue Datei `frontend/src/components/challenges/ChallengeDetail.tsx`:
 
@@ -3305,12 +3305,12 @@ und die Route direkt nach `/challenges`:
 
 Verfügbare Theme-Farben laut `frontend/src/index.css`: `surface`, `card`, `line`, `accent`, `accent-ink`, `ink`, `ink-soft`, `ink-mute`, `ink-tech`, `danger`. Es gibt **keine** Erfolgsfarbe — erfinde keine, der Code oben nutzt bewusst nur diese.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/components/challenges/ChallengeDetail.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/challenges/ChallengeDetail.tsx frontend/src/components/challenges/ChallengeDetail.test.tsx frontend/src/App.tsx
