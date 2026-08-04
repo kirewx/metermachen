@@ -12,11 +12,19 @@ Saison-Ranking, eine 300-MM-Huerde soll fuer alle dieselbe Huerde sein.
 import json
 from collections import defaultdict
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from datetime import time as time_type
 
 from sqlmodel import Session, select
 
 from ..models import Activity, Category, Challenge, ChallengeParticipant, User
+
+# Karenz nach Challenge-Ende: Einfrieren erst am Folgetag um 06:00 deutscher
+# Zeit. Deckt einen ausstehenden Strava-Sync und eine Aktivitaet kurz vor
+# Mitternacht ab, die erst am naechsten Morgen eingetragen wird.
+KARENZ_STUNDE = 6
+# Fester Sommerzeit-Offset wie in services/feed.py und services/achievements.py.
+_MESZ = timezone(timedelta(hours=2))
 
 
 def category_ids(ch: Challenge) -> list[int]:
@@ -192,3 +200,54 @@ def standings(
         else:
             e["geschafft"] = e["rank"] <= ch.top_n
     return eintraege
+
+
+def freeze_at(ch: Challenge) -> datetime:
+    """UTC-Zeitpunkt, ab dem das Ergebnis feststeht."""
+    tag = ch.period_end + timedelta(days=1)
+    return datetime.combine(
+        tag, time_type(KARENZ_STUNDE, 0), tzinfo=_MESZ
+    ).astimezone(timezone.utc)
+
+
+def ist_vorlaeufig(ch: Challenge, heute: date_type) -> bool:
+    """Zeitraum vorbei, Ergebnis aber noch nicht eingefroren."""
+    return ch.status == "laufend" and heute > ch.period_end
+
+
+def _einfrieren(session: Session, ch: Challenge, jetzt: datetime, heute: date_type) -> None:
+    eintraege = standings(session, ch, heute)
+    ch.result_json = json.dumps(
+        {
+            "entries": [
+                {k: e[k] for k in ("user_id", "value", "rank", "geschafft")}
+                for e in eintraege
+            ],
+            "gewinner_ids": [e["user_id"] for e in eintraege if e["geschafft"]],
+        }
+    )
+    ch.status = "beendet"
+    ch.resolved_at = jetzt
+    session.add(ch)
+    session.commit()
+
+
+def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
+    """Faellige Statusuebergaenge, lazy beim Request — kein Cron.
+    Gleiches Muster wie bets.resolve_due."""
+    jetzt = jetzt or datetime.now(timezone.utc)
+    heute = jetzt.astimezone(_MESZ).date()
+
+    for ch in session.exec(
+        select(Challenge).where(Challenge.status == "geplant").order_by(Challenge.id)
+    ).all():
+        if heute >= ch.period_start:
+            ch.status = "laufend"
+            session.add(ch)
+            session.commit()
+
+    for ch in session.exec(
+        select(Challenge).where(Challenge.status == "laufend").order_by(Challenge.id)
+    ).all():
+        if jetzt >= freeze_at(ch):
+            _einfrieren(session, ch, jetzt, heute)

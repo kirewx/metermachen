@@ -940,7 +940,7 @@ git commit -m "feat(challenges): Teilnehmer-Ermittlung und Rangliste mit geteilt
 
 Einfrierzeitpunkt: Folgetag von `period_end`, 06:00 deutscher Zeit. Feed-Events kommen erst in Task 11 dazu — hier bleibt `resolve_due` noch ohne Feed.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_challenges_lifecycle.py`:
 
@@ -1036,12 +1036,12 @@ def test_resolve_due_ignoriert_abgebrochene(session):
     assert ch.status == "abgebrochen"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_lifecycle.py -k "freeze or resolve or eingefroren" -v`
 Expected: FAIL — `AttributeError: module 'app.services.challenges' has no attribute 'freeze_at'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/services/challenges.py` die Imports oben ergänzen:
 
@@ -1115,12 +1115,12 @@ def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
             _einfrieren(session, ch, jetzt, heute)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_lifecycle.py -v`
 Expected: PASS (12 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/challenges.py backend/tests/test_challenges_lifecycle.py
