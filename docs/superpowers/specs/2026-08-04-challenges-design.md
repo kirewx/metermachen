@@ -37,8 +37,8 @@ Anzeige und Code.
   Modell, es fehlt nur die Rechteprüfung)
 - Eingeschränkter Teilnehmerkreis (ausgewählte Personen)
 - Kopplung an Punkte-Ledger, Wetten oder Achievements
-- Automatische Verlosung unter den Qualifizierten — die App ermittelt, wer
-  qualifiziert ist; gezogen wird offline
+- **Auslosung in der App.** Die App ermittelt, wer qualifiziert ist, und hält
+  fest, wer gewonnen hat — gezogen wird offline (Glücksrad o. Ä.)
 
 ## Datenmodell
 
@@ -192,6 +192,40 @@ Es gibt **keinen Recompute-Endpunkt**. Eine Korrektur, die später als der
 Einfrierzeitpunkt eintrifft, ändert das Ergebnis nicht mehr. Das ist gewollt:
 Ende der Challenge ist Ende der Challenge.
 
+### Sieger eintragen (Ziel-Challenges)
+
+Bei `mode="ziel"` liefert die App die Liste der Qualifizierten. Wenn daraus ein
+einzelner Preis vergeben wird (Beispiel: ein Startplatz), findet die Ziehung
+**außerhalb der App** statt — Glücksrad, Los, wie auch immer. Der Admin trägt
+danach den Sieger ein, damit alle sehen, wer gewonnen hat.
+
+- **Nur `mode="ziel"`.** Ranglisten-Challenges haben per Definition schon einen
+  Sieger.
+- **Erst nach dem Einfrieren** (`status="beendet"`). Vorher steht der Kreis der
+  Qualifizierten nicht fest.
+- **Nur aus den Qualifizierten.** Wer die Schwelle nicht geknackt hat, lässt
+  sich nicht eintragen — sonst wäre die ganze Wertung wertlos.
+- **Korrigierbar.** Anders als eine Auslosung ist ein Eintrag eine
+  festgehaltene Tatsache; ein Vertipper muss sich beheben lassen. Ein erneutes
+  Setzen überschreibt den vorherigen Eintrag.
+
+Das Ergebnis wird in `result_json` unter `sieger` abgelegt:
+
+```json
+{
+  "entries": [...],
+  "gewinner_ids": [3, 7, 12],
+  "sieger": {
+    "user_id": 7,
+    "gesetzt_am": "2026-09-01T18:30:00+00:00"
+  }
+}
+```
+
+`gewinner_ids` (alle Qualifizierten) und `sieger` (der eine Preisträger) sind
+bewusst getrennt: Ersteres ist die Wertung der App, Letzteres eine Entscheidung
+von außen.
+
 ### Beitritt
 
 - Nur bei `join_mode="opt_in"`. Bei `auto` sind alle aktiven Nutzer dabei.
@@ -225,6 +259,7 @@ hinter `Depends(require_addon("challenges"))`.
 | `POST /api/challenges` | Admin | Anlegen |
 | `PATCH /api/challenges/{id}` | Admin | Bearbeiten |
 | `DELETE /api/challenges/{id}` | Admin | Abbrechen (Status `abgebrochen`, keine Löschung) |
+| `PUT /api/challenges/{id}/sieger` | Admin | Sieger eintragen oder korrigieren (Body: `{"user_id": 7}`) |
 
 ### Fehlerfälle
 
@@ -234,6 +269,9 @@ hinter `Depends(require_addon("challenges"))`.
 | Beitritt nach `period_end` | 409 |
 | Austritt aus nicht laufender Challenge | 409 |
 | Wertungsregeln an nicht mehr `geplant`er Challenge ändern | 409 |
+| Sieger eintragen bei `mode="rangliste"` | 409 |
+| Sieger eintragen vor dem Einfrieren | 409 |
+| Sieger eintragen, der nicht qualifiziert ist | 422 |
 | `period_end < period_start` | 422 |
 | `period_end` liegt in der Vergangenheit (beim Anlegen) | 422 |
 | `mode="ziel"` ohne `target` | 422 |
@@ -298,6 +336,12 @@ Bewusst kein Podest und keine Bahnen-Darstellung: die Liste skaliert auf
 beliebig viele Teilnehmer, braucht kein Querscrollen und stellt alle drei
 Zustände gleich deutlich dar.
 
+**Bei beendeten Ziel-Challenges** steht über der Liste ein Siegerband:
+„🏆 Sieger: Ben — Startplatz". Ist noch keiner eingetragen, sieht der Admin
+dort ein Auswahlfeld mit den Qualifizierten und einen Knopf „Sieger
+eintragen"; alle anderen sehen den Hinweis „Sieger wird noch ausgelost". Die
+eingetragene Person wird zusätzlich in der Teilnehmerliste mit 🏆 markiert.
+
 ## Feed-Integration
 
 Drei neue `FeedEvent`-Typen. `FeedItem.tsx` bekommt die Darstellungen;
@@ -308,6 +352,11 @@ Reaktionen funktionieren dadurch automatisch mit.
 | `challenge_start` | `resolve_due`, Übergang nach `laufend` | `challenge_id`, `title`, `prize` |
 | `challenge_qualified` | beim Berechnen, sobald jemand `target` erreicht (nur `mode="ziel"`) | `challenge_id`, `title`, `user_id` |
 | `challenge_end` | `resolve_due`, beim Einfrieren | `challenge_id`, `title`, `gewinner_ids`, `prize` |
+| `challenge_sieger` | Admin trägt den Sieger ein | `challenge_id`, `title`, `prize`, `user_id` |
+
+Beim Korrigieren eines bereits gesetzten Siegers entsteht **kein** zweites
+Event — das vorhandene wird auf den neuen Sieger umgeschrieben, damit im Feed
+nicht zwei widersprechende Meldungen stehen.
 
 `challenge_qualified` entsteht in einer Lesefunktion, die bei jedem Request
 läuft, und muss deshalb **idempotent** sein: vor dem Anlegen wird geprüft, ob
@@ -336,17 +385,21 @@ erhalten, bis die Wetten überarbeitet werden.
 - Gleichstand: gleicher Rang, übersprungener Folgerang, mehr als `top_n` Gewinner
 - inaktive Nutzer erscheinen weder im Stand noch in `result_json`
 - abgebrochene Challenges tauchen in `GET /api/challenges` nicht auf
+- Sieger eintragen: nur Admin, nur `mode="ziel"`, nur nach dem Einfrieren,
+  nur aus den Qualifizierten; Korrektur überschreibt
 - alle Fehlercodes aus der Tabelle oben
 
 **`backend/tests/test_feed.py`**
 
-- die drei neuen Event-Typen
+- die vier neuen Event-Typen
 - `challenge_qualified` entsteht bei wiederholten Requests genau einmal
+- eine Sieger-Korrektur erzeugt kein zweites `challenge_sieger`-Event
 
 **Frontend**
 
 - `Challenges.test.tsx` — die vier Abschnitte, Beitreten, leerer Zustand
-- `ChallengeDetail.test.tsx` — die drei Zustands-Chips, „vorläufig"-Hinweis
+- `ChallengeDetail.test.tsx` — die drei Zustands-Chips, „vorläufig"-Hinweis,
+  Siegerband und Admin-Auswahlfeld
 - `tabs.test.ts` — Tab erscheint nur bei aktivem Add-on
 
 ## Erste Challenge

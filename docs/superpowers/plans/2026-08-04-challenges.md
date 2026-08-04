@@ -2114,6 +2114,267 @@ git commit -m "feat(challenges): Feed-Events fuer Start, Qualifikation und Ende"
 
 ---
 
+## Task 11a: Sieger eintragen
+
+**Files:**
+- Modify: `backend/app/services/challenges.py`, `backend/app/services/feed.py`, `backend/app/routers/challenges.py`
+- Test: `backend/tests/test_challenges_api.py`
+
+Die Auslosung passiert **außerhalb der App** (Glücksrad, Los). Der Admin trägt danach nur ein, wer gewonnen hat. Deshalb kein Zufall im Code — und der Eintrag ist korrigierbar, weil ein Vertipper sich beheben lassen muss.
+
+- [ ] **Step 1: Write the failing test**
+
+Ans Ende von `backend/tests/test_challenges_api.py`:
+
+```python
+def _beendete_mit_qualifizierten(session):
+    """Beendete Ziel-Challenge, in der anna qualifiziert ist und ben nicht."""
+    import json
+
+    from app.models import Challenge
+
+    heute = date.today()
+    anna = make_user(session, username="anna", is_admin=True)
+    ben = make_user(session, username="ben")
+    ch = Challenge(
+        title="August-Ziel", creator_id=anna.id, mode="ziel", target=100.0,
+        metric="mm", join_mode="auto",
+        period_start=heute - timedelta(days=20), period_end=heute - timedelta(days=10),
+        status="beendet",
+        result_json=json.dumps(
+            {
+                "entries": [
+                    {"user_id": anna.id, "value": 120.0, "rank": 1, "geschafft": True},
+                    {"user_id": ben.id, "value": 40.0, "rank": 2, "geschafft": False},
+                ],
+                "gewinner_ids": [anna.id],
+            }
+        ),
+    )
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    return ch, anna, ben
+
+
+def test_sieger_eintragen_und_korrigieren(session, client):
+    import json
+
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, ben = _beendete_mit_qualifizierten(session)
+    login(client, username="anna")
+
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 200, r.text
+    assert r.json()["sieger_id"] == anna.id
+
+    # Korrektur ist erlaubt — ein Eintrag ist eine Tatsache, keine Ziehung.
+    ch.result_json = json.dumps(
+        {**json.loads(ch.result_json), "gewinner_ids": [anna.id, ben.id]}
+    )
+    session.add(ch)
+    session.commit()
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    assert r.status_code == 200
+    assert r.json()["sieger_id"] == ben.id
+
+
+def test_sieger_nur_aus_den_qualifizierten(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, _anna, ben = _beendete_mit_qualifizierten(session)
+    login(client, username="anna")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    assert r.status_code == 422
+
+
+def test_sieger_nur_als_admin(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, _ben = _beendete_mit_qualifizierten(session)
+    login(client, username="ben")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 403
+
+
+def test_sieger_erst_nach_dem_einfrieren(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, _ben = _beendete_mit_qualifizierten(session)
+    ch.status = "laufend"
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 409
+
+
+def test_sieger_nicht_bei_rangliste(session, client):
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, _ben = _beendete_mit_qualifizierten(session)
+    ch.mode = "rangliste"
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    assert r.status_code == 409
+
+
+def test_sieger_korrektur_erzeugt_kein_zweites_feed_event(session, client):
+    import json
+
+    from sqlmodel import select
+
+    from app.models import FeedEvent, Season
+
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, anna, ben = _beendete_mit_qualifizierten(session)
+    session.add(Season(year=date.today().year, goal_km=1000.0, start_date=date.today()))
+    ch.result_json = json.dumps(
+        {**json.loads(ch.result_json), "gewinner_ids": [anna.id, ben.id]}
+    )
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+
+    client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": anna.id})
+    client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    events = [
+        e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_sieger"
+    ]
+    assert len(events) == 1
+    assert events[0].user_id == ben.id
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd backend && uv run pytest tests/test_challenges_api.py -k sieger -v`
+Expected: FAIL — 405 Method Not Allowed (Route fehlt)
+
+- [ ] **Step 3: Write minimal implementation**
+
+In `backend/app/services/challenges.py` ans Dateiende:
+
+```python
+class NichtQualifiziert(ValueError):
+    """Sieger steht nicht auf der Liste der Qualifizierten — 422, nicht 409."""
+
+
+def sieger_id(ch: Challenge) -> int | None:
+    return json.loads(ch.result_json or "{}").get("sieger", {}).get("user_id")
+
+
+def setze_sieger(
+    session: Session, ch: Challenge, user_id: int, jetzt: datetime
+) -> None:
+    """Traegt den offline ermittelten Preistraeger ein. Ueberschreibbar —
+    anders als eine Auslosung ist das ein festgehaltener Fakt, und ein
+    Vertipper muss sich korrigieren lassen."""
+    if ch.mode != "ziel":
+        raise ValueError("Ranglisten haben ihren Sieger bereits")
+    if ch.status != "beendet":
+        raise ValueError("Erst nach dem Ende der Challenge")
+    ergebnis = json.loads(ch.result_json or "{}")
+    if user_id not in ergebnis.get("gewinner_ids", []):
+        raise NichtQualifiziert("Diese Person hat das Ziel nicht erreicht")
+    ergebnis["sieger"] = {"user_id": user_id, "gesetzt_am": jetzt.isoformat()}
+    ch.result_json = json.dumps(ergebnis)
+    session.add(ch)
+    session.commit()
+    feed.challenge_sieger_event(session, ch, user_id)
+```
+
+In `backend/app/services/feed.py` ans Dateiende:
+
+```python
+def challenge_sieger_event(session: Session, ch: Challenge, user_id: int) -> None:
+    """Bei einer Korrektur wird das vorhandene Event umgeschrieben statt ein
+    zweites anzulegen — sonst staenden zwei widersprechende Meldungen im Feed."""
+    payload = {
+        "challenge_id": ch.id,
+        "title": ch.title,
+        "prize": ch.prize,
+        "user_id": user_id,
+    }
+    for ev in session.exec(
+        select(FeedEvent).where(FeedEvent.type == "challenge_sieger")
+    ).all():
+        if json.loads(ev.payload_json or "{}").get("challenge_id") == ch.id:
+            ev.user_id = user_id
+            ev.payload_json = json.dumps(payload)
+            session.add(ev)
+            session.commit()
+            return
+    _emit(session, type_="challenge_sieger", user_id=user_id, payload=payload)
+```
+
+In `backend/app/routers/challenges.py` bei den Schemas ergänzen:
+
+```python
+class SiegerIn(BaseModel):
+    user_id: int
+```
+
+In `ChallengeOut` zwei Felder ergänzen (nach `gewinner_ids`):
+
+```python
+    sieger_id: int | None
+    kann_sieger_setzen: bool
+```
+
+In `_challenge_out` beim Konstruktoraufruf nach `gewinner_ids=gewinner,`:
+
+```python
+        sieger_id=svc.sieger_id(ch),
+        kann_sieger_setzen=(
+            me.is_admin
+            and ch.mode == "ziel"
+            and ch.status == "beendet"
+            and len(gewinner) > 0
+        ),
+```
+
+Ans Dateiende von `routers/challenges.py`:
+
+```python
+@router.put(
+    "/{challenge_id}/sieger", response_model=ChallengeOut,
+    dependencies=[Depends(require_admin)],
+)
+def set_sieger(
+    challenge_id: int,
+    data: SiegerIn,
+    me: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    ch = _geladene_challenge(session, challenge_id)
+    try:
+        svc.setze_sieger(session, ch, data.user_id, datetime.now(timezone.utc))
+    except svc.NichtQualifiziert as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    session.refresh(ch)
+    return _challenge_out(session, ch, me, date_type.today())
+```
+
+Dafür oben in `routers/challenges.py` den Import erweitern:
+
+```python
+from datetime import datetime, timezone
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd backend && uv run pytest tests/test_challenges_api.py -v`
+Expected: PASS (23 Tests)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/app/services/challenges.py backend/app/services/feed.py backend/app/routers/challenges.py backend/tests/test_challenges_api.py
+git commit -m "feat(challenges): Sieger eintragen und korrigieren"
+```
+
+---
+
 ## Task 12: Backend-Gesamtlauf
 
 **Files:** keine
@@ -2175,6 +2436,8 @@ export type Challenge = {
   standings: ChallengeStanding[]
   mein_stand: ChallengeStanding | null
   gewinner_ids: number[]
+  sieger_id: number | null
+  kann_sieger_setzen: boolean
   created_at: string
   resolved_at: string | null
 }
@@ -2207,6 +2470,7 @@ Den `FeedEvent`-Typ erweitern: `type` um die drei neuen Werte, `payload` um vier
     | 'challenge_start'
     | 'challenge_qualified'
     | 'challenge_end'
+    | 'challenge_sieger'
 ```
 
 und im `payload`-Objekt ergänzen:
@@ -2234,6 +2498,11 @@ Im `api`-Objekt nach `betAchievements:` einfügen:
     request<Challenge>(`/api/challenges/${id}`, patch(b)),
   cancelChallenge: (id: number) =>
     request<void>(`/api/challenges/${id}`, { method: 'DELETE' }),
+  setChallengeSieger: (id: number, userId: number) =>
+    request<Challenge>(`/api/challenges/${id}/sieger`, {
+      method: 'PUT',
+      body: JSON.stringify({ user_id: userId }),
+    }),
 ```
 
 - [ ] **Step 3: Typecheck**
@@ -2272,6 +2541,7 @@ const basis: Challenge = {
   period_start: '2026-08-04', period_end: '2026-08-31',
   status: 'laufend', vorlaeufig: false, bin_dabei: true, kann_beitreten: false,
   standings: [], mein_stand: null, gewinner_ids: [],
+  sieger_id: null, kann_sieger_setzen: false,
   created_at: '2026-08-01T10:00:00Z', resolved_at: null,
 }
 
@@ -3047,6 +3317,188 @@ git commit -m "feat(challenges): Detailansicht mit Teilnehmerliste und Zustands-
 
 ---
 
+## Task 17a: Siegerband in der Detailansicht
+
+**Files:**
+- Modify: `frontend/src/components/challenges/ChallengeDetail.tsx`
+- Test: `frontend/src/components/challenges/ChallengeDetail.test.tsx`
+
+- [ ] **Step 1: Write the failing test**
+
+Ans Ende von `frontend/src/components/challenges/ChallengeDetail.test.tsx`, und den `vi.mock`-Block oben um `setChallengeSieger: vi.fn().mockResolvedValue({})` erweitern:
+
+```tsx
+  it('laesst den Admin den Sieger eintragen', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...detail,
+      status: 'beendet',
+      vorlaeufig: false,
+      gewinner_ids: [1, 2],
+      sieger_id: null,
+      kann_sieger_setzen: true,
+      standings: [
+        { user_id: 1, display_name: 'Rick', avatar: '🦊', value: 412, rank: 1, geschafft: true, nicht_mehr_schaffbar: false },
+        { user_id: 2, display_name: 'Mia', avatar: '🐻', value: 320, rank: 2, geschafft: true, nicht_mehr_schaffbar: false },
+      ],
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/challenges/1']}>
+          <Routes>
+            <Route path="/challenges/:id" element={<ChallengeDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Sieger eintragen' })).toBeInTheDocument(),
+    )
+    fireEvent.change(screen.getByLabelText('Sieger'), { target: { value: '2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sieger eintragen' }))
+    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, 2))
+  })
+
+  it('zeigt den eingetragenen Sieger allen', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...detail,
+      status: 'beendet',
+      vorlaeufig: false,
+      gewinner_ids: [1],
+      sieger_id: 1,
+      kann_sieger_setzen: false,
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/challenges/1']}>
+          <Routes>
+            <Route path="/challenges/:id" element={<ChallengeDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByText(/Sieger: Rick/)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Sieger eintragen' })).toBeNull()
+  })
+```
+
+Der Import in der Testdatei muss `fireEvent` mit aufnehmen:
+
+```tsx
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd frontend && npx vitest run src/components/challenges/ChallengeDetail.test.tsx`
+Expected: FAIL — `Unable to find an accessible element with the role "button" and name "Sieger eintragen"`
+
+- [ ] **Step 3: Write minimal implementation**
+
+In `frontend/src/components/challenges/ChallengeDetail.tsx` den Import von `useState` und `Select` ergänzen:
+
+```tsx
+import { useState } from 'react'
+import Select from '../ui/Select'
+```
+
+Im Komponentenrumpf nach der `austreten`-Mutation einfügen:
+
+```tsx
+  const [wahl, setWahl] = useState<number | null>(null)
+  const siegerSetzen = useMutation({
+    mutationFn: (userId: number) => api.setChallengeSieger(challengeId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] })
+      queryClient.invalidateQueries({ queryKey: ['challenges'] })
+    },
+  })
+```
+
+Direkt nach dem `</header>` einfügen:
+
+```tsx
+      {ch.status === 'beendet' && ch.mode === 'ziel' && (
+        <section className="rounded-2xl border border-accent bg-card p-3">
+          {ch.sieger_id !== null ? (
+            <p className="text-sm font-bold text-ink">
+              🏆 Sieger:{' '}
+              {ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ??
+                'unbekannt'}
+              {ch.prize && (
+                <span className="font-normal text-ink-mute"> — {ch.prize}</span>
+              )}
+            </p>
+          ) : ch.kann_sieger_setzen ? (
+            <div className="flex items-end gap-2">
+              <Select
+                label="Sieger"
+                className="flex-1"
+                value={wahl === null ? '' : String(wahl)}
+                onChange={(e) => setWahl(Number(e.target.value))}
+              >
+                <option value="">– bitte wählen –</option>
+                {ch.standings
+                  .filter((s) => ch.gewinner_ids.includes(s.user_id))
+                  .map((s) => (
+                    <option key={s.user_id} value={s.user_id}>
+                      {s.display_name}
+                    </option>
+                  ))}
+              </Select>
+              <button
+                onClick={() => wahl !== null && siegerSetzen.mutate(wahl)}
+                disabled={wahl === null || siegerSetzen.isPending}
+                className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
+              >
+                Sieger eintragen
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-mute">
+              {ch.gewinner_ids.length > 0
+                ? 'Sieger wird noch ausgelost.'
+                : 'Niemand hat das Ziel erreicht.'}
+            </p>
+          )}
+        </section>
+      )}
+```
+
+Und in der Teilnehmerliste den Namen um die Markierung erweitern — ersetze
+
+```tsx
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                {s.display_name}
+              </span>
+```
+
+durch
+
+```tsx
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                {s.display_name}
+                {s.user_id === ch.sieger_id && ' 🏆'}
+              </span>
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `cd frontend && npx vitest run src/components/challenges/ChallengeDetail.test.tsx`
+Expected: PASS (3 Tests)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/components/challenges/ChallengeDetail.tsx frontend/src/components/challenges/ChallengeDetail.test.tsx
+git commit -m "feat(challenges): Sieger im Detail eintragen und anzeigen"
+```
+
+---
+
 ## Task 18: Feed-Darstellung der neuen Events
 
 **Files:**
@@ -3071,6 +3523,12 @@ In `frontend/src/pages/Feed.test.tsx` die `events`-Liste im `vi.hoisted`-Block u
       reactions: [],
     },
     {
+      id: 7, type: 'challenge_sieger', user_id: 2, display_name: 'Ben', avatar: '🐻',
+      created_at: new Date().toISOString(),
+      payload: { challenge_id: 1, title: 'August bis Stuttgartlauf', prize: 'Startplatz', user_id: 2 },
+      reactions: [],
+    },
+    {
       id: 4, type: 'challenge_end', user_id: null, display_name: null, avatar: null,
       created_at: new Date().toISOString(),
       payload: {
@@ -3084,7 +3542,7 @@ In `frontend/src/pages/Feed.test.tsx` die `events`-Liste im `vi.hoisted`-Block u
 Und ans Ende des `describe`-Blocks:
 
 ```tsx
-  it('zeigt die drei Challenge-Ereignisse', async () => {
+  it('zeigt die vier Challenge-Ereignisse', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={qc}>
@@ -3096,7 +3554,8 @@ Und ans Ende des `describe`-Blocks:
     )
     expect(screen.getByText(/hat das Ziel geknackt/)).toBeInTheDocument()
     expect(screen.getByText(/Juli-Sprint ist vorbei/)).toBeInTheDocument()
-    expect(screen.getByText(/Ben/)).toBeInTheDocument()
+    expect(screen.getByText(/gewinnt/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Ben/).length).toBeGreaterThan(0)
   })
 ```
 
@@ -3119,6 +3578,7 @@ const TYP_FARBE: Record<string, string> = {
   challenge_start: '#34d399',
   challenge_qualified: '#34d399',
   challenge_end: '#34d399',
+  challenge_sieger: '#fbbf24',
 }
 ```
 
@@ -3143,6 +3603,18 @@ Und direkt vor `{(ev.type === 'recap_week' || ev.type === 'recap_month') && <Rec
           <span className="text-ink">
             <b>{ev.display_name}</b> hat das Ziel geknackt —{' '}
             <b className="text-accent">{ev.payload.title}</b>
+          </span>
+          <Zeit iso={ev.created_at} />
+        </div>
+      )}
+      {ev.type === 'challenge_sieger' && (
+        <div className="flex items-baseline gap-2 text-sm">
+          <span>🏆</span>
+          <span className="text-ink">
+            <b>{ev.display_name}</b> gewinnt <b>{ev.payload.title}</b>
+            {ev.payload.prize && (
+              <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
+            )}
           </span>
           <Zeit iso={ev.created_at} />
         </div>
@@ -3525,6 +3997,8 @@ Backend starten, im Admin das Add-on `challenges` einschalten, die August-Challe
 
 Prüfen: Tab erscheint, Hero-Karte zeigt den eigenen Stand, Detailansicht listet alle Mitglieder, Feed zeigt „Neue Challenge".
 
+Den Sieger-Eintrag kannst du erst nach dem Ende einer Challenge testen. Zum Durchspielen eine Wegwerf-Challenge mit `period_end` von gestern anlegen ist **nicht** möglich (422) — setze stattdessen bei einer bestehenden das `period_end` in der DB zurück, oder verlasse dich auf `test_sieger_eintragen_und_korrigieren` aus Task 11a.
+
 - [ ] **Step 3: Push und PR**
 
 ```bash
@@ -3534,8 +4008,9 @@ gh pr create --title "feat: Challenges" --body "Setzt docs/superpowers/specs/202
 Zeitlich begrenzte Wettbewerbe mit Ziel- und Ranglisten-Modus, Metriken
 MM/Streak/Anzahl mit Kategorie-Filter, auto- und opt-in-Teilnahme.
 Stand wird zur Lesezeit gerechnet, Ergebnis friert am Folgetag um 06:00
-deutscher Zeit ein. Feed-Anbindung, Admin-Verwaltung, Saison-Umbenennung
-in den Anzeigetexten.
+deutscher Zeit ein. Bei Ziel-Challenges traegt der Admin den offline
+ermittelten Sieger ein. Feed-Anbindung, Admin-Verwaltung,
+Saison-Umbenennung in den Anzeigetexten.
 
 Nach dem Merge: Add-on 'sidebets' im Admin ausschalten, Add-on
 'challenges' einschalten, August-Challenge anlegen.
