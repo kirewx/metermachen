@@ -1428,7 +1428,7 @@ git commit -m "feat(challenges): API-Endpunkte fuer Liste und Detail"
 - Modify: `backend/app/routers/challenges.py`
 - Test: `backend/tests/test_challenges_api.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_challenges_api.py`:
 
@@ -1502,12 +1502,12 @@ def test_austreten_aus_beendeter_challenge_ist_409(session, client):
     assert client.delete(f"/api/challenges/{ch.id}/join").status_code == 409
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -k "beitreten or austreten" -v`
 Expected: FAIL — 405 Method Not Allowed (Route fehlt)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/routers/challenges.py` den Model-Import erweitern:
 
@@ -1572,12 +1572,12 @@ def leave_challenge(
     return _challenge_out(session, ch, me, date_type.today())
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_api.py -v`
 Expected: PASS (11 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/routers/challenges.py backend/tests/test_challenges_api.py

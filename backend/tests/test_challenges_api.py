@@ -75,3 +75,72 @@ def test_detail_404_bei_unbekannter_id(session, client):
     make_addon(session, key="challenges", label="Challenges", enabled=True)
     login(client)
     assert client.get("/api/challenges/999").status_code == 404
+
+
+def test_beitreten_und_austreten(session, client):
+    make_user(session)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(session, join_mode="opt_in")
+    login(client)
+    assert client.get(f"/api/challenges/{ch.id}").json()["bin_dabei"] is False
+    r = client.post(f"/api/challenges/{ch.id}/join")
+    assert r.status_code == 200, r.text
+    assert r.json()["bin_dabei"] is True
+    r = client.delete(f"/api/challenges/{ch.id}/join")
+    assert r.status_code == 200
+    assert r.json()["bin_dabei"] is False
+
+
+def test_beitreten_ist_idempotent(session, client):
+    make_user(session)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(session, join_mode="opt_in")
+    login(client)
+    client.post(f"/api/challenges/{ch.id}/join")
+    r = client.post(f"/api/challenges/{ch.id}/join")
+    assert r.status_code == 200
+    assert r.json()["bin_dabei"] is True
+
+
+def test_beitreten_zu_auto_challenge_ist_409(session, client):
+    make_user(session)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(session, join_mode="auto")
+    login(client)
+    assert client.post(f"/api/challenges/{ch.id}/join").status_code == 409
+
+
+def test_beitreten_nach_ende_ist_409(session, client):
+    heute = date.today()
+    make_user(session)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(
+        session, join_mode="opt_in", status="beendet",
+        period_start=heute - timedelta(days=20), period_end=heute - timedelta(days=10),
+    )
+    login(client)
+    assert client.post(f"/api/challenges/{ch.id}/join").status_code == 409
+
+
+def test_beitreten_zu_geplanter_challenge_erlaubt(session, client):
+    heute = date.today()
+    make_user(session)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(
+        session, join_mode="opt_in", status="geplant",
+        period_start=heute + timedelta(days=5), period_end=heute + timedelta(days=20),
+    )
+    login(client)
+    assert client.post(f"/api/challenges/{ch.id}/join").status_code == 200
+
+
+def test_austreten_aus_beendeter_challenge_ist_409(session, client):
+    heute = date.today()
+    make_user(session)
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch = make_challenge(
+        session, join_mode="opt_in", status="beendet",
+        period_start=heute - timedelta(days=20), period_end=heute - timedelta(days=10),
+    )
+    login(client)
+    assert client.delete(f"/api/challenges/{ch.id}/join").status_code == 409

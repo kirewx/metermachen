@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session, require_addon
-from ..models import Challenge, User
+from ..models import Challenge, ChallengeParticipant, User
 from ..services import challenges as svc
 
 router = APIRouter(
@@ -147,4 +147,58 @@ def get_challenge(
     ch = session.get(Challenge, challenge_id)
     if ch is None or ch.status == "abgebrochen":
         raise HTTPException(status_code=404, detail="Challenge nicht gefunden")
+    return _challenge_out(session, ch, me, date_type.today())
+
+
+def _geladene_challenge(session: Session, challenge_id: int) -> Challenge:
+    ch = session.get(Challenge, challenge_id)
+    if ch is None or ch.status == "abgebrochen":
+        raise HTTPException(status_code=404, detail="Challenge nicht gefunden")
+    return ch
+
+
+@router.post("/{challenge_id}/join", response_model=ChallengeOut)
+def join_challenge(
+    challenge_id: int,
+    me: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    svc.resolve_due(session)
+    ch = _geladene_challenge(session, challenge_id)
+    heute = date_type.today()
+    if ch.join_mode != "opt_in":
+        raise HTTPException(status_code=409, detail="Hier sind alle automatisch dabei")
+    if heute > ch.period_end or ch.status == "beendet":
+        raise HTTPException(status_code=409, detail="Die Challenge ist vorbei")
+    vorhanden = session.exec(
+        select(ChallengeParticipant).where(
+            ChallengeParticipant.challenge_id == ch.id,
+            ChallengeParticipant.user_id == me.id,
+        )
+    ).first()
+    if vorhanden is None:  # idempotent: zweiter Beitritt ist kein Fehler
+        session.add(ChallengeParticipant(challenge_id=ch.id, user_id=me.id))
+        session.commit()
+    return _challenge_out(session, ch, me, heute)
+
+
+@router.delete("/{challenge_id}/join", response_model=ChallengeOut)
+def leave_challenge(
+    challenge_id: int,
+    me: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    svc.resolve_due(session)
+    ch = _geladene_challenge(session, challenge_id)
+    if ch.status not in ("geplant", "laufend"):
+        raise HTTPException(status_code=409, detail="Die Challenge ist vorbei")
+    zeile = session.exec(
+        select(ChallengeParticipant).where(
+            ChallengeParticipant.challenge_id == ch.id,
+            ChallengeParticipant.user_id == me.id,
+        )
+    ).first()
+    if zeile is not None:
+        session.delete(zeile)
+        session.commit()
     return _challenge_out(session, ch, me, date_type.today())
