@@ -36,6 +36,12 @@ KNOWN_ADDONS = [
         "enabled": True,
         "active_from": SIDEBETS_START,  # schaltet zusammen mit den Wetten scharf
     },
+    {
+        "key": "challenges",
+        "label": "Challenges",
+        "description": "Zeitlich begrenzte Wettbewerbe mit Ziel oder Rangliste.",
+        "enabled": False,  # erst befuellen, dann scharfschalten
+    },
 ]
 
 

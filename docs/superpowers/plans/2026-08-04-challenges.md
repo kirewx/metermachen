@@ -197,7 +197,7 @@ git commit -m "feat(challenges): Datenmodell Challenge und ChallengeParticipant"
 - Modify: `backend/app/seed.py:24` (`KNOWN_ADDONS`)
 - Test: `backend/tests/test_seed.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_seed.py`:
 
@@ -216,12 +216,12 @@ def test_seed_legt_challenges_addon_aus_an(session):
     assert addon.active_from is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_seed.py -k challenges -v`
 Expected: FAIL — `assert None is not None`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/seed.py`, als weiterer Eintrag in der Liste `KNOWN_ADDONS`:
 
@@ -234,12 +234,12 @@ In `backend/app/seed.py`, als weiterer Eintrag in der Liste `KNOWN_ADDONS`:
     },
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_seed.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/seed.py backend/tests/test_seed.py
