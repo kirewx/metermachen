@@ -3507,7 +3507,7 @@ git commit -m "feat(challenges): Sieger im Detail eintragen und anzeigen"
 - Modify: `frontend/src/components/feed/FeedItem.tsx`
 - Test: `frontend/src/pages/Feed.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `frontend/src/pages/Feed.test.tsx` die `events`-Liste im `vi.hoisted`-Block um drei Einträge erweitern (vor dem schließenden `]`):
 
@@ -3561,12 +3561,12 @@ Und ans Ende des `describe`-Blocks:
   })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/pages/Feed.test.tsx`
 Expected: FAIL — `Unable to find an element with the text: /Neue Challenge/`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `frontend/src/components/feed/FeedItem.tsx` das `TYP_FARBE`-Objekt erweitern:
 
@@ -3640,12 +3640,12 @@ Und direkt vor `{(ev.type === 'recap_week' || ev.type === 'recap_month') && <Rec
       )}
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/pages/Feed.test.tsx`
 Expected: PASS (3 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/feed/FeedItem.tsx frontend/src/pages/Feed.test.tsx

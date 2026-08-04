@@ -33,6 +33,33 @@ const { events } = vi.hoisted(() => ({
       },
       reactions: [],
     },
+    {
+      id: 6, type: 'challenge_start', user_id: null, display_name: null, avatar: null,
+      created_at: new Date().toISOString(),
+      payload: { challenge_id: 1, title: 'August bis Stuttgartlauf', prize: 'Startplatz' },
+      reactions: [],
+    },
+    {
+      id: 5, type: 'challenge_qualified', user_id: 1, display_name: 'Anna', avatar: '🦊',
+      created_at: new Date().toISOString(),
+      payload: { challenge_id: 1, title: 'August bis Stuttgartlauf' },
+      reactions: [],
+    },
+    {
+      id: 7, type: 'challenge_sieger', user_id: 2, display_name: 'Ben', avatar: '🐻',
+      created_at: new Date().toISOString(),
+      payload: { challenge_id: 1, title: 'August bis Stuttgartlauf', prize: 'Startplatz', user_id: 2 },
+      reactions: [],
+    },
+    {
+      id: 4, type: 'challenge_end', user_id: null, display_name: null, avatar: null,
+      created_at: new Date().toISOString(),
+      payload: {
+        challenge_id: 1, title: 'Juli-Sprint', prize: 'Kuchen',
+        gewinner_ids: [2], gewinner_namen: ['Ben'],
+      },
+      reactions: [],
+    },
   ],
 }))
 
@@ -80,5 +107,22 @@ describe('Feed', () => {
     expect(screen.queryByText(/Drei Aktivitäten an einem Tag/)).toBeNull()
     fireEvent.click(screen.getByText(/Hattrick/))
     expect(screen.getByText(/Drei Aktivitäten an einem Tag/)).toBeInTheDocument()
+  })
+
+  it('zeigt die vier Challenge-Ereignisse', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <Feed />
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByText(/Neue Challenge/)).toBeInTheDocument(),
+    )
+    expect(screen.getByText(/hat das Ziel geknackt/)).toBeInTheDocument()
+    expect(screen.getByText('Juli-Sprint')).toBeInTheDocument()
+    expect(screen.getByText(/ist vorbei/)).toBeInTheDocument()
+    expect(screen.getAllByText(/gewinnt/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Ben/).length).toBeGreaterThan(0)
   })
 })
