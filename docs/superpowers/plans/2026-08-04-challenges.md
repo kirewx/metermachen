@@ -430,7 +430,7 @@ git commit -m "feat(challenges): Metrik mm mit Kategorie-Filter"
 - Modify: `backend/app/services/challenges.py`
 - Test: `backend/tests/test_challenges_metrics.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_challenges_metrics.py`:
 
@@ -484,12 +484,12 @@ def test_streak_zaehlt_nur_bis_heute(session):
     assert challenges.metric_value(session, user.id, ch, date(2026, 8, 4)) == 2
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_metrics.py -k "anzahl or streak" -v`
 Expected: FAIL — `ValueError: Unbekannte Metrik: anzahl`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `backend/app/services/challenges.py`: `from collections import defaultdict` und `from datetime import timedelta` oben ergänzen, dann `metric_value` ersetzen und die neuen Funktionen davor einfügen:
 
@@ -556,12 +556,12 @@ def metric_value(
     raise ValueError(f"Unbekannte Metrik: {ch.metric}")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_metrics.py -v`
 Expected: PASS (8 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/challenges.py backend/tests/test_challenges_metrics.py
