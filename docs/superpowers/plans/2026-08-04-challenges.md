@@ -2379,7 +2379,7 @@ git commit -m "feat(challenges): Sieger eintragen und korrigieren"
 
 **Files:** keine
 
-- [ ] **Step 1: Alle Backend-Tests laufen lassen**
+- [x] **Step 1: Alle Backend-Tests laufen lassen**
 
 Run: `cd backend && uv run pytest`
 Expected: PASS — keine Regression in bestehenden Tests. Falls `test_migration.py` fehlschlägt, prüfe, dass du `db.py:migrate()` **nicht** angefasst hast (neue Tabellen brauchen dort nichts).
