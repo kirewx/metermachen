@@ -70,7 +70,7 @@ Lies das, bevor du anfängst — es spart dir mehrere Fehlversuche:
 - Modify: `backend/app/models.py` (ans Dateiende, nach `FeedSeen`)
 - Test: `backend/tests/test_models.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_models.py`:
 
@@ -124,12 +124,12 @@ def test_challenge_participant_unique(session):
         session.commit()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_models.py -k challenge -v`
 Expected: FAIL — `ImportError: cannot import name 'Challenge' from 'app.models'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Ans Ende von `backend/app/models.py`:
 
@@ -177,12 +177,12 @@ class ChallengeParticipant(SQLModel, table=True):
     joined_at: datetime = Field(default_factory=utcnow)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_models.py -v`
 Expected: PASS (alle Tests der Datei)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/models.py backend/tests/test_models.py
