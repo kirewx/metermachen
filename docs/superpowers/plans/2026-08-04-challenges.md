@@ -578,7 +578,7 @@ git commit -m "feat(challenges): Metriken anzahl und streak"
 
 Kernregel: `max_erreichbar = max(beste_serie_bisher, serie_bis_gestern + resttage_ab_heute)`. Bewusst `serie_bis_gestern`, weil der heutige Tag noch offen ist und als erreichbar zählt.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ans Ende von `backend/tests/test_challenges_metrics.py`:
 
@@ -665,12 +665,12 @@ def test_abbruchregel_gilt_nicht_fuer_mm_und_rangliste(session):
     assert challenges.streak_noch_moeglich(session, user.id, rang, date(2026, 8, 31))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_metrics.py -k moeglich -v`
 Expected: FAIL — `AttributeError: module 'app.services.challenges' has no attribute 'streak_noch_moeglich'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Ans Ende von `backend/app/services/challenges.py`:
 
@@ -702,12 +702,12 @@ def streak_noch_moeglich(
     return laufend + resttage >= ch.target
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_metrics.py -v`
 Expected: PASS (14 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/challenges.py backend/tests/test_challenges_metrics.py

@@ -109,3 +109,30 @@ def metric_value(
     if ch.metric == "streak":
         return metric_streak(session, user_id, ch, heute)
     raise ValueError(f"Unbekannte Metrik: {ch.metric}")
+
+
+def streak_noch_moeglich(
+    session: Session, user_id: int, ch: Challenge, heute: date_type
+) -> bool:
+    """False, sobald das Streak-Ziel rechnerisch nicht mehr erreichbar ist.
+
+    Gilt nur fuer mode='ziel' + metric='streak' — bei mm/anzahl gibt es kein
+    Tageslimit, dort ist Unmoeglichkeit nie beweisbar.
+    """
+    if ch.mode != "ziel" or ch.metric != "streak" or ch.target is None:
+        return True
+    if heute < ch.period_start:
+        return True
+    bis = min(heute, ch.period_end)
+    tage = per_day(session, user_id, ch, ch.period_end)
+    beste = laengste_serie(tage, ch.period_start, bis, ch.streak_min_mm)
+    if beste >= ch.target:
+        return True
+    gestern = min(heute - timedelta(days=1), ch.period_end)
+    laufend = (
+        serie_endend_am(tage, ch.period_start, gestern, ch.streak_min_mm)
+        if gestern >= ch.period_start
+        else 0
+    )
+    resttage = max((ch.period_end - heute).days + 1, 0)
+    return laufend + resttage >= ch.target

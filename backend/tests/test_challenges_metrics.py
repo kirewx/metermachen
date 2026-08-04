@@ -129,3 +129,85 @@ def test_streak_zaehlt_nur_bis_heute(session):
         add_activity(session, user.id, lauf.id, date(2026, 8, tag), 6.0)
     # Am 4. August ist die Serie erst 2 Tage lang.
     assert challenges.metric_value(session, user.id, ch, date(2026, 8, 4)) == 2
+
+
+def test_streak_noch_moeglich_wenn_genug_resttage(session):
+    from app.services import challenges
+
+    user = make_user(session)
+    make_category(session, name="Joggen", factor=1.0)
+    ch = make_challenge(
+        session, metric="streak", target=10.0,
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+    )
+    # Am 10. August bleiben 22 Tage — auch ohne jede Aktivitaet erreichbar.
+    assert challenges.streak_noch_moeglich(session, user.id, ch, date(2026, 8, 10))
+
+
+def test_streak_nicht_mehr_moeglich_wenn_resttage_fehlen(session):
+    from app.services import challenges
+
+    user = make_user(session)
+    make_category(session, name="Joggen", factor=1.0)
+    ch = make_challenge(
+        session, metric="streak", target=10.0,
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+    )
+    # Am 25. August bleiben 7 Tage, keine laufende Serie -> unmoeglich.
+    assert not challenges.streak_noch_moeglich(session, user.id, ch, date(2026, 8, 25))
+
+
+def test_streak_laufende_serie_rettet_die_rechnung(session):
+    from app.services import challenges
+
+    user = make_user(session)
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    ch = make_challenge(
+        session, metric="streak", target=10.0,
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+    )
+    # 20.-24. August durchgezogen = Serie 5, dazu 7 Resttage ab dem 25. = 12.
+    for tag in range(20, 25):
+        add_activity(session, user.id, lauf.id, date(2026, 8, tag), 6.0)
+    assert challenges.streak_noch_moeglich(session, user.id, ch, date(2026, 8, 25))
+
+
+def test_streak_heutiger_tag_zaehlt_als_erreichbar(session):
+    from app.services import challenges
+
+    user = make_user(session)
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    ch = make_challenge(
+        session, metric="streak", target=3.0,
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 5),
+    )
+    # Serie bis gestern (3.8.) = 2, heute (4.8.) noch nichts eingetragen,
+    # Resttage 4.+5. = 2 -> 2 + 2 = 4 >= 3. Muss moeglich bleiben.
+    for tag in (2, 3):
+        add_activity(session, user.id, lauf.id, date(2026, 8, tag), 6.0)
+    assert challenges.streak_noch_moeglich(session, user.id, ch, date(2026, 8, 4))
+
+
+def test_streak_bereits_geschafft_bleibt_moeglich(session):
+    from app.services import challenges
+
+    user = make_user(session)
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    ch = make_challenge(
+        session, metric="streak", target=3.0,
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+    )
+    for tag in (1, 2, 3):
+        add_activity(session, user.id, lauf.id, date(2026, 8, tag), 6.0)
+    assert challenges.streak_noch_moeglich(session, user.id, ch, date(2026, 8, 30))
+
+
+def test_abbruchregel_gilt_nicht_fuer_mm_und_rangliste(session):
+    from app.services import challenges
+
+    user = make_user(session)
+    make_category(session, name="Joggen", factor=1.0)
+    mm_ch = make_challenge(session, metric="mm", target=99999.0)
+    assert challenges.streak_noch_moeglich(session, user.id, mm_ch, date(2026, 8, 31))
+    rang = make_challenge(session, mode="rangliste", metric="streak", target=None, top_n=1)
+    assert challenges.streak_noch_moeglich(session, user.id, rang, date(2026, 8, 31))
