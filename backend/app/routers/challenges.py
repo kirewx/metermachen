@@ -114,6 +114,7 @@ def _challenge_out(
         gewinner = ergebnis.get("gewinner_ids", [])
     else:
         roh = svc.standings(session, ch, heute)
+        svc.emit_qualified(session, ch, roh)
         gewinner = [e["user_id"] for e in roh if e["geschafft"]]
 
     def eintrag(e: dict) -> StandingEntryOut:

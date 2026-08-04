@@ -18,6 +18,7 @@ from datetime import time as time_type
 from sqlmodel import Session, select
 
 from ..models import Activity, Category, Challenge, ChallengeParticipant, User
+from . import feed
 
 # Karenz nach Challenge-Ende: Einfrieren erst am Folgetag um 06:00 deutscher
 # Zeit. Deckt einen ausstehenden Strava-Sync und eine Aktivitaet kurz vor
@@ -217,19 +218,21 @@ def ist_vorlaeufig(ch: Challenge, heute: date_type) -> bool:
 
 def _einfrieren(session: Session, ch: Challenge, jetzt: datetime, heute: date_type) -> None:
     eintraege = standings(session, ch, heute)
+    gewinner = [e["user_id"] for e in eintraege if e["geschafft"]]
     ch.result_json = json.dumps(
         {
             "entries": [
                 {k: e[k] for k in ("user_id", "value", "rank", "geschafft")}
                 for e in eintraege
             ],
-            "gewinner_ids": [e["user_id"] for e in eintraege if e["geschafft"]],
+            "gewinner_ids": gewinner,
         }
     )
     ch.status = "beendet"
     ch.resolved_at = jetzt
     session.add(ch)
     session.commit()
+    feed.challenge_end_event(session, ch, gewinner)
 
 
 def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
@@ -245,9 +248,19 @@ def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
             ch.status = "laufend"
             session.add(ch)
             session.commit()
+            feed.challenge_start_event(session, ch)
 
     for ch in session.exec(
         select(Challenge).where(Challenge.status == "laufend").order_by(Challenge.id)
     ).all():
         if jetzt >= freeze_at(ch):
             _einfrieren(session, ch, jetzt, heute)
+
+
+def emit_qualified(session: Session, ch: Challenge, eintraege: list[dict]) -> None:
+    """Feed-Event fuer alle, die das Ziel geknackt haben. Idempotent."""
+    if ch.mode != "ziel" or ch.status != "laufend":
+        return
+    for e in eintraege:
+        if e["geschafft"]:
+            feed.challenge_qualified_event(session, ch, e["user_id"])
