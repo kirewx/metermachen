@@ -254,7 +254,7 @@ git commit -m "feat(challenges): Add-on challenges im Seed, standardmaessig aus"
 - Create: `backend/app/services/challenges.py`
 - Test: `backend/tests/test_challenges_metrics.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Neue Datei `backend/tests/test_challenges_metrics.py`:
 
@@ -343,12 +343,12 @@ def test_mm_ignoriert_km_factor(session):
     assert challenges.metric_value(session, user.id, ch) == 40.0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run pytest tests/test_challenges_metrics.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.services.challenges'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Neue Datei `backend/app/services/challenges.py`:
 
@@ -410,12 +410,12 @@ def metric_value(
     raise ValueError(f"Unbekannte Metrik: {ch.metric}")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run pytest tests/test_challenges_metrics.py -v`
 Expected: PASS (4 Tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/challenges.py backend/tests/test_challenges_metrics.py
