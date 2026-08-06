@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
-import type { Comparison, ComparisonUser } from '../../api/client'
+import type { Comparison } from '../../api/client'
+import { profilPfad } from '../profile/pfad'
 import AuszeichnungsBadges from '../ui/AuszeichnungsBadges'
 import Avatar from '../ui/Avatar'
 import Card from '../ui/Card'
 import Icon from '../ui/Icon'
-import PersonDetail from './PersonDetail'
 import { computeSinceLastSeen, describeSinceLastSeen } from './sinceLastSeen'
 import { toDisplay, unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
 
 export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
-  const [detail, setDetail] = useState<ComparisonUser | null>(null)
   const { data: lastSeen } = useQuery({
     queryKey: ['comparison-last-seen', data.year],
     queryFn: () => api.lastSeenComparison(data.year),
@@ -77,10 +77,9 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
           const fuehrt = u.rank === 1
           return (
             <div key={u.user_id} className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setDetail(u)}
-                aria-label={`Details zu ${u.display_name}`}
+              <Link
+                to={profilPfad(u.user_id, data.year)}
+                aria-label={`Profil von ${u.display_name}`}
                 className="flex w-44 shrink-0 items-center gap-2 rounded-lg text-left transition hover:opacity-80"
               >
                 <span
@@ -105,7 +104,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                     )}
                   </p>
                 </div>
-              </button>
+              </Link>
               <div className="relative h-5 flex-1 overflow-hidden rounded-full border border-line bg-surface">
                 {data.milestones.map((m) => (
                   <span
@@ -156,9 +155,6 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
           )
         })}
       </div>
-      {detail && (
-        <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />
-      )}
     </Card>
   )
 }

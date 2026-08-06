@@ -11,14 +11,14 @@ import {
 import type { Props as LabelProps } from 'recharts/types/component/Label'
 import type { DotItemDotProps } from 'recharts/types/util/types'
 import { useState } from 'react'
-import type { Comparison, ComparisonUser } from '../../api/client'
+import { Link } from 'react-router-dom'
+import type { Comparison } from '../../api/client'
+import { profilPfad } from '../profile/pfad'
 import Card from '../ui/Card'
-import PersonDetail from './PersonDetail'
 import { unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
 
 export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
-  const [detail, setDetail] = useState<ComparisonUser | null>(null)
   const [visible, setVisible] = useState<Set<number>>(() => new Set(data.users.map((u) => u.user_id)))
   // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
   const byDate = new Map<string, Record<string, number | string>>()
@@ -165,21 +165,17 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
                 <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: an ? farbe : 'var(--t-ink-mute)' }} />
                 {u.display_name}
               </button>
-              <button
-                type="button"
-                aria-label={`Details zu ${u.display_name}`}
-                onClick={() => setDetail(u)}
+              <Link
+                to={profilPfad(u.user_id, data.year)}
+                aria-label={`Profil von ${u.display_name}`}
                 className="flex h-4 w-4 items-center justify-center rounded-full border border-line text-[9px] text-ink-mute transition hover:border-accent hover:text-accent"
               >
                 i
-              </button>
+              </Link>
             </span>
           )
         })}
       </div>
-      {detail && (
-        <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />
-      )}
     </Card>
   )
 }

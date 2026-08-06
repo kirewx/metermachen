@@ -10,6 +10,7 @@ import Einladung from './pages/Einladung'
 import Feed from './pages/Feed'
 import Login from './pages/Login'
 import MeineAktivitaeten from './pages/MeineAktivitaeten'
+import Profil from './pages/Profil'
 import Regeln from './pages/Regeln'
 import Vergleich from './pages/Vergleich'
 import Wetten from './pages/Wetten'
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/" element={<Vergleich />} />
         <Route path="/feed" element={<Feed />} />
         <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
+        <Route path="/profil/:userId" element={<Profil />} />
         <Route path="/challenges" element={<Challenges />} />
         <Route path="/challenges/:id" element={<ChallengeDetail />} />
         <Route path="/regeln" element={<Regeln />} />

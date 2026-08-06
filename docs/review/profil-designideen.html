@@ -1,0 +1,438 @@
+<title>Profilseite &amp; Spinnennetz — MeterMachen Design-Ideen</title>
+<style>
+  :root {
+    --paper: #F3F6F7; --card: #FFFFFF; --ink: #141A1D; --ink-soft: #414B50;
+    --ink-faint: #6B7579; --line: #DDE4E6; --line-soft: #E9EEEF;
+    --accent: #0E9DB0; --accent-deep: #0A7C8C; --accent-wash: #E2F3F5;
+    --amber: #C8801B; --amber-wash: #F8ECD8; --good: #2E8B57; --crit: #C1453B;
+    --shadow: 0 1px 2px rgba(20,26,29,.05), 0 8px 24px -14px rgba(20,26,29,.16);
+    --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --mono: "Cascadia Code", Consolas, "SF Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0E1315; --card: #161D20; --ink: #EAF0F1; --ink-soft: #B4BEC1;
+      --ink-faint: #7E888C; --line: #273033; --line-soft: #1E2629;
+      --accent: #34C6D8; --accent-deep: #7FE0EC; --accent-wash: #12312F;
+      --amber: #E8B25F; --amber-wash: #33281440; --good: #6FCB94; --crit: #E8837A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #F3F6F7; --card: #FFFFFF; --ink: #141A1D; --ink-soft: #414B50;
+    --ink-faint: #6B7579; --line: #DDE4E6; --line-soft: #E9EEEF;
+    --accent: #0E9DB0; --accent-deep: #0A7C8C; --accent-wash: #E2F3F5;
+    --amber: #C8801B; --amber-wash: #F8ECD8; --good: #2E8B57; --crit: #C1453B;
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E1315; --card: #161D20; --ink: #EAF0F1; --ink-soft: #B4BEC1;
+    --ink-faint: #7E888C; --line: #273033; --line-soft: #1E2629;
+    --accent: #34C6D8; --accent-deep: #7FE0EC; --accent-wash: #12312F;
+    --amber: #E8B25F; --amber-wash: #33281440; --good: #6FCB94; --crit: #E8837A;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 15.5px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 40px 24px 72px; }
+
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px 24px;
+    padding-bottom: 20px; border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent-deep);
+  }
+  h1 {
+    font-weight: 800; font-size: clamp(32px, 6.5vw, 48px);
+    letter-spacing: -.03em; line-height: .95; margin: 8px 0 0;
+  }
+  .h1line { display: flex; align-items: center; gap: 12px; }
+  .h1line .bolt { color: var(--accent); font-size: .8em; }
+  .meta { text-align: right; font-size: 12.5px; color: var(--ink-faint); line-height: 1.7; }
+  .meta b { color: var(--ink-soft); font-weight: 600; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 999px; background: var(--accent-wash);
+    color: var(--accent-deep); font-weight: 600; font-size: 12px;
+  }
+  .pill::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--accent); }
+
+  .tldr {
+    font-family: var(--serif); font-size: 17px; line-height: 1.55;
+    color: var(--ink-soft); margin: 22px 0 4px; max-width: 64ch;
+  }
+  .tldr b { color: var(--ink); font-weight: 600; }
+
+  h2 {
+    font-weight: 700; font-size: 13px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin: 42px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  h2 .no { color: var(--accent); font-weight: 800; }
+  h3 { font-size: 15px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.01em; }
+
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    position: relative; padding: 5px 0 5px 20px; font-size: 15px;
+    color: var(--ink-soft); line-height: 1.45;
+  }
+  li::before {
+    content: ""; position: absolute; left: 2px; top: 12px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+  }
+  li b, strong { color: var(--ink); font-weight: 600; }
+  .mono, code { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--line-soft); padding: 1px 5px; border-radius: 4px; color: var(--accent-deep); }
+  p { color: var(--ink-soft); }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 24px 0 4px; }
+  @media (max-width: 620px) { .stats { grid-template-columns: repeat(2,1fr); } }
+  .stat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .stat .n {
+    font-weight: 800; font-size: 22px; letter-spacing: -.02em; line-height: 1.1;
+    color: var(--accent-deep); font-variant-numeric: tabular-nums;
+  }
+  .stat .l { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; line-height: 1.3; }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; background: var(--card); font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 13px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th {
+    font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--ink-faint); background: color-mix(in srgb, var(--accent-wash) 50%, var(--card)); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  @media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; gap: 16px; } }
+
+  /* ---- Varianten-Block ---- */
+  .variant { margin: 0 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 720px) { .variant { grid-template-columns: 1fr; } }
+  .vhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .vhead .tag {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px;
+  }
+  .verdict { font-size: 13.5px; margin-top: 10px; padding: 9px 12px; border-radius: 8px;
+    background: var(--line-soft); color: var(--ink-soft); }
+  .verdict b { color: var(--ink); }
+  .verdict.win { background: var(--accent-wash); color: var(--accent-deep); }
+  .verdict.win b { color: var(--accent-deep); }
+
+  /* ---- App-Skin: so sieht MeterMachen wirklich aus (Neon Night) ---- */
+  .app {
+    background: #0a0f12; border: 1px solid rgba(0,229,255,.3); border-radius: 18px;
+    padding: 14px; color: #f2fbfd; font-size: 12.5px; line-height: 1.35;
+    box-shadow: 0 18px 40px -22px rgba(0,0,0,.8);
+  }
+  .app .mute { color: #5a8a96; }
+  .app .soft { color: #bfeef7; }
+  .app .acc { color: #00e5ff; }
+  .app .lbl { font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .25em;
+    text-transform: uppercase; color: #3d6470; border-bottom: 1px solid rgba(0,229,255,.15);
+    padding-bottom: 4px; margin: 12px 0 8px; }
+  .app .lbl span { color: #00e5ff; }
+  .app .av { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(0,229,255,.3);
+    display: grid; place-items: center; font-size: 20px; background: #050508; flex: none; }
+  .app .av.big { width: 62px; height: 62px; font-size: 30px; }
+  .app .row { display: flex; align-items: center; gap: 10px; }
+  .app .name { font-weight: 800; font-size: 16px; letter-spacing: -.01em; }
+  .app .typ { font-weight: 800; letter-spacing: .04em; color: #00e5ff; text-shadow: 0 0 14px rgba(0,229,255,.5); }
+  .app .chip { display: inline-block; border: 1px solid rgba(0,229,255,.3); border-radius: 999px;
+    padding: 1px 8px; font-size: 10px; color: #bfeef7; }
+  .app .kpi { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+  .app .kpi div { background: #050508; border: 1px solid rgba(0,229,255,.15); border-radius: 10px; padding: 6px 8px; }
+  .app .kpi .v { font-weight: 900; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .app .kpi .k { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: #5a8a96; margin-top: 2px; }
+  .app .bar { height: 6px; border-radius: 999px; background: #050508; overflow: hidden; }
+  .app .bar i { display: block; height: 100%; }
+  .app .act { display: flex; gap: 8px; align-items: center; padding: 3px 0;
+    border-bottom: 1px solid rgba(0,229,255,.12); font-size: 11px; }
+  .app .act .d { font-family: var(--mono); color: #5a8a96; width: 38px; flex: none; font-size: 10px; }
+  .app .act .v { font-family: var(--mono); color: #00e5ff; font-weight: 700; margin-left: auto; }
+  .app .tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .app .tbl td { padding: 3px 0; border-bottom: 1px solid rgba(0,229,255,.12); color: #bfeef7; }
+  .app .tbl td.k { font-family: var(--mono); color: #5a8a96; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+  .app .tbl td.v { text-align: right; font-family: var(--mono); font-weight: 700; color: #f2fbfd; }
+  .caption { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; text-align: center; }
+
+  .arch { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  @media (max-width: 620px) { .arch { grid-template-columns: 1fr; } }
+  .arch .a { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 9px; padding: 9px 12px; box-shadow: var(--shadow); }
+  .arch .a .t { font-weight: 700; font-size: 14.5px; }
+  .arch .a .r { font-size: 12.5px; color: var(--ink-faint); font-family: var(--mono); }
+
+  .discuss { margin-top: 40px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 22px; box-shadow: var(--shadow); }
+  .discuss h2 { margin-top: 0; color: var(--accent-deep); border-color: var(--accent-wash); }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-faint); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }
+</style>
+
+<!-- Wiederverwendbares Spinnennetz (Demo-Daten: Kira vs. du) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="netz">
+      <!-- Ringe 25/50/75/100 % -->
+      <polygon points="170,107 191.9,122.9 183.5,148.6 156.5,148.6 148.1,122.9" fill="none" stroke="rgba(0,229,255,.13)"/>
+      <polygon points="170,84 213.8,115.8 197.1,167.2 142.9,167.2 126.3,115.8" fill="none" stroke="rgba(0,229,255,.13)"/>
+      <polygon points="170,61 235.6,108.7 210.6,185.8 129.4,185.8 104.4,108.7" fill="none" stroke="rgba(0,229,255,.13)"/>
+      <polygon points="170,38 257.5,101.6 224.1,204.4 115.9,204.4 82.5,101.6" fill="none" stroke="rgba(0,229,255,.28)"/>
+      <!-- Speichen -->
+      <g stroke="rgba(0,229,255,.16)">
+        <line x1="170" y1="130" x2="170" y2="38"/>
+        <line x1="170" y1="130" x2="257.5" y2="101.6"/>
+        <line x1="170" y1="130" x2="224.1" y2="204.4"/>
+        <line x1="170" y1="130" x2="115.9" y2="204.4"/>
+        <line x1="170" y1="130" x2="82.5" y2="101.6"/>
+      </g>
+      <!-- Vergleichsperson (du), gestrichelt -->
+      <polygon points="170,65.6 200.6,120.1 199.8,170.9 156.5,148.6 130.6,117.2"
+               fill="rgba(242,251,253,.06)" stroke="rgba(242,251,253,.55)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <!-- Profil-Person -->
+      <polygon points="170,93.2 244.4,105.9 180.8,144.9 137.5,174.6 143.7,121.5"
+               fill="rgba(0,229,255,.22)" stroke="#00e5ff" stroke-width="2"/>
+      <g fill="#00e5ff">
+        <circle cx="170" cy="93.2" r="3"/><circle cx="244.4" cy="105.9" r="3"/>
+        <circle cx="180.8" cy="144.9" r="3"/><circle cx="137.5" cy="174.6" r="3"/>
+        <circle cx="143.7" cy="121.5" r="3"/>
+      </g>
+      <!-- Achsenbeschriftung -->
+      <g font-family="Consolas, ui-monospace, monospace" font-size="11" font-weight="700" fill="#bfeef7">
+        <text x="170" y="22" text-anchor="middle">LAUFEN <tspan fill="#5a8a96">40</tspan></text>
+        <text x="276.5" y="95.4" text-anchor="end" dy="-8">RAD <tspan fill="#5a8a96">85</tspan></text>
+        <text x="256" y="228" text-anchor="middle">SCHWIMMEN <tspan fill="#5a8a96">20</tspan></text>
+        <text x="84" y="228" text-anchor="middle">HÖHE <tspan fill="#5a8a96">60</tspan></text>
+        <text x="63.5" y="95.4" text-anchor="start" dy="-8">WANDERN <tspan fill="#5a8a96">30</tspan></text>
+      </g>
+    </g>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">MeterMachen · Design-Ideen &amp; Entscheidung</div>
+      <div class="h1line"><span class="bolt">◈</span><h1>Profilseite</h1></div>
+    </div>
+    <div class="meta">
+      <span class="pill">Variante B umgesetzt</span><br>
+      <b>Datum</b> 06.08.2026 · <b>Route</b> <span class="mono">/profil/:id</span>
+    </div>
+  </header>
+
+  <p class="tldr"><b>Worum es geht:</b> Ein Klick auf einen Namen öffnet bisher ein Modal mit einer nackten Aktivitätenliste. Stattdessen: eine echte <b>Profilseite</b> mit <b>Spinnennetz-Diagramm</b> über fünf Achsen — Laufen, Rad, Schwimmen, Höhe und die persönliche Spezialdisziplin. Aus der Form des Netzes leitet die App einen <b>Typ</b> ab („Wasserratte", „Bergziege", „Triathlon-Maschine") — und man kann sein eigenes Netz darüberlegen, um sich zu vergleichen.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">5</div><div class="l">Achsen: 4 fix + 1 persönliche Spezialdisziplin</div></div>
+    <div class="stat"><div class="n">100 %</div><div class="l">= Gruppenbestwert auf dieser Achse</div></div>
+    <div class="stat"><div class="n">12</div><div class="l">Typen, aus der eigenen Verteilung abgeleitet</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">neue Backend-Endpunkte nötig</div></div>
+  </div>
+
+  <h2><span class="no">01</span> Datenlage — alles schon da</h2>
+  <p><code>GET /api/comparison/{jahr}</code> liefert pro Person bereits <code>by_category</code> (MM und echte km je Kategorie), <code>total_elevation_m</code>, <code>auszeichnungen</code>, <code>avatar</code> und <code>rank</code>. <code>GET /api/users/{id}/activities</code> liefert die Einzeleinträge inkl. <code>start_time</code> und <code>elevation_m</code>. Die Profilseite rechnet daraus alles selbst — <b>keine neue Tabelle, kein neuer Endpunkt, keine Migration</b>. Die Zuordnung Kategorie → Disziplin spiegelt <code>bucket_for_category()</code> aus <span class="mono">services/achievements.py</span> (Icon <code>laufen</code>/<code>rad</code>/<code>schwimmen</code>), damit Netz und Achievements dieselbe Sprache sprechen.</p>
+
+  <h2><span class="no">02</span> Variante A — „Steckbrief"</h2>
+  <div class="variant">
+    <div class="app">
+      <div class="row" style="margin-bottom:10px">
+        <span class="av">🦊</span>
+        <div style="min-width:0">
+          <div class="name">Kira Wagner 🏔️ 🐇</div>
+          <div class="mute" style="font-size:11px">Platz 3 · 1 284 MM · 214 Einträge</div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div><div class="v">1 284</div><div class="k">MM</div></div>
+        <div><div class="v">642</div><div class="k">km</div></div>
+        <div><div class="v">18,4k</div><div class="k">Höhe</div></div>
+        <div><div class="v">214</div><div class="k">Einträge</div></div>
+      </div>
+      <div class="lbl"><span>// </span>Sportprofil</div>
+      <svg viewBox="0 0 340 240" style="width:100%;height:auto"><use href="#netz"/></svg>
+      <div class="lbl"><span>// </span>Letzte Aktivitäten</div>
+      <div class="act"><span class="d">04.08.</span><span>Radfahren · Feierabendrunde</span><span class="v">→ 42</span></div>
+      <div class="act"><span class="d">02.08.</span><span>Wandern · Brecherspitz</span><span class="v">→ 33</span></div>
+    </div>
+    <div>
+      <div class="vhead"><span class="tag">A</span><h3>Kopfzeile, Kennzahlen, Netz, Liste</h3></div>
+      <ul>
+        <li><b>Klassischer Aufbau</b> von oben nach unten — nichts überrascht.</li>
+        <li>Das Netz ist <b>eine Sektion unter vielen</b>, gleichberechtigt mit der Aktivitätenliste.</li>
+        <li>Der <b>Typ fehlt</b> als eigenständiges Element; er müsste in die Kopfzeile gequetscht werden.</li>
+      </ul>
+      <div class="verdict"><b>Warum nicht:</b> solide, aber austauschbar. Die Kennzahlen-Kacheln stehen vor dem Netz und stehlen ihm die Aufmerksamkeit — dabei ist genau das Netz der Grund, warum jemand die Seite öffnet.</div>
+    </div>
+  </div>
+
+  <h2><span class="no">03</span> Variante B — „Spielerkarte" <span class="pill" style="margin-left:auto">gewählt</span></h2>
+  <div class="variant">
+    <div class="app">
+      <div class="row" style="margin-bottom:8px">
+        <span class="av big">🦊</span>
+        <div style="min-width:0">
+          <div class="mute" style="font-size:9px;letter-spacing:.25em">PLATZ 3 · SAISON 2026</div>
+          <div class="name">Kira Wagner 🏔️ 🐇</div>
+          <div class="typ" style="font-size:19px">🚴 KILOMETERFRESSER</div>
+          <div class="soft" style="font-size:11px">48 % der Meter im Sattel — und dabei ordentlich Höhe gemacht.</div>
+        </div>
+      </div>
+      <div style="position:relative">
+        <svg viewBox="0 0 340 240" style="width:100%;height:auto"><use href="#netz"/></svg>
+        <div style="position:absolute;right:0;top:0;text-align:right">
+          <span class="chip" style="border-color:#00e5ff;color:#00e5ff">Kira</span><br>
+          <span class="chip" style="margin-top:4px">✓ mit mir vergleichen</span>
+        </div>
+      </div>
+      <div class="kpi" style="margin-top:4px">
+        <div><div class="v">1 284</div><div class="k">MM</div></div>
+        <div><div class="v">642</div><div class="k">km</div></div>
+        <div><div class="v">18,4k</div><div class="k">Höhe</div></div>
+        <div><div class="v">214</div><div class="k">Einträge</div></div>
+      </div>
+      <div class="lbl"><span>// </span>Sportarten</div>
+      <div style="display:grid;gap:5px">
+        <div><div style="display:flex;justify-content:space-between;font-size:10px" class="soft"><span>Radfahren</span><span class="mute">612 MM</span></div><div class="bar"><i style="width:85%;background:#3498db"></i></div></div>
+        <div><div style="display:flex;justify-content:space-between;font-size:10px" class="soft"><span>Wandern</span><span class="mute">288 MM</span></div><div class="bar"><i style="width:40%;background:#27ae60"></i></div></div>
+        <div><div style="display:flex;justify-content:space-between;font-size:10px" class="soft"><span>Joggen</span><span class="mute">244 MM</span></div><div class="bar"><i style="width:34%;background:#e74c3c"></i></div></div>
+      </div>
+      <div class="lbl"><span>// </span>Letzte Aktivitäten</div>
+      <div class="act"><span class="d">04.08.</span><span>Radfahren · Feierabendrunde</span><span class="v">→ 42</span></div>
+      <div class="act"><span class="d">02.08.</span><span>Wandern · Brecherspitz · 780 hm</span><span class="v">→ 33</span></div>
+    </div>
+    <div>
+      <div class="vhead"><span class="tag">B</span><h3>Typ als Schlagzeile, Netz als Hauptbild</h3></div>
+      <ul>
+        <li><b>Der Typ ist die Überschrift</b> — die eine Zeile, die man weitererzählt („ich bin jetzt offiziell Bergziege").</li>
+        <li><b>Das Netz füllt die Breite</b> und liegt direkt unter dem Namen: auf dem Handy ohne Scrollen sichtbar.</li>
+        <li><b>Vergleichs-Toggle am Netz:</b> eigenes Profil als gestrichelte Kontur darüberlegen — der direkte Vergleich, den du wolltest.</li>
+        <li>Zahlen kommen <b>nach</b> dem Bild: erst der Eindruck, dann die Details.</li>
+      </ul>
+      <div class="verdict win"><b>Warum diese:</b> Sie beantwortet in zwei Sekunden „wer ist das für ein Sportler?" — genau die Frage, wegen der man auf einen Namen klickt. Der HUD-Look der App trägt das Netz von selbst, und auf 30 Leute skaliert es: jedes Profil sieht anders aus, ohne dass eine Zeile Code pro Person nötig wäre.</div>
+    </div>
+  </div>
+
+  <h2><span class="no">04</span> Variante C — „Dossier"</h2>
+  <div class="variant">
+    <div class="app">
+      <div class="row" style="margin-bottom:8px">
+        <span class="av">🦊</span>
+        <div style="min-width:0;flex:1">
+          <div class="name" style="font-size:14px">KIRA WAGNER</div>
+          <div class="mute" style="font-size:10px;font-family:var(--mono)">ID 12 · TYP: KILOMETERFRESSER · RANG 03</div>
+        </div>
+        <svg viewBox="60 10 250 220" style="width:96px;height:auto;flex:none"><use href="#netz"/></svg>
+      </div>
+      <table class="tbl">
+        <tr><td class="k">Gewertet</td><td class="v">1 284 MM</td><td class="k">Echt</td><td class="v">642 km</td></tr>
+        <tr><td class="k">Höhe</td><td class="v">18 412 m</td><td class="k">Einträge</td><td class="v">214</td></tr>
+        <tr><td class="k">Ø Eintrag</td><td class="v">6,0 MM</td><td class="k">Längste</td><td class="v">96 MM</td></tr>
+        <tr><td class="k">Lauf</td><td class="v">244</td><td class="k">Rad</td><td class="v">612</td></tr>
+        <tr><td class="k">Schwimm</td><td class="v">140</td><td class="k">Wandern</td><td class="v">288</td></tr>
+      </table>
+      <div class="lbl"><span>// </span>Log</div>
+      <div class="act"><span class="d">04.08.</span><span>RAD · 42,0 km</span><span class="v">→ 42</span></div>
+      <div class="act"><span class="d">02.08.</span><span>WANDERN · 11,0 km · 780 hm</span><span class="v">→ 33</span></div>
+    </div>
+    <div>
+      <div class="vhead"><span class="tag">C</span><h3>Datenblatt, Zahlen zuerst</h3></div>
+      <ul>
+        <li><b>Maximale Dichte</b> — alles auf einem Schirm, kein Scrollen.</li>
+        <li>Passt zum Mono-/HUD-Charakter der App und wäre für Statistik-Nerds ein Fest.</li>
+        <li>Aber: das Netz schrumpft zum <b>Briefmarken-Ornament</b>, der Typ wird zu einer Zeile Fließtext.</li>
+      </ul>
+      <div class="verdict"><b>Warum nicht:</b> Auf dem Handy wird die Tabelle eng, und der emotionale Teil — „was bin ich für ein Typ?" — verschwindet zwischen den Zahlen. Einzelne Ideen daraus (Ø pro Eintrag, längste Aktivität) wandern als Kacheln in Variante B.</div>
+    </div>
+  </div>
+
+  <h2><span class="no">05</span> Das Spinnennetz — wie gerechnet wird</h2>
+  <div class="grid2">
+    <div>
+      <h3 style="margin-bottom:8px">Die fünf Achsen</h3>
+      <ul>
+        <li><b>Laufen</b> — alle Kategorien mit Icon <code>laufen</code> (Joggen, Laufen).</li>
+        <li><b>Rad</b> — Icon <code>rad</code>.</li>
+        <li><b>Schwimmen</b> — Icon <code>schwimmen</code>.</li>
+        <li><b>Höhe</b> — <code>total_elevation_m</code>, roh, ohne jeden Faktor.</li>
+        <li><b>Spezial</b> — die stärkste <em>übrige</em> Kategorie dieser Person (Wandern, Tanzen, Spazieren, Ski …). Die Achse trägt deren Namen. Wer keine hat, bekommt die in der Gruppe verbreitetste Nebenkategorie — so bleibt das Fünfeck immer ein Fünfeck.</li>
+      </ul>
+      <p style="font-size:14px;margin-top:10px">Die drei Kern-Disziplinen sind <b>bei jedem gleich</b> — dadurch bleiben Profile vergleichbar. Nur die fünfte Achse ist persönlich; beim Vergleich zweier Leute wird sie für beide auf <em>derselben</em> Kategorie gemessen.</p>
+    </div>
+    <div>
+      <h3 style="margin-bottom:8px">Skalierung</h3>
+      <p style="font-size:14px">Pro Achse gilt <b>100 % = bester Wert der Gruppe</b> in dieser Saison:</p>
+      <p class="mono" style="font-size:13px;background:var(--line-soft);padding:10px 12px;border-radius:8px;color:var(--ink)">wert = eigene_MM(achse) / max_gruppe(achse) · 100</p>
+      <ul>
+        <li>Wer eine Achse anführt, <b>berührt dort den Außenring</b> — das macht Ehrgeiz sichtbar.</li>
+        <li>Höhe zählt in Metern und bleibt roh (wie in der Höhenmeter-Ansicht), alle anderen Achsen in gewerteten MM.</li>
+        <li>Ist eine Achse in der ganzen Gruppe leer, bleibt sie stehen und alle stehen dort auf 0 — kein Division-durch-Null.</li>
+        <li>Neben jedem Achsennamen steht der Prozentwert, im Tooltip/darunter der echte Wert.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="no">06</span> Der Typ — aus der eigenen Verteilung</h2>
+  <p>Der Typ beschreibt <b>die Person, nicht ihren Rang</b>. Grundlage sind daher die Anteile an den <em>eigenen</em> gewerteten Metern (nicht die Gruppen-Skalierung): <code>anteil(achse) = MM(achse) / MM(gesamt)</code>. Dazu die Höhen-Intensität <code>hm_je_100mm</code>, verglichen mit dem Gruppenmedian. Die erste zutreffende Regel gewinnt:</p>
+  <div class="arch" style="margin:12px 0 8px">
+    <div class="a"><div class="t">🌱 Frischling</div><div class="r">&lt; 20 MM gesamt</div></div>
+    <div class="a"><div class="t">🏔️ Bergziege</div><div class="r">hm/100 MM ≥ 2 × Gruppenmedian, min. 3 000 hm</div></div>
+    <div class="a"><div class="t">🥇 Triathlon-Maschine</div><div class="r">Lauf, Rad und Schwimmen je ≥ 20 %</div></div>
+    <div class="a"><div class="t">🐬 Wasserratte</div><div class="r">Schwimmen ≥ 45 %</div></div>
+    <div class="a"><div class="t">🚴 Kilometerfresser</div><div class="r">Rad ≥ 45 %</div></div>
+    <div class="a"><div class="t">🏃 Laufmaschine</div><div class="r">Laufen ≥ 45 %</div></div>
+    <div class="a"><div class="t">🥾 Gipfelstürmer</div><div class="r">Wandern ≥ 45 %</div></div>
+    <div class="a"><div class="t">💃 Tanzbär</div><div class="r">Tanzen ≥ 45 %</div></div>
+    <div class="a"><div class="t">🚶 Flaneur</div><div class="r">Spazieren ≥ 45 %</div></div>
+    <div class="a"><div class="t">🧭 Freigeist</div><div class="r">sonstige Spezialkategorie ≥ 45 %</div></div>
+    <div class="a"><div class="t">⚔️ Doppelspitze</div><div class="r">zwei Disziplinen je ≥ 30 %</div></div>
+    <div class="a"><div class="t">🎲 Allrounder</div><div class="r">alles andere — nichts dominiert</div></div>
+  </div>
+  <p style="font-size:14px">Darunter eine erklärende Zeile mit der konkreten Zahl, z. B. <em>„48 % der Meter im Sattel — und dabei ordentlich Höhe gemacht."</em> Die Begriffe sind bewusst <b>ohne Artikel und geschlechtsneutral gehalten</b> (Wasserratte, Bergziege, Allrounder), damit sie für alle in der Gruppe passen.</p>
+
+  <h2><span class="no">07</span> Was sich sonst noch ändert</h2>
+  <div class="grid2">
+    <div>
+      <ul>
+        <li><b>Neue Route</b> <code>/profil/:userId?jahr=2026</code> — teilbar, direkt verlinkbar.</li>
+        <li><b>Namen werden Links:</b> in Rennen, Sport-Mix, Verlauf und Höhenmeter führt der Klick auf eine Person jetzt aufs Profil statt ins Modal.</li>
+        <li>Das alte <span class="mono">PersonDetail</span>-Modal entfällt; seine Aktivitätenliste lebt als Sektion auf der Profilseite weiter.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><b>Vergleichs-Overlay:</b> Standardmäßig an, sobald man ein fremdes Profil ansieht — die eigene Kontur gestrichelt darüber.</li>
+        <li><b>Saison-Wahl</b> über den <code>?jahr=</code>-Parameter, gleiche Logik wie im Vergleichs-Tab.</li>
+        <li><b>Auszeichnungen</b> (Emoji-Badges mit Popover) wandern mit auf die Seite.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="discuss">
+    <h2><span class="no">08</span> Zu klären</h2>
+    <ul>
+      <li><b>Profilbild:</b> Bleibt es beim Icon/Emoji-Avatar? Echte Fotos hieße Upload, Speicher, Moderation und Datenschutz-Text — bewusst <em>nicht</em> in diesem PR. Ein größerer Avatar plus Typ trägt die Seite fürs Erste.</li>
+      <li><b>Fünfte Achse:</b> Reicht eine Spezialdisziplin, oder sollen es zwei sein (dann Sechseck)?</li>
+      <li><b>Schwellen:</b> 45 % für einen reinen Typ, 30 % für die Doppelspitze — zu streng, zu locker?</li>
+      <li><b>Typ öffentlich?</b> Aktuell sieht jeder den Typ von jedem. Alternativ nur auf dem eigenen Profil.</li>
+      <li><b>Später:</b> Typ als Zeile im Feed („Kira ist jetzt Bergziege") — eigenes Feature, nicht hier.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <span>MeterMachen · Profilseite v1</span>
+    <span class="mono">docs/review/profil-designideen.html</span>
+  </footer>
+</div>

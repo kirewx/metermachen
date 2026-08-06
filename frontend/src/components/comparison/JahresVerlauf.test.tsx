@@ -1,17 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { Comparison } from '../../api/client'
 import JahresVerlauf from './JahresVerlauf'
 
 vi.mock('../../api/client', () => ({
   api: {
-    categories: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Laufen', factor: 4, color: '#f00', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: [] },
-    ]),
-    userActivities: vi.fn().mockResolvedValue([
-      { id: 7, category_id: 1, date: '2026-03-01', distance_km: 5, duration_min: null, elevation_m: null, note: 'Morgenlauf', scaled_km: 20, edited: false, source: 'manual', strava_url: null },
-    ]),
   },
 }))
 
@@ -30,16 +25,17 @@ function renderVerlauf() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <JahresVerlauf data={data} />
+      <MemoryRouter>
+        <JahresVerlauf data={data} />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
-describe('JahresVerlauf Detailansicht', () => {
-  it('öffnet über die anklickbare Personen-Legende die Detailansicht', async () => {
+describe('JahresVerlauf Personen-Legende', () => {
+  it('verlinkt die Person auf ihre Profilseite', () => {
     renderVerlauf()
-    fireEvent.click(screen.getByLabelText('Details zu Erik'))
-    expect(await screen.findByText('Morgenlauf', { exact: false })).toBeInTheDocument()
+    expect(screen.getByLabelText('Profil von Erik')).toHaveAttribute('href', '/profil/1?jahr=2026')
   })
 
   it('togglet eine Kurve über den Chip und schaltet mit Alle/Keine', () => {
@@ -53,7 +49,13 @@ describe('JahresVerlauf Detailansicht', () => {
       ],
     }
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={qc}><JahresVerlauf data={zwei} /></QueryClientProvider>)
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <JahresVerlauf data={zwei} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
     // Toggle-Chip hat aria-pressed
     const chip = screen.getByRole('button', { name: 'Erik ein-/ausblenden' })
     expect(chip).toHaveAttribute('aria-pressed', 'true')
@@ -65,7 +67,7 @@ describe('JahresVerlauf Detailansicht', () => {
     expect(screen.getByRole('button', { name: 'Lisa ein-/ausblenden' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('öffnet Detail über den i-Button am Chip', async () => {
+  it('bietet den Profil-Link als eigenen i-Knopf neben dem Toggle an', () => {
     const zwei: Comparison = {
       year: 2026, goal_km: 1000, milestones: [], start_date: null, phase: 'challenge',
       users: [
@@ -74,8 +76,13 @@ describe('JahresVerlauf Detailansicht', () => {
       ],
     }
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={qc}><JahresVerlauf data={zwei} /></QueryClientProvider>)
-    fireEvent.click(screen.getByRole('button', { name: 'Details zu Erik' }))
-    expect(await screen.findByText('Morgenlauf', { exact: false })).toBeInTheDocument()
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <JahresVerlauf data={zwei} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole('link', { name: 'Profil von Erik' })).toHaveTextContent('i')
   })
 })
