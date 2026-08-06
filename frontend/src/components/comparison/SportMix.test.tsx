@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { Comparison } from '../../api/client'
 import SportMix from './SportMix'
@@ -44,7 +45,9 @@ function renderMix() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <SportMix data={data} />
+      <MemoryRouter>
+        <SportMix data={data} />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -62,7 +65,9 @@ describe('SportMix', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={qc}>
-        <SportMix data={data} mode="km" />
+        <MemoryRouter>
+          <SportMix data={data} mode="km" />
+        </MemoryRouter>
       </QueryClientProvider>,
     )
     // echte km: 50 (Laufen) + 100 (Radfahren) = 150, nicht 300 MM
@@ -70,10 +75,12 @@ describe('SportMix', () => {
     expect(screen.queryByText(/^300/)).not.toBeInTheDocument()
   })
 
-  it('öffnet beim Klick auf eine Person deren Detailansicht', async () => {
+  it('verlinkt die Person auf ihre Profilseite in derselben Saison', () => {
     renderMix()
-    fireEvent.click(screen.getByLabelText('Details zu Erik'))
-    expect(await screen.findByText('Morgenlauf', { exact: false })).toBeInTheDocument()
+    expect(screen.getByLabelText('Profil von Erik')).toHaveAttribute(
+      'href',
+      '/profil/1?jahr=2026',
+    )
   })
 
   it('zeigt Sportart-Piktogramme in ausreichend breiten Segmenten', () => {
@@ -99,7 +106,9 @@ describe('SportMix', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={qc}>
-        <SportMix data={schmal} />
+        <MemoryRouter>
+          <SportMix data={schmal} />
+        </MemoryRouter>
       </QueryClientProvider>,
     )
     expect(screen.getByLabelText('Laufen')).toBeInTheDocument()

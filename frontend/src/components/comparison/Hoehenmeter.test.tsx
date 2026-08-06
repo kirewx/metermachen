@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { Comparison, ComparisonUser } from '../../api/client'
 import Hoehenmeter from './Hoehenmeter'
@@ -49,7 +50,9 @@ function renderHm(data: Comparison) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <Hoehenmeter data={data} />
+      <MemoryRouter>
+        <Hoehenmeter data={data} />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

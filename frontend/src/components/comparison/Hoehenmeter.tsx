@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
-import type { Comparison, ComparisonUser } from '../../api/client'
+import type { Comparison } from '../../api/client'
+import { profilPfad } from '../profile/pfad'
 import Card from '../ui/Card'
 import Collapsible from '../ui/Collapsible'
 import HoehenSaeulen from './HoehenSaeulen'
 import HoehenVerlauf from './HoehenVerlauf'
 import { nachHoehe, presetAuswahl, PRESETS, type Preset } from './hoehenAuswahl'
 import { formatHm } from './monatsFarbe'
-import PersonDetail from './PersonDetail'
 import { userColor } from './userColor'
 
 const UNTERANSICHTEN = [
@@ -24,7 +25,7 @@ type Unteransicht = (typeof UNTERANSICHTEN)[number]['key']
  */
 export default function Hoehenmeter({ data }: { data: Comparison }) {
   const [unteransicht, setUnteransicht] = useState<Unteransicht>('saeulen')
-  const [detail, setDetail] = useState<ComparisonUser | null>(null)
+  const navigate = useNavigate()
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me })
   const meId = me?.id ?? null
   const sortiert = useMemo(() => nachHoehe(data.users), [data.users])
@@ -94,7 +95,7 @@ export default function Hoehenmeter({ data }: { data: Comparison }) {
           users={data.users.filter((u) => auswahl.has(u.user_id))}
           months={data.elevation_months}
           meId={meId}
-          onSelect={setDetail}
+          onSelect={(u) => navigate(profilPfad(u.user_id, data.year))}
         />
       ) : (
         <HoehenVerlauf data={data} auswahl={auswahl} meId={meId} />
@@ -137,8 +138,6 @@ export default function Hoehenmeter({ data }: { data: Comparison }) {
           })}
         </div>
       </Collapsible>
-
-      {detail && <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />}
     </Card>
   )
 }

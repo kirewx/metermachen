@@ -1,12 +1,11 @@
-import { useState } from 'react'
-import type { Comparison, ComparisonUser } from '../../api/client'
+import { Link } from 'react-router-dom'
+import type { Comparison } from '../../api/client'
+import { profilPfad } from '../profile/pfad'
 import Avatar from '../ui/Avatar'
 import Icon from '../ui/Icon'
-import PersonDetail from './PersonDetail'
 import { toDisplay, unitLabel, type UnitMode } from './unit'
 
 export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
-  const [detail, setDetail] = useState<ComparisonUser | null>(null)
   // Alle vorkommenden Kategorien für die Legende sammeln (Reihenfolge stabil).
   const legende = new Map<number, { name: string; color: string }>()
   for (const u of data.users)
@@ -24,10 +23,9 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
               className="reihe-rein flex items-center gap-3"
               style={{ animationDelay: `${i * 60}ms` }}
             >
-              <button
-                type="button"
-                onClick={() => setDetail(u)}
-                aria-label={`Details zu ${u.display_name}`}
+              <Link
+                to={profilPfad(u.user_id, data.year)}
+                aria-label={`Profil von ${u.display_name}`}
                 className="flex shrink-0 items-center gap-3 rounded-lg text-left transition hover:opacity-80"
               >
                 <span className="w-7 font-mono text-sm font-bold tabular-nums text-ink-tech">
@@ -35,7 +33,7 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
                 </span>
                 <Avatar value={u.avatar} size="sm" />
                 <span className="w-24 truncate text-sm font-bold text-ink">{u.display_name}</span>
-              </button>
+              </Link>
               <div className="flex h-6 flex-1 overflow-hidden rounded-full bg-surface">
                 {u.by_category.map((c) => {
                   const anteil = gesamt > 0 ? (c.scaled_km / gesamt) * 100 : 0
@@ -74,9 +72,6 @@ export default function SportMix({ data, mode = 'mm' }: { data: Comparison; mode
           </li>
         ))}
       </ul>
-      {detail && (
-        <PersonDetail user={detail} year={data.year} onClose={() => setDetail(null)} />
-      )}
     </div>
   )
 }
