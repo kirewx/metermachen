@@ -43,8 +43,10 @@ export default function Spinnennetz({ name, achsen, vergleich = null }: Props) {
 
   return (
     <div>
+      {/* viewBox seitlich größer als das Netz: lange Achsennamen ("SPAZIEREN
+          100") ragen darüber hinaus und würden sonst abgeschnitten. */}
       <svg
-        viewBox="0 0 340 250"
+        viewBox="-45 0 430 250"
         className="w-full"
         role="img"
         aria-label={`Sportprofil von ${name}: ${achsen

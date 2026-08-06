@@ -140,7 +140,12 @@ export default function Profil() {
           <StatValue label="Einträge" value={`${activities.length}`} />
         </div>
         <p className="text-xs text-ink-mute">
-          Ø {schnitt.toFixed(1)} MM je Eintrag · längste Aktivität {Math.round(laengste)} MM
+          Ø{' '}
+          {schnitt.toLocaleString('de-DE', {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          })}{' '}
+          MM je Eintrag · längste Aktivität {Math.round(laengste)} MM
         </p>
       </Card>
 

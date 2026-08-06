@@ -77,7 +77,7 @@ export function bestimmeTyp(
       key: 'bergziege',
       emoji: '🏔️',
       label: 'Bergziege',
-      satz: `${Math.round(eigeneHm)} Höhenmeter je 100 MM — hier geht es fast nur bergauf.`,
+      satz: `Auf je 100 MM kommen ${Math.round(eigeneHm).toLocaleString('de-DE')} Höhenmeter — hier geht es fast nur bergauf.`,
     }
 
   if (anteil.lauf >= 0.2 && anteil.rad >= 0.2 && anteil.schwimm >= 0.2)
