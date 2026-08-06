@@ -57,6 +57,7 @@ describe('SchnellwahlCard', () => {
       date: heute(),
       distance_km: 5,
       duration_min: null,
+      elevation_m: null,
       note: null,
       start_time: null,
     })
@@ -80,9 +81,19 @@ describe('SchnellwahlCard', () => {
       date: '2026-03-01',
       distance_km: 7.5,
       duration_min: 42,
+      elevation_m: null,
       note: 'Runde am Fluss',
       start_time: null,
     })
+  })
+
+  it('Details: Höhenmeter werden übernommen', async () => {
+    const onSubmit = vi.fn()
+    render(<SchnellwahlCard categories={categories} onSubmit={onSubmit} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }))
+    await userEvent.type(screen.getByLabelText('Höhenmeter'), '420')
+    await userEvent.click(screen.getByRole('button', { name: /Eintragen/ }))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ elevation_m: 420 }))
   })
 
   it('Details: Startzeit wird als HH:MM übernommen', async () => {

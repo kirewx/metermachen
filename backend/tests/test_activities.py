@@ -144,3 +144,25 @@ def test_liste_zeigt_saison_fenster_ueber_jahresgrenze(client, session):
     daten = [a["date"] for a in r.json()]
     assert "2027-01-15" in daten
     assert "2027-06-01" not in daten
+
+
+def test_hoehenmeter_manuell_erfassen_und_korrigieren(client, session):
+    make_user(session)
+    cat = make_category(session, factor=4.0)
+    login(client)
+    r = create_activity(client, cat.id, elevation_m=420.5)
+    assert r.status_code == 201, r.text
+    assert r.json()["elevation_m"] == 420.5
+    act_id = r.json()["id"]
+    r = client.patch(f"/api/activities/{act_id}", json={"elevation_m": 500.0})
+    assert r.json()["elevation_m"] == 500.0
+    # explizit leeren ist erlaubt — sonst bliebe ein Tippfehler für immer stehen
+    r = client.patch(f"/api/activities/{act_id}", json={"elevation_m": None})
+    assert r.json()["elevation_m"] is None
+
+
+def test_hoehenmeter_duerfen_nicht_negativ_sein(client, session):
+    make_user(session)
+    cat = make_category(session)
+    login(client)
+    assert create_activity(client, cat.id, elevation_m=-10).status_code == 422

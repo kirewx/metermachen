@@ -141,6 +141,7 @@ class ActivityCreate(BaseModel):
     distance_km: float = Field(gt=0)
     duration_min: int | None = Field(default=None, gt=0)
     start_time: time_type | None = None
+    elevation_m: float | None = Field(default=None, ge=0)
     note: str | None = None
 
     @field_validator("date")
@@ -157,6 +158,7 @@ class ActivityPatch(BaseModel):
     distance_km: float | None = Field(default=None, gt=0)
     duration_min: int | None = Field(default=None, gt=0)
     start_time: time_type | None = None
+    elevation_m: float | None = Field(default=None, ge=0)
     note: str | None = None
 
     @field_validator("date")
@@ -202,6 +204,14 @@ class CumulativePoint(BaseModel):
     date: date_type
     scaled_km: float
     real_km: float = 0.0
+    elevation_m: float = 0.0
+
+
+class MonthElevation(BaseModel):
+    """Höhenmeter eines Kalendermonats, Monat als 'YYYY-MM'."""
+
+    month: str
+    meters: float
 
 
 class Auszeichnung(BaseModel):
@@ -220,9 +230,11 @@ class ComparisonUser(BaseModel):
     km_factor: float = 1.0
     emojis: list[str] = []
     auszeichnungen: list[Auszeichnung] = []
+    total_elevation_m: float = 0.0
     by_category: list[CategoryShare]
     segments: list[Segment]
     cumulative: list[CumulativePoint]
+    elevation_by_month: list[MonthElevation] = []
 
 
 class ComparisonOut(BaseModel):
@@ -232,6 +244,7 @@ class ComparisonOut(BaseModel):
     users: list[ComparisonUser]
     start_date: date_type | None = None
     phase: str = "challenge"
+    elevation_months: list[str] = []
 
 
 class LastSeenEntry(BaseModel):

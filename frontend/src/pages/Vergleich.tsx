@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import SchnellwahlLeiste from '../components/activities/SchnellwahlLeiste'
+import Hoehenmeter from '../components/comparison/Hoehenmeter'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
 import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
@@ -17,6 +18,7 @@ const ANSICHTEN = [
   { key: 'rennen', label: 'Rennen', icon: 'fahne' },
   { key: 'verlauf', label: 'Verlauf', icon: 'chart' },
   { key: 'sportmix', label: 'Sport-Mix', icon: 'medaille' },
+  { key: 'hoehenmeter', label: 'Höhenmeter', icon: 'berg' },
 ] as const
 type Ansicht = (typeof ANSICHTEN)[number]['key']
 
@@ -79,7 +81,8 @@ export default function Vergleich() {
               {a.label}
             </button>
           ))}
-        {!archiv && (
+        {/* Höhenmeter sind roh — MM/km-Umschalter hat dort keine Bedeutung. */}
+        {!archiv && ansicht !== 'hoehenmeter' && (
           <div className="ml-auto flex overflow-hidden rounded-full border border-line text-xs">
             <button
               type="button"
@@ -126,6 +129,7 @@ export default function Vergleich() {
       {!archiv && data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
       {!archiv && data && ansicht === 'verlauf' && <JahresVerlauf data={data} mode={mode} />}
       {!archiv && data && ansicht === 'sportmix' && <SportMix data={data} mode={mode} />}
+      {!archiv && data && ansicht === 'hoehenmeter' && <Hoehenmeter data={data} />}
     </div>
   )
 }

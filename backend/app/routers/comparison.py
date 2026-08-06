@@ -26,10 +26,27 @@ from ..schemas import (
     CumulativePoint,
     LastSeenEntry,
     LastSeenOut,
+    MonthElevation,
     Segment,
 )
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
+
+
+def _monatsschluessel(tag: date_type) -> str:
+    return f"{tag.year:04d}-{tag.month:02d}"
+
+
+def _monatsachse(erster: date_type, letzter: date_type) -> list[str]:
+    """Lückenlose Monatsliste von `erster` bis `letzter`, jeweils als 'YYYY-MM'."""
+    monate: list[str] = []
+    jahr, monat = erster.year, erster.month
+    while (jahr, monat) <= (letzter.year, letzter.month):
+        monate.append(f"{jahr:04d}-{monat:02d}")
+        monat += 1
+        if monat == 13:
+            jahr, monat = jahr + 1, 1
+    return monate
 
 
 # Hinweis: "challenge" meint hier die SAISON (Jahreswertung), nicht das
@@ -78,23 +95,52 @@ def compute_comparison(
             Auszeichnung(emoji=emoji, title=titel, description=desc)
         )
 
+    # Gemeinsame Monatsachse für die Höhenmeter-Ansicht: ab Challenge-Start (bzw. ab
+    # der ersten Aktivität) bis zum laufenden Monat. Alle Personen teilen sie sich,
+    # damit ein Monat überall dieselbe Farbe bekommt.
+    alle_daten = [a.date for a, _ in rows]
+    if phase == "challenge" and start is not None and date_type.today() >= start:
+        erster_tag = start
+    elif alle_daten:
+        erster_tag = min(alle_daten)
+    else:
+        erster_tag = None
+    if erster_tag is None:
+        elevation_months: list[str] = []
+    else:
+        letzter_tag = max(alle_daten) if alle_daten else erster_tag
+        heute = date_type.today()
+        if phase == "challenge" and in_window(heute, window) and heute > letzter_tag:
+            letzter_tag = heute
+        elevation_months = _monatsachse(erster_tag, max(letzter_tag, erster_tag))
+
     result_users = []
     for user in users:
         acts = by_user.get(user.id, [])
         segments, cumulative = [], []
         shares, real_shares = defaultdict(float), defaultdict(float)
+        hm_pro_monat: dict[str, float] = defaultdict(float)
         running = 0.0
         real_running = 0.0
+        hm_running = 0.0
         factor = user.km_factor if phase == "challenge" else 1.0
         for a, c in acts:
             scaled = round(a.distance_km * c.factor * factor, 2)
             running = round(running + scaled, 2)
             real_running = round(real_running + a.distance_km, 2)
+            # Höhenmeter bleiben roh: weder Kategorie- noch Personen-Faktor.
+            hm_running = round(hm_running + (a.elevation_m or 0.0), 1)
+            hm_pro_monat[_monatsschluessel(a.date)] += a.elevation_m or 0.0
             segments.append(
                 Segment(date=a.date, category_id=c.id, color=c.color, scaled_km=scaled)
             )
             cumulative.append(
-                CumulativePoint(date=a.date, scaled_km=running, real_km=real_running)
+                CumulativePoint(
+                    date=a.date,
+                    scaled_km=running,
+                    real_km=real_running,
+                    elevation_m=hm_running,
+                )
             )
             shares[c.id] += scaled
             real_shares[c.id] += a.distance_km
@@ -122,9 +168,15 @@ def compute_comparison(
                 rank=0,
                 total_scaled_km=running,
                 total_real_km=real_running,
+                total_elevation_m=hm_running,
                 by_category=by_category,
                 segments=segments,
                 cumulative=cumulative,
+                elevation_by_month=[
+                    MonthElevation(month=m, meters=round(hm_pro_monat[m], 1))
+                    for m in sorted(hm_pro_monat)
+                    if hm_pro_monat[m] > 0
+                ],
             )
         )
 
@@ -139,6 +191,7 @@ def compute_comparison(
         users=result_users,
         start_date=season.start_date,
         phase=phase,
+        elevation_months=elevation_months,
     )
 
 
