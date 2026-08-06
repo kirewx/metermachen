@@ -658,3 +658,19 @@ def test_backfill_from_ohne_season_aktuelles_jahr(session):
     from datetime import date
 
     assert strava._backfill_from(session) == date(date.today().year, 1, 1)
+
+
+def test_import_ueberschreibt_korrigierte_hoehenmeter_nicht(session):
+    """Wer einen Strava-Wert von Hand korrigiert, soll ihn behalten."""
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {"id": 4242, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+            "total_elevation_gain": 123.4,
+            "start_date_local": "2026-03-01T07:00:00Z", "name": "Lauf"}
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity)).one()
+    act.elevation_m = 800.0
+    session.add(act)
+    session.commit()
+    assert strava.import_activity(session, conn, data) is False  # Dublette, kein Update
+    assert session.exec(select(Activity)).one().elevation_m == 800.0

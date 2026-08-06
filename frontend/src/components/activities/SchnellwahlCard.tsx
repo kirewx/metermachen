@@ -37,6 +37,9 @@ export default function SchnellwahlCard({
   const [date, setDate] = useState(initial?.date ?? heute())
   const [duration, setDuration] = useState(initial?.duration_min ? String(initial.duration_min) : '')
   const [startzeit, setStartzeit] = useState(initial?.start_time?.slice(0, 5) ?? '')
+  const [hoehenmeter, setHoehenmeter] = useState(
+    initial?.elevation_m != null ? String(initial.elevation_m) : '',
+  )
   const [note, setNote] = useState(initial?.note ?? '')
   const [pulsiert, setPulsiert] = useState(false)
   const [gesperrt, setGesperrt] = useState(false)
@@ -60,6 +63,7 @@ export default function SchnellwahlCard({
         date,
         distance_km: km,
         duration_min: duration ? parseInt(duration, 10) : null,
+        elevation_m: hoehenmeter ? parseFloat(hoehenmeter.replace(',', '.')) : null,
         note: note || null,
         start_time: startzeit || null,
       }),
@@ -75,6 +79,7 @@ export default function SchnellwahlCard({
           setDetails(false)
           setDate(heute())
           setDuration('')
+          setHoehenmeter('')
           setNote('')
           setStartzeit('')
         }
@@ -158,6 +163,15 @@ export default function SchnellwahlCard({
               min="1"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
+            />
+            {/* Strava liefert Höhenmeter automatisch — von Hand erfasste Aktivitäten
+                brauchen das Feld, damit alle im Höhenmeter-Vergleich auftauchen. */}
+            <Input
+              label="Höhenmeter"
+              type="number"
+              min="0"
+              value={hoehenmeter}
+              onChange={(e) => setHoehenmeter(e.target.value)}
             />
             <Input label="Notiz" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>

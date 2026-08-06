@@ -53,8 +53,8 @@ def test_cumulative_series(client, session):
     login(client)
     erik = client.get("/api/comparison/2026").json()["users"][0]
     assert erik["cumulative"] == [
-        {"date": "2026-01-10", "scaled_km": 20.0, "real_km": 5.0},
-        {"date": "2026-02-01", "scaled_km": 50.0, "real_km": 35.0},
+        {"date": "2026-01-10", "scaled_km": 20.0, "real_km": 5.0, "elevation_m": 0.0},
+        {"date": "2026-02-01", "scaled_km": 50.0, "real_km": 35.0, "elevation_m": 0.0},
     ]
 
 
@@ -210,6 +210,90 @@ def test_comparison_liefert_auszeichnungen_mit_beschreibung(client, session):
         "title": "Hattrick",
         "description": "Drei Aktivitäten an einem Tag.",
     }]
+
+
+def _hm_setup(session):
+    """Season ab 01.07.2026, Höhenmeter über drei Monate verteilt."""
+    erik = make_user(session)
+    lisa = make_user(session, username="lisa")
+    cat = make_category(session, factor=1.0)
+    session.add(Season(year=2026, goal_km=1000, milestones_json="[]",
+                       start_date=date(2026, 7, 1), end_date=date(2026, 12, 31)))
+    session.commit()
+
+    def act(user, d, km, hm):
+        session.add(Activity(user_id=user.id, category_id=cat.id, date=d,
+                             distance_km=km, elevation_m=hm))
+
+    act(erik, date(2026, 6, 20), 10, 500)  # vor dem Start — zählt nicht
+    act(erik, date(2026, 7, 5), 10, 300)
+    act(erik, date(2026, 7, 20), 10, 200)
+    act(erik, date(2026, 9, 2), 10, 450)  # August bleibt leer
+    act(lisa, date(2026, 7, 8), 10, None)  # ohne Höhenmeter
+    session.commit()
+    return erik, lisa
+
+
+def test_elevation_totals_und_monatsbuckets(client, session):
+    _hm_setup(session)
+    login(client)
+    users = client.get("/api/comparison/2026").json()["users"]
+    erik = next(u for u in users if u["display_name"] == "Erik")
+    lisa = next(u for u in users if u["display_name"] == "Lisa")
+    # 500 hm vom 20.06. liegen vor dem Challenge-Start und zählen nicht mit
+    assert erik["total_elevation_m"] == 950.0
+    assert erik["elevation_by_month"] == [
+        {"month": "2026-07", "meters": 500.0},
+        {"month": "2026-09", "meters": 450.0},
+    ]
+    # Aktivität ohne Höhenmeter erzeugt keinen Monatseintrag
+    assert lisa["total_elevation_m"] == 0.0
+    assert lisa["elevation_by_month"] == []
+
+
+def test_elevation_monatsachse_ab_challenge_start(client, session):
+    _hm_setup(session)
+    login(client)
+    body = client.get("/api/comparison/2026").json()
+    # lückenlos ab Startmonat, auch über den leeren August hinweg
+    assert body["elevation_months"][:3] == ["2026-07", "2026-08", "2026-09"]
+    assert body["elevation_months"][0] == "2026-07"
+
+
+def test_elevation_kumulativ_in_der_zeitreihe(client, session):
+    _hm_setup(session)
+    login(client)
+    erik = next(
+        u for u in client.get("/api/comparison/2026").json()["users"]
+        if u["display_name"] == "Erik"
+    )
+    assert [p["elevation_m"] for p in erik["cumulative"]] == [300.0, 500.0, 950.0]
+
+
+def test_elevation_ignoriert_km_faktoren(client, session):
+    erik, _ = _hm_setup(session)
+    erik.km_factor = 3.0
+    session.add(erik)
+    session.commit()
+    login(client)
+    me = next(
+        u for u in client.get("/api/comparison/2026").json()["users"]
+        if u["user_id"] == erik.id
+    )
+    # Höhenmeter bleiben roh, obwohl km_factor und Kategorie-Faktor greifen
+    assert me["total_elevation_m"] == 950.0
+
+
+def test_elevation_leer_ohne_daten(client, session):
+    make_user(session)
+    make_category(session)
+    session.add(Season(year=2026, goal_km=1000.0))
+    session.commit()
+    login(client)
+    body = client.get("/api/comparison/2026").json()
+    assert body["elevation_months"] == []
+    assert body["users"][0]["total_elevation_m"] == 0.0
+    assert body["users"][0]["elevation_by_month"] == []
 
 
 def test_comparison_fenster_ueber_jahresgrenze_mit_freeze(client, session):

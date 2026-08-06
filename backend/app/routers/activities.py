@@ -97,7 +97,8 @@ def patch_activity(
     changes = {
         key: value
         for key, value in data.model_dump(exclude_unset=True).items()
-        if value is not None or key in ("note", "duration_min", "start_time")
+        if value is not None
+        or key in ("note", "duration_min", "start_time", "elevation_m")
     }
     if "category_id" in changes:
         _validate_category(session, changes["category_id"])

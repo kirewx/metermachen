@@ -43,6 +43,7 @@ export type ActivityInput = {
   date: string
   distance_km: number
   duration_min?: number | null
+  elevation_m?: number | null
   note?: string | null
   start_time?: string | null
 }
@@ -56,6 +57,7 @@ export type CategoryShare = {
 }
 export type Segment = { date: string; category_id: number; color: string; scaled_km: number }
 export type Auszeichnung = { emoji: string; title: string; description: string }
+export type MonthElevation = { month: string; meters: number }
 export type ComparisonUser = {
   user_id: number
   display_name: string
@@ -63,10 +65,12 @@ export type ComparisonUser = {
   rank: number
   total_scaled_km: number
   total_real_km: number
+  total_elevation_m: number
   km_factor: number
   by_category: CategoryShare[]
   segments: Segment[]
-  cumulative: { date: string; scaled_km: number; real_km: number }[]
+  cumulative: { date: string; scaled_km: number; real_km: number; elevation_m: number }[]
+  elevation_by_month: MonthElevation[]
   emojis?: string[]
   auszeichnungen?: Auszeichnung[]
 }
@@ -77,6 +81,8 @@ export type Comparison = {
   users: ComparisonUser[]
   start_date: string | null
   phase: string
+  /** Gemeinsame Monatsachse ab Challenge-Start, je Eintrag 'YYYY-MM'. */
+  elevation_months: string[]
 }
 export type SeenEntry = { user_id: number; scaled_km: number; rank: number }
 export type LastSeen = { seen_at: string; entries: SeenEntry[] }
