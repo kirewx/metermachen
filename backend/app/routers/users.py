@@ -1,12 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from .. import auth
+from .. import auth, config
 from ..deps import get_current_user, get_session, require_admin
-from ..models import Activity, Category, Invite, StravaConnection, User
+from ..models import Activity, Category, Invite, StravaConnection, User, utcnow
 from ..schemas import ActivityOut
 from ..services.season_window import in_window, window_bounds
 from .activities import _to_out
@@ -46,6 +46,12 @@ class UserAdminPatch(BaseModel):
     km_factor: float | None = Field(default=None, gt=0)
 
 
+class ResetLinkOut(BaseModel):
+    token: str
+    url: str
+    expires_at: datetime
+
+
 def _username_taken(session: Session, username: str, ignore_id: int | None = None) -> bool:
     other = session.exec(select(User).where(User.username == username)).first()
     return other is not None and other.id != ignore_id
@@ -73,6 +79,25 @@ def create_user(data: UserCreate, session: Session = Depends(get_session)):
 @router.get("", response_model=list[UserAdminOut], dependencies=[Depends(require_admin)])
 def list_users(session: Session = Depends(get_session)):
     return session.exec(select(User).order_by(User.id)).all()
+
+
+@router.post(
+    "/{user_id}/reset-link",
+    response_model=ResetLinkOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_reset_link(user_id: int, session: Session = Depends(get_session)):
+    """Einmal-Link zum Passwort-Zurücksetzen — Übergabe außerhalb der App."""
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User nicht gefunden")
+    token = auth.create_reset_token(user.id, user.password_hash)
+    base = config.PUBLIC_BASE_URL or ""
+    return ResetLinkOut(
+        token=token,
+        url=f"{base}/passwort-reset/{token}",
+        expires_at=utcnow() + timedelta(seconds=auth.RESET_MAX_AGE),
+    )
 
 
 @router.get(

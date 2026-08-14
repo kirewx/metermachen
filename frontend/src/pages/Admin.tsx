@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, type AddOn, type AdminUser, type Invite, type Milestone, type Season } from '../api/client'
+import {
+  api,
+  type AddOn,
+  type AdminUser,
+  type Invite,
+  type Milestone,
+  type ResetLink,
+  type Season,
+} from '../api/client'
 import ChallengesAdmin from '../components/admin/ChallengesAdmin'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
@@ -477,6 +485,8 @@ function Mitglieder() {
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me })
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: api.listUsers })
   const [loeschUser, setLoeschUser] = useState<AdminUser | null>(null)
+  const [resetUser, setResetUser] = useState<AdminUser | null>(null)
+  const [resetLink, setResetLink] = useState<ResetLink | null>(null)
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['users'] })
     queryClient.invalidateQueries({ queryKey: ['comparison'] })
@@ -501,6 +511,30 @@ function Mitglieder() {
     },
     onError: (e) => toast(e.message),
   })
+  const resetErstellen = useMutation({
+    mutationFn: (u: AdminUser) => api.createResetLink(u.id),
+    onSuccess: (link, u) => {
+      setResetUser(u)
+      setResetLink(link)
+    },
+    onError: (e) => toast(e.message),
+  })
+
+  // Vollständige URL: das Backend liefert nur einen relativen Pfad,
+  // wenn PUBLIC_BASE_URL nicht gesetzt ist (wie bei Einladungen).
+  const volleResetUrl = (link: ResetLink) =>
+    link.url.startsWith('http') ? link.url : window.location.origin + link.url
+
+  function kopieren(url: string) {
+    if (!navigator.clipboard) {
+      toast('Kopieren nicht möglich')
+      return
+    }
+    navigator.clipboard
+      .writeText(url)
+      .then(() => toast('Link kopiert', 'ok'))
+      .catch(() => toast('Kopieren fehlgeschlagen'))
+  }
 
   return (
     <Collapsible title="Mitglieder" defaultOpen>
@@ -540,6 +574,13 @@ function Mitglieder() {
                   faktor.mutate({ id: u.id, km_factor })
               }}
             />
+            <Button
+              variant="ghost"
+              disabled={resetErstellen.isPending}
+              onClick={() => resetErstellen.mutate(u)}
+            >
+              Reset-Link
+            </Button>
             {u.id !== me?.id && (
               <>
                 <Button
@@ -561,6 +602,45 @@ function Mitglieder() {
           </li>
         ))}
       </ul>
+      <Modal
+        open={resetLink !== null}
+        onClose={() => {
+          setResetLink(null)
+          setResetUser(null)
+        }}
+        title={`Passwort-Reset für ${resetUser?.display_name ?? ''}`}
+      >
+        {resetLink && (
+          <div className="space-y-3">
+            <p className="text-sm text-danger">
+              Achtung: Dieser Link gewährt vollen Zugriff auf das Konto. Gib ihn
+              nur direkt an {resetUser?.display_name ?? 'die Person'} weiter.
+            </p>
+            <p className="text-xs text-ink-mute">
+              Einmalig nutzbar, gültig 24 Stunden. Mit dem Setzen eines neuen
+              Passworts werden alle offenen Links ungültig.
+            </p>
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+              <div className="rounded-lg bg-white p-2">
+                <QRCodeSVG value={volleResetUrl(resetLink)} size={120} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="mb-1 font-mono text-xs uppercase tracking-wider text-ink-tech">
+                  Reset-Link
+                </p>
+                <p className="break-all text-sm text-ink">{volleResetUrl(resetLink)}</p>
+                <Button
+                  variant="ghost"
+                  className="mt-2"
+                  onClick={() => kopieren(volleResetUrl(resetLink))}
+                >
+                  Link kopieren
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
       <Modal
         open={loeschUser !== null}
         onClose={() => setLoeschUser(null)}
