@@ -169,6 +169,11 @@ export type InvitePublic = {
   expired?: boolean
   used?: boolean
 }
+export type ResetLink = {
+  token: string
+  url: string
+  expires_at: string
+}
 
 export type BetParticipant = {
   user_id: number
@@ -432,6 +437,10 @@ export const api = {
   patchUser: (id: number, b: { is_active?: boolean; km_factor?: number }) =>
     request<AdminUser>(`/api/users/${id}`, patch(b)),
   deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
+  createResetLink: (userId: number) =>
+    request<ResetLink>(`/api/users/${userId}/reset-link`, { method: 'POST' }),
+  resetPassword: (token: string, password: string) =>
+    request<Me>('/api/auth/reset-password', post({ token, password })),
   addons: () => request<AddOn[]>('/api/addons'),
   createAddon: (b: {
     key: string

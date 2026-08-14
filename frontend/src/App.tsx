@@ -10,6 +10,7 @@ import Einladung from './pages/Einladung'
 import Feed from './pages/Feed'
 import Login from './pages/Login'
 import MeineAktivitaeten from './pages/MeineAktivitaeten'
+import PasswortReset from './pages/PasswortReset'
 import Profil from './pages/Profil'
 import Regeln from './pages/Regeln'
 import Vergleich from './pages/Vergleich'
@@ -69,6 +70,7 @@ export default function App() {
     return (
       <Routes>
         <Route path="/einladung/:token" element={<Einladung />} />
+        <Route path="/passwort-reset/:token" element={<PasswortReset />} />
         <Route path="/datenschutz" element={<Datenschutz />} />
         <Route path="/regeln" element={<RegelnOeffentlich />} />
         <Route path="*" element={<Login />} />

@@ -49,6 +49,9 @@ export default function Login() {
           <Button type="submit" className="w-full">
             Los geht's
           </Button>
+          <p className="text-[11px] text-ink-mute">
+            Passwort vergessen? Frag einen Admin nach einem Reset-Link.
+          </p>
         </Card>
         <p className="mt-4 flex justify-center gap-3 text-center text-[11px] text-ink-mute">
           <Link to="/regeln" className="hover:text-accent">

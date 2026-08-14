@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from .. import auth, config
@@ -32,6 +32,42 @@ def login(data: LoginIn, response: Response, session: Session = Depends(get_sess
         raise HTTPException(status_code=401, detail="Benutzername oder Passwort falsch")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account ist deaktiviert")
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        auth.create_session_token(user.id),
+        max_age=auth.SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=config.SESSION_COOKIE_SECURE,
+    )
+    return user
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    password: str = Field(min_length=4)
+
+
+@router.post("/reset-password", response_model=MeOut)
+def reset_password(
+    data: ResetPasswordIn, response: Response, session: Session = Depends(get_session)
+):
+    parsed = auth.read_reset_token(data.token)
+    user = session.get(User, parsed[0]) if parsed is not None else None
+    # Eine Meldung für alle Fälle (manipuliert, abgelaufen, schon eingelöst):
+    # Außenstehende sollen Token nicht auf ihren Zustand abklopfen können.
+    if (
+        parsed is None
+        or user is None
+        or auth.password_fingerprint(user.password_hash) != parsed[1]
+    ):
+        raise HTTPException(status_code=400, detail="Link ungültig oder abgelaufen")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account ist deaktiviert")
+    user.password_hash = auth.hash_password(data.password)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     response.set_cookie(
         auth.SESSION_COOKIE,
         auth.create_session_token(user.id),
