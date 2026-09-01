@@ -3,6 +3,11 @@ import { api } from '../api/client'
 import Card from '../components/ui/Card'
 import Icon from '../components/ui/Icon'
 
+const datumKurz = (iso: string) => {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 function Abschnitt({ titel, children }: { titel: string; children: React.ReactNode }) {
   return (
     <Card>
@@ -64,6 +69,12 @@ export default function Regeln() {
                 </td>
                 <td className="py-1.5 text-right font-mono tabular-nums text-accent">
                   ×{c.factor}
+                  {c.pending_changes.length > 0 && (
+                    <div className="text-xs text-ink-mute">
+                      ab {datumKurz(c.pending_changes[0].valid_from)}: ×
+                      {c.pending_changes[0].factor}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
