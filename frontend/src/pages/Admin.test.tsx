@@ -4,14 +4,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Admin from './Admin'
 
 const patchCategory = vi.fn().mockResolvedValue({})
+const createFactorChange = vi.fn().mockResolvedValue({})
+const deleteFactorChange = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('../api/client', () => ({
   api: {
     categories: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Laufen', factor: 4, color: '#f00', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: ['Run'] },
-      { id: 2, name: 'Radfahren', factor: 1, color: '#00f', icon: 'rad', default_km: 20, is_active: true, strava_sport_types: [] },
+      { id: 1, name: 'Laufen', factor: 4, base_factor: 4, color: '#f00', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: ['Run'],
+        pending_changes: [{ id: 7, factor: 3, valid_from: '2026-10-01' }], history: [] },
+      { id: 2, name: 'Radfahren', factor: 1, base_factor: 1, color: '#00f', icon: 'rad', default_km: 20, is_active: true, strava_sport_types: [],
+        pending_changes: [], history: [] },
     ]),
     patchCategory: (...a: unknown[]) => patchCategory(...a),
+    createFactorChange: (...a: unknown[]) => createFactorChange(...a),
+    deleteFactorChange: (...a: unknown[]) => deleteFactorChange(...a),
     seasons: vi.fn().mockResolvedValue([]),
     listInvites: vi.fn().mockResolvedValue([]),
     me: vi.fn().mockResolvedValue({
@@ -41,7 +47,11 @@ function renderAdmin() {
   )
 }
 
-beforeEach(() => patchCategory.mockClear())
+beforeEach(() => {
+  patchCategory.mockClear()
+  createFactorChange.mockClear()
+  deleteFactorChange.mockClear()
+})
 
 describe('Admin Mitglieder', () => {
   it('listet Mitglieder mit Name und Username, ohne Aktionen für sich selbst', async () => {
@@ -56,6 +66,28 @@ describe('Admin Mitglieder', () => {
     expect(s.getAllByText('Aktivieren')).toHaveLength(1)
     expect(s.queryByLabelText('Account chef löschen')).not.toBeInTheDocument()
     expect(s.getByLabelText('Account lisa löschen')).toBeInTheDocument()
+  })
+})
+
+describe('Admin Faktor-Änderungen', () => {
+  it('zeigt aktuellen Faktor und anstehende Änderung, legt neue an', async () => {
+    renderAdmin()
+    expect(await screen.findByText('×4')).toBeInTheDocument()
+    expect(screen.getByText(/ab 01\.10\.2026 ×3/)).toBeInTheDocument()
+    fireEvent.click(screen.getAllByText('Faktor ändern')[0])
+    fireEvent.change(screen.getByLabelText('Neuer Faktor'), { target: { value: '3.5' } })
+    fireEvent.change(screen.getByLabelText('Gültig ab'), { target: { value: '2026-11-01' } })
+    fireEvent.click(screen.getByText('Änderung anlegen'))
+    await waitFor(() =>
+      expect(createFactorChange).toHaveBeenCalledWith(1, { factor: 3.5, valid_from: '2026-11-01' }),
+    )
+  })
+
+  it('löscht eine anstehende Änderung', async () => {
+    renderAdmin()
+    fireEvent.click((await screen.findAllByText('Faktor ändern'))[0])
+    fireEvent.click(screen.getByLabelText('Änderung ab 01.10.2026 löschen'))
+    await waitFor(() => expect(deleteFactorChange).toHaveBeenCalledWith(1, 7))
   })
 })
 
