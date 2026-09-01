@@ -45,3 +45,37 @@ def test_user_achievements_404_for_unknown_or_inactive(client, session):
     login(client)
     assert client.get("/api/achievements/user/999").status_code == 404
     assert client.get(f"/api/achievements/user/{tom.id}").status_code == 404
+
+
+HIDDEN_KEYS = {
+    "kletterkoenig", "hattrick", "wochenkoenig", "psychopath", "langstreckenguru",
+    "kurzstreckenprofi", "dauerbrenner_bronze", "dauerbrenner_silber", "dauerbrenner_gold",
+}
+
+
+def test_hidden_admin_lists_every_definition_with_unlockers(client, session):
+    make_user(session, username="chef", is_admin=True)
+    lisa = make_user(session, username="lisa")
+    tom = make_user(session, username="tom")
+    tom.is_active = False
+    session.add(tom)
+    session.add(AchievementUnlock(user_id=lisa.id, key="hattrick"))
+    session.add(AchievementUnlock(user_id=tom.id, key="hattrick"))  # inactive: not listed
+    session.commit()
+    login(client, username="chef")
+
+    r = client.get("/api/achievements/hidden")
+    assert r.status_code == 200
+    body = {h["key"]: h for h in r.json()}
+    assert set(body) == HIDDEN_KEYS
+    assert body["hattrick"]["title"] == "Hattrick"
+    assert body["hattrick"]["emoji"] == "\U0001F3A9"
+    assert [u["display_name"] for u in body["hattrick"]["unlocks"]] == ["Lisa"]
+    assert body["hattrick"]["unlocks"][0]["unlocked_at"]
+    assert body["kletterkoenig"]["unlocks"] == []
+
+
+def test_hidden_admin_forbidden_for_members(client, session):
+    make_user(session)
+    login(client)
+    assert client.get("/api/achievements/hidden").status_code == 403

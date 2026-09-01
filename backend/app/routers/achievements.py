@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from ..deps import get_current_user, get_session
+from ..deps import get_current_user, get_session, require_admin
 from ..models import AchievementUnlock, Activity, Category, User
 from ..services.achievements import (
     DISZIPLIN_ICON,
@@ -385,6 +385,50 @@ def user_achievements(user_id: int, session: Session = Depends(get_session)):
     if target is None or not target.is_active:
         raise HTTPException(status_code=404, detail="Mitglied nicht gefunden")
     return [a for a in achievements_for(session, target) if a.achieved]
+
+
+class HiddenUnlockOut(BaseModel):
+    user_id: int
+    display_name: str
+    avatar: str
+    unlocked_at: datetime
+
+
+class HiddenAchievementAdminOut(BaseModel):
+    key: str
+    title: str
+    description: str
+    emoji: str | None
+    unlocks: list[HiddenUnlockOut]
+
+
+@router.get(
+    "/hidden",
+    response_model=list[HiddenAchievementAdminOut],
+    dependencies=[Depends(require_admin)],
+)
+def hidden_achievements_admin(session: Session = Depends(get_session)):
+    """Admin overview: every hidden definition and who unlocked it when."""
+    hidden_keys = [key for key, *_ in HIDDEN_DEFS]
+    rows = session.exec(
+        select(AchievementUnlock, User)
+        .join(User, AchievementUnlock.user_id == User.id)
+        .where(AchievementUnlock.key.in_(hidden_keys), User.is_active)
+        .order_by(AchievementUnlock.unlocked_at)
+    ).all()
+    by_key: dict[str, list[HiddenUnlockOut]] = defaultdict(list)
+    for ul, u in rows:
+        by_key[ul.key].append(HiddenUnlockOut(
+            user_id=u.id, display_name=u.display_name, avatar=u.avatar,
+            unlocked_at=ul.unlocked_at,
+        ))
+    return [
+        HiddenAchievementAdminOut(
+            key=key, title=title, description=description,
+            emoji=EMOJIS.get(key), unlocks=by_key.get(key, []),
+        )
+        for key, title, description, _icon in HIDDEN_DEFS
+    ]
 
 
 class ShowcasePatch(BaseModel):
