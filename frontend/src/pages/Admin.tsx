@@ -12,6 +12,7 @@ import {
   type Season,
 } from '../api/client'
 import ChallengesAdmin from '../components/admin/ChallengesAdmin'
+import HiddenAchievementsAdmin from '../components/admin/HiddenAchievementsAdmin'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
 import Collapsible from '../components/ui/Collapsible'
@@ -50,6 +51,7 @@ export default function Admin() {
       <ChallengesAdmin />
       <Mitglieder />
       <Einladungen />
+      <HiddenAchievementsAdmin />
     </div>
   )
 }

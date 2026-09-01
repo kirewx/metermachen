@@ -1,16 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type Me } from '../../api/client'
-import AvatarWahl from './AvatarWahl'
-import Button from './Button'
-import Input from './Input'
-import Modal from './Modal'
-import StravaConnectButton from './StravaConnectButton'
-import { useToast } from './Toast'
+import AvatarWahl from '../ui/AvatarWahl'
+import Button from '../ui/Button'
+import Card from '../ui/Card'
+import Icon from '../ui/Icon'
+import Input from '../ui/Input'
+import SectionTitle from '../ui/SectionTitle'
+import StravaConnectButton from '../ui/StravaConnectButton'
+import { useToast } from '../ui/Toast'
 
-type Props = { me: Me; open: boolean; onClose: () => void }
-
-export default function ProfilModal({ me, open, onClose }: Props) {
+// Account settings as the last section of the own profile page: login name,
+// display name, avatar, password, the Strava connection, rules link and logout.
+export default function SettingsSection({ me }: { me: Me }) {
   const queryClient = useQueryClient()
   const toast = useToast()
   const [username, setUsername] = useState(me.username)
@@ -34,13 +37,6 @@ export default function ProfilModal({ me, open, onClose }: Props) {
     .filter((a) => a.achieved && a.emoji)
     .map((a) => a.emoji as string)
 
-  // Beim Schließen den Bestätigungs-Zustand zurücksetzen — sonst löst ein
-  // einzelner Klick beim Wiederöffnen versehentlich das Trennen aus.
-  const close = () => {
-    setTrennenConfirm(false)
-    onClose()
-  }
-
   const prevBackfill = useRef<string | undefined>(undefined)
   useEffect(() => {
     const state = strava?.backfill?.state
@@ -57,8 +53,8 @@ export default function ProfilModal({ me, open, onClose }: Props) {
     mutationFn: () => api.disconnectStrava(),
     onSuccess: () => {
       setTrennenConfirm(false)
-      // Beim Trennen werden importierte Aktivitäten gelöscht (API-Policy §7.4) —
-      // Ranking und Aktivitätenliste neu laden.
+      // Disconnecting deletes imported activities (API policy §7.4):
+      // reload ranking and activity list.
       queryClient.invalidateQueries({ queryKey: ['strava-status'] })
       queryClient.invalidateQueries({ queryKey: ['comparison'] })
       queryClient.invalidateQueries({ queryKey: ['activities'] })
@@ -86,13 +82,19 @@ export default function ProfilModal({ me, open, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['comparison'] })
       setPasswort('')
       toast('Profil gespeichert', 'ok')
-      close()
     },
     onError: (e) => toast(e.message),
   })
 
+  const logout = useMutation({
+    mutationFn: () => api.logout(),
+    onSuccess: () => queryClient.setQueryData(['me'], null),
+    onError: (e) => toast(e.message),
+  })
+
   return (
-    <Modal open={open} onClose={close} title="Profil">
+    <Card>
+      <SectionTitle>Einstellungen</SectionTitle>
       <div className="space-y-4">
         <Input
           label="Benutzername (Login)"
@@ -180,7 +182,20 @@ export default function ProfilModal({ me, open, onClose }: Props) {
         >
           Speichern
         </Button>
+        <div className="flex items-center justify-between border-t border-line/40 pt-3 text-xs">
+          <Link to="/regeln" className="text-accent hover:underline">
+            Regeln
+          </Link>
+          <button
+            type="button"
+            onClick={() => logout.mutate()}
+            className="flex items-center gap-1 text-ink-mute hover:text-danger"
+          >
+            <Icon name="logout" size={14} />
+            Logout
+          </button>
+        </div>
       </div>
-    </Modal>
+    </Card>
   )
 }

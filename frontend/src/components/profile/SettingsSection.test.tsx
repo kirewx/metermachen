@@ -1,14 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Me } from '../../api/client'
-import ProfilModal from './ProfilModal'
+import SettingsSection from './SettingsSection'
 
 const me: Me = { id: 1, username: 'erik', display_name: 'Erik', avatar: 'icon:laufen', is_admin: false }
 
 const stravaStatus = vi.fn()
 const consentStrava = vi.fn()
 const disconnectStrava = vi.fn()
+const logout = vi.fn()
 const toastSpy = vi.fn()
 vi.mock('../../api/client', () => ({
   api: {
@@ -17,15 +19,19 @@ vi.mock('../../api/client', () => ({
     stravaStatus: () => stravaStatus(),
     consentStrava: () => consentStrava(),
     disconnectStrava: () => disconnectStrava(),
+    logout: () => logout(),
   },
 }))
-vi.mock('./Toast', () => ({ useToast: () => toastSpy }))
+vi.mock('../ui/Toast', () => ({ useToast: () => toastSpy }))
 
-function renderModal() {
+function renderSection() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  qc.setQueryData(['me'], me)
   const utils = render(
     <QueryClientProvider client={qc}>
-      <ProfilModal me={me} open onClose={vi.fn()} />
+      <MemoryRouter>
+        <SettingsSection me={me} />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
   return { qc, ...utils }
@@ -38,63 +44,65 @@ beforeEach(() => {
   consentStrava.mockResolvedValue(undefined)
   disconnectStrava.mockReset()
   disconnectStrava.mockResolvedValue(undefined)
+  logout.mockReset()
+  logout.mockResolvedValue(undefined)
 })
 
-describe('ProfilModal Strava-Abschnitt', () => {
-  it('zeigt Verbinden-Button, wenn nicht verbunden und zugestimmt', async () => {
+describe('SettingsSection Strava section', () => {
+  it('shows the connect button when not connected but consented', async () => {
     stravaStatus.mockResolvedValue({ enabled: true, connected: false, consent: true })
-    renderModal()
+    renderSection()
     expect(await screen.findByRole('link', { name: /Connect with Strava/ })).toBeInTheDocument()
   })
 
-  it('zeigt Zustimmungs-Checkbox statt Verbinden-Button ohne Consent', async () => {
+  it('shows the consent checkbox instead of the connect button without consent', async () => {
     stravaStatus.mockResolvedValue({ enabled: true, connected: false, consent: false })
-    renderModal()
+    renderSection()
     const cb = await screen.findByRole('checkbox')
     expect(screen.queryByRole('link', { name: /Connect with Strava/ })).not.toBeInTheDocument()
     fireEvent.click(cb)
     await waitFor(() => expect(consentStrava).toHaveBeenCalled())
   })
 
-  it('zeigt Trennen-Button, wenn verbunden', async () => {
+  it('shows the disconnect button when connected', async () => {
     stravaStatus.mockResolvedValue({ enabled: true, connected: true, athlete_id: 42 })
-    renderModal()
+    renderSection()
     expect(await screen.findByRole('button', { name: /Strava trennen/ })).toBeInTheDocument()
   })
 
-  it('trennt erst nach Bestätigung (Zwei-Klick)', async () => {
+  it('disconnects only after confirmation (two clicks)', async () => {
     stravaStatus.mockResolvedValue({ enabled: true, connected: true, athlete_id: 42 })
-    renderModal()
+    renderSection()
     fireEvent.click(await screen.findByRole('button', { name: /Strava trennen/ }))
-    expect(disconnectStrava).not.toHaveBeenCalled() // erster Klick warnt nur
+    expect(disconnectStrava).not.toHaveBeenCalled() // first click only warns
     fireEvent.click(await screen.findByRole('button', { name: /Wirklich trennen/ }))
     await waitFor(() => expect(disconnectStrava).toHaveBeenCalled())
   })
 
-  it('zeigt nichts, wenn Feature deaktiviert', async () => {
+  it('shows nothing when the feature is disabled', async () => {
     stravaStatus.mockResolvedValue({ enabled: false, connected: false })
-    renderModal()
+    renderSection()
     await screen.findByLabelText('Anzeigename')
     expect(screen.queryByRole('button', { name: /Strava/ })).not.toBeInTheDocument()
   })
 })
 
-describe('ProfilModal Strava-Backfill', () => {
-  it('zeigt Importfortschritt bei state running', async () => {
+describe('SettingsSection Strava backfill', () => {
+  it('shows import progress while running', async () => {
     stravaStatus.mockResolvedValue({
       enabled: true, connected: true, athlete_id: 42,
       backfill: { state: 'running', total: 52, done: 23 },
     })
-    renderModal()
+    renderSection()
     expect(await screen.findByText(/Importiere… 23 von 52/)).toBeInTheDocument()
   })
 
-  it('feuert Toast beim Übergang running → done', async () => {
+  it('fires a toast on the running → done transition', async () => {
     stravaStatus.mockResolvedValue({
       enabled: true, connected: true, athlete_id: 42,
       backfill: { state: 'running', total: 52, done: 50 },
     })
-    const { qc } = renderModal()
+    const { qc } = renderSection()
     await screen.findByText(/Importiere…/)
     toastSpy.mockClear()
     act(() => {
@@ -108,13 +116,29 @@ describe('ProfilModal Strava-Backfill', () => {
     })
   })
 
-  it('kein Toast, wenn Modal erst im done-Zustand öffnet', async () => {
+  it('no toast when the section mounts already in the done state', async () => {
     stravaStatus.mockResolvedValue({
       enabled: true, connected: true, athlete_id: 42,
       backfill: { state: 'done', total: 52, done: 52 },
     })
-    renderModal()
+    renderSection()
     await screen.findByRole('button', { name: /Strava trennen/ })
     expect(toastSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('SettingsSection footer', () => {
+  it('links to the rules', async () => {
+    stravaStatus.mockResolvedValue({ enabled: false, connected: false })
+    renderSection()
+    expect(await screen.findByRole('link', { name: 'Regeln' })).toHaveAttribute('href', '/regeln')
+  })
+
+  it('logout calls the API and clears the me query', async () => {
+    stravaStatus.mockResolvedValue({ enabled: false, connected: false })
+    const { qc } = renderSection()
+    fireEvent.click(await screen.findByRole('button', { name: /Logout/ }))
+    await waitFor(() => expect(logout).toHaveBeenCalled())
+    await waitFor(() => expect(qc.getQueryData(['me'])).toBeNull())
   })
 })

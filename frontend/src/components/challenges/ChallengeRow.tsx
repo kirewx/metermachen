@@ -7,7 +7,7 @@ export default function ChallengeRow({ ch }: { ch: Challenge }) {
     .map((s) => s.display_name)
   return (
     <Link
-      to={`/challenges/${ch.id}`}
+      to={`/arena/challenges/${ch.id}`}
       className="flex items-center gap-2 border-b border-line px-3 py-2.5 text-sm last:border-b-0"
     >
       <span className="min-w-0 flex-1 truncate text-ink">{ch.title}</span>

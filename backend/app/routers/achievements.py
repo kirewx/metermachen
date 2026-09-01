@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from ..deps import get_current_user, get_session
+from ..deps import get_current_user, get_session, require_admin
 from ..models import AchievementUnlock, Activity, Category, User
 from ..services.achievements import (
     DISZIPLIN_ICON,
@@ -180,14 +180,8 @@ def warmup_achievements(session: Session = Depends(get_session)):
     return WarmupOut(final=today >= start, start_date=start, achievements=out)
 
 
-@router.get("", response_model=list[AchievementOut])
-def achievements(
-    user: User = Depends(get_current_user), session: Session = Depends(get_session)
-):
-    # „Platz 1 gehalten"/Testphasen-Sieg können ohne eigene Aktivität eintreten —
-    # deshalb wird beim Abruf für die anfragende Person geprüft (Spec §2.2).
-    check_unlocks(session, user.id)
-
+def achievements_for(session: Session, user: User) -> list[AchievementOut]:
+    """Full achievement list (achieved and open) for one user. Pure read."""
     cats = {c.id: c for c in session.exec(select(Category)).all()}
     user_acts = session.exec(
         select(Activity).where(Activity.user_id == user.id)
@@ -367,6 +361,74 @@ def achievements(
                 showcased=ul.showcased,
             ))
     return out
+
+
+@router.get("", response_model=list[AchievementOut])
+def achievements(
+    user: User = Depends(get_current_user), session: Session = Depends(get_session)
+):
+    # "Platz 1 gehalten"/Testphasen-Sieg can trigger without an own activity,
+    # so unlocks are checked for the requesting person on every read (spec §2.2).
+    check_unlocks(session, user.id)
+    return achievements_for(session, user)
+
+
+@router.get(
+    "/user/{user_id}",
+    response_model=list[AchievementOut],
+    dependencies=[Depends(get_current_user)],
+)
+def user_achievements(user_id: int, session: Session = Depends(get_session)):
+    """Unlocked achievements of another member (hidden ones included once
+    unlocked). Read-only: no unlock check on someone else's behalf."""
+    target = session.get(User, user_id)
+    if target is None or not target.is_active:
+        raise HTTPException(status_code=404, detail="Mitglied nicht gefunden")
+    return [a for a in achievements_for(session, target) if a.achieved]
+
+
+class HiddenUnlockOut(BaseModel):
+    user_id: int
+    display_name: str
+    avatar: str
+    unlocked_at: datetime
+
+
+class HiddenAchievementAdminOut(BaseModel):
+    key: str
+    title: str
+    description: str
+    emoji: str | None
+    unlocks: list[HiddenUnlockOut]
+
+
+@router.get(
+    "/hidden",
+    response_model=list[HiddenAchievementAdminOut],
+    dependencies=[Depends(require_admin)],
+)
+def hidden_achievements_admin(session: Session = Depends(get_session)):
+    """Admin overview: every hidden definition and who unlocked it when."""
+    hidden_keys = [key for key, *_ in HIDDEN_DEFS]
+    rows = session.exec(
+        select(AchievementUnlock, User)
+        .join(User, AchievementUnlock.user_id == User.id)
+        .where(AchievementUnlock.key.in_(hidden_keys), User.is_active)
+        .order_by(AchievementUnlock.unlocked_at)
+    ).all()
+    by_key: dict[str, list[HiddenUnlockOut]] = defaultdict(list)
+    for ul, u in rows:
+        by_key[ul.key].append(HiddenUnlockOut(
+            user_id=u.id, display_name=u.display_name, avatar=u.avatar,
+            unlocked_at=ul.unlocked_at,
+        ))
+    return [
+        HiddenAchievementAdminOut(
+            key=key, title=title, description=description,
+            emoji=EMOJIS.get(key), unlocks=by_key.get(key, []),
+        )
+        for key, title, description, _icon in HIDDEN_DEFS
+    ]
 
 
 class ShowcasePatch(BaseModel):

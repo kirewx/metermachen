@@ -1,8 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { api, type Me } from '../../api/client'
-import ProfilModal from './ProfilModal'
 import Avatar from './Avatar'
 import CountdownBanner from './CountdownBanner'
 import { challengeLaeuft } from './countdown'
@@ -18,27 +16,22 @@ const pill = ({ isActive }: { isActive: boolean }) =>
       : 'text-ink-mute hover:text-ink'
   }`
 
+// App chrome: top bar (logo, desktop tabs, admin gear, theme, avatar → own
+// profile), countdown banner, page outlet, footer, mobile bottom tabs.
 export default function Layout({ me }: { me: Me }) {
-  const queryClient = useQueryClient()
   const { theme, toggle } = useTheme()
-  const [profilOffen, setProfilOffen] = useState(false)
   const { data: seasons } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const { data: addons } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
   const season = aktiveSeason(seasons ?? [])
   const gestartet = Boolean(season?.start_date && challengeLaeuft(season?.start_date))
   const aktiveAddons = new Set((addons ?? []).filter((a) => a.active).map((a) => a.key))
-  const tabs = sichtbareTabs(TABS, { isAdmin: me.is_admin, gestartet, aktiveAddons })
+  const tabs = sichtbareTabs(TABS, { gestartet, aktiveAddons })
   const { data: feedUnseen } = useQuery({
     queryKey: ['feed-unseen'],
     queryFn: api.feedUnseen,
     refetchInterval: 60_000,
     enabled: gestartet,
   })
-
-  async function logout() {
-    await api.logout()
-    queryClient.setQueryData(['me'], null)
-  }
 
   return (
     <div className="min-h-screen pb-20 sm:pb-0">
@@ -58,30 +51,38 @@ export default function Layout({ me }: { me: Me }) {
             </NavLink>
           ))}
         </div>
-        <button
-          aria-label="Farbmodus wechseln"
-          onClick={toggle}
-          className="ml-auto text-ink-mute hover:text-accent"
-        >
-          <Icon name={theme === 'dunkel' ? 'sonne' : 'mond'} size={18} />
-        </button>
-        <button
-          aria-label="Profil öffnen"
-          onClick={() => setProfilOffen(true)}
-          className="flex items-center gap-2 text-sm text-ink-soft hover:text-ink"
-        >
-          <Avatar value={me.avatar} size="sm" />
-          <span className="hidden sm:inline">{me.display_name}</span>
-        </button>
-        <button aria-label="Logout" onClick={logout} className="text-ink-mute hover:text-danger">
-          <Icon name="logout" size={18} />
-        </button>
+        <div className="ml-auto flex items-center gap-3">
+          {me.is_admin && (
+            <NavLink to="/admin" aria-label="Admin" className="text-ink-mute hover:text-accent">
+              <Icon name="zahnrad" size={18} />
+            </NavLink>
+          )}
+          <button
+            aria-label="Farbmodus wechseln"
+            onClick={toggle}
+            className="text-ink-mute hover:text-accent"
+          >
+            <Icon name={theme === 'dunkel' ? 'sonne' : 'mond'} size={18} />
+          </button>
+          <Link
+            to={`/profil/${me.id}`}
+            aria-label="Mein Profil"
+            className="flex items-center gap-2 text-sm text-ink-soft hover:text-ink"
+          >
+            <Avatar value={me.avatar} size="sm" />
+            <span className="hidden sm:inline">{me.display_name}</span>
+          </Link>
+        </div>
       </nav>
       <CountdownBanner />
       <main className="mx-auto max-w-5xl p-4">
         <Outlet />
       </main>
       <footer className="mx-auto max-w-5xl px-4 pb-24 pt-2 text-center text-[11px] text-ink-mute sm:pb-6">
+        <NavLink to="/regeln" className="hover:text-accent">
+          Regeln
+        </NavLink>
+        <span className="mx-2">·</span>
         <NavLink to="/datenschutz" className="hover:text-accent">
           Datenschutz
         </NavLink>
@@ -113,7 +114,6 @@ export default function Layout({ me }: { me: Me }) {
           </NavLink>
         ))}
       </nav>
-      {profilOffen && <ProfilModal me={me} open onClose={() => setProfilOffen(false)} />}
     </div>
   )
 }

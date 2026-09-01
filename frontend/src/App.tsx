@@ -1,15 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { api, isUnauthorized } from './api/client'
 import ChallengeDetail from './components/challenges/ChallengeDetail'
 import Layout from './components/ui/Layout'
+import { arenaEntryPath } from './components/ui/tabs'
 import Admin from './pages/Admin'
+import Arena from './pages/Arena'
 import Challenges from './pages/Challenges'
 import Datenschutz from './pages/Datenschutz'
 import Einladung from './pages/Einladung'
 import Feed from './pages/Feed'
 import Login from './pages/Login'
-import MeineAktivitaeten from './pages/MeineAktivitaeten'
+import MyMeters from './pages/MyMeters'
 import PasswortReset from './pages/PasswortReset'
 import Profil from './pages/Profil'
 import Regeln from './pages/Regeln'
@@ -29,6 +31,12 @@ function RegelnOeffentlich() {
       </p>
     </div>
   )
+}
+
+// Old deep link /challenges/:id → new home inside the Arena.
+function RedirectChallenge() {
+  const { id } = useParams()
+  return <Navigate to={`/arena/challenges/${id}`} replace />
 }
 
 export default function App() {
@@ -52,7 +60,8 @@ export default function App() {
     queryFn: () => api.addons().catch(() => []),
     enabled: !!me,
   })
-  const sidebetsAktiv = (addons ?? []).some((a) => a.key === 'sidebets' && a.active)
+  const aktiveAddons = new Set((addons ?? []).filter((a) => a.active).map((a) => a.key))
+  const sidebetsAktiv = aktiveAddons.has('sidebets')
   if (isLoading) return <p className="p-8 text-ink-mute">Lade…</p>
   if (isError)
     return (
@@ -76,19 +85,29 @@ export default function App() {
         <Route path="*" element={<Login />} />
       </Routes>
     )
+  // Routes depend on the add-ons; wait for them so a refresh on /arena/wetten
+  // never bounces to the home page while they load.
+  if (addons === undefined) return <p className="p-8 text-ink-mute">Lade…</p>
   return (
     <Routes>
       <Route element={<Layout me={me} />}>
         <Route path="/" element={<Vergleich />} />
         <Route path="/feed" element={<Feed />} />
-        <Route path="/aktivitaeten" element={<MeineAktivitaeten />} />
+        <Route path="/mymeters" element={<MyMeters />} />
+        <Route path="/arena" element={<Arena />}>
+          <Route index element={<Navigate to={arenaEntryPath(aktiveAddons)} replace />} />
+          <Route path="challenges" element={<Challenges />} />
+          <Route path="challenges/:id" element={<ChallengeDetail />} />
+          {sidebetsAktiv && <Route path="wetten" element={<Wetten />} />}
+        </Route>
         <Route path="/profil/:userId" element={<Profil />} />
-        <Route path="/challenges" element={<Challenges />} />
-        <Route path="/challenges/:id" element={<ChallengeDetail />} />
         <Route path="/regeln" element={<Regeln />} />
-        {sidebetsAktiv && <Route path="/wetten" element={<Wetten />} />}
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin" element={me.is_admin ? <Admin /> : <Navigate to="/" replace />} />
         <Route path="/datenschutz" element={<Datenschutz />} />
+        <Route path="/aktivitaeten" element={<Navigate to="/mymeters" replace />} />
+        <Route path="/challenges" element={<Navigate to="/arena/challenges" replace />} />
+        <Route path="/challenges/:id" element={<RedirectChallenge />} />
+        <Route path="/wetten" element={<Navigate to="/arena/wetten" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

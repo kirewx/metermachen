@@ -1,71 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { sichtbareTabs, TABS as ECHTE_TABS, type Tab } from './tabs'
+import { arenaEntryPath, sichtbareTabs, TABS } from './tabs'
 
-const TABS: Tab[] = [
-  { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
-  // synthetischer abStart-Tab (der echte Archiv-Tab wurde entfernt, Spec 2026-07-25 A1)
-  { to: '/spaeter', label: 'Später', icon: 'pokal', end: false, adminOnly: false, abStart: true },
-  { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
-  { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: false, addon: 'sidebets' },
-]
-
-const labels = (opts: Parameters<typeof sichtbareTabs>[1]) =>
+const labels = (opts: { gestartet: boolean; aktiveAddons: Set<string> }) =>
   sichtbareTabs(TABS, opts).map((t) => t.label)
 
 describe('sichtbareTabs', () => {
-  it('blendet Admin-Tab für Nicht-Admins aus', () => {
-    const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set(['sidebets']) })
+  it('shows exactly four tabs when everything is active', () => {
+    const l = labels({ gestartet: true, aktiveAddons: new Set(['challenges', 'sidebets']) })
+    expect(l).toEqual(['Vergleich', 'Feed', 'Arena', 'MyMeters'])
+  })
+
+  it('has no Admin and no Aktivitäten tab any more', () => {
+    const l = labels({ gestartet: true, aktiveAddons: new Set(['challenges', 'sidebets']) })
     expect(l).not.toContain('Admin')
+    expect(l).not.toContain('Aktivitäten')
   })
 
-  it('zeigt Admin-Tab für Admins', () => {
-    const l = labels({ isAdmin: true, gestartet: true, aktiveAddons: new Set() })
-    expect(l).toContain('Admin')
+  it('hides Feed before the season starts', () => {
+    expect(labels({ gestartet: false, aktiveAddons: new Set() })).not.toContain('Feed')
+    expect(labels({ gestartet: true, aktiveAddons: new Set() })).toContain('Feed')
   })
 
-  it('blendet abStart-Tab vor Saison-Start aus', () => {
-    const l = labels({ isAdmin: false, gestartet: false, aktiveAddons: new Set() })
-    expect(l).not.toContain('Später')
+  it('shows Arena when either add-on is active and hides it when none is', () => {
+    expect(labels({ gestartet: true, aktiveAddons: new Set() })).not.toContain('Arena')
+    expect(labels({ gestartet: true, aktiveAddons: new Set(['challenges']) })).toContain('Arena')
+    expect(labels({ gestartet: true, aktiveAddons: new Set(['sidebets']) })).toContain('Arena')
   })
 
-  it('zeigt abStart-Tab ab Saison-Start', () => {
-    const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set() })
-    expect(l).toContain('Später')
+  it('MyMeters points at /mymeters', () => {
+    expect(TABS.find((t) => t.label === 'MyMeters')?.to).toBe('/mymeters')
   })
+})
 
-  it('versteckt Add-on-Tab, wenn das Add-on nicht aktiv ist', () => {
-    const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set() })
-    expect(l).not.toContain('Wetten')
-  })
-
-  it('zeigt Add-on-Tab, wenn das Add-on aktiv ist', () => {
-    const l = labels({ isAdmin: false, gestartet: true, aktiveAddons: new Set(['sidebets']) })
-    expect(l).toContain('Wetten')
-  })
-
-  it('zeigt den Feed-Tab nur ab Saison-Start', () => {
-    const vorher = sichtbareTabs(ECHTE_TABS, {
-      isAdmin: false,
-      gestartet: false,
-      aktiveAddons: new Set(),
-    }).map((t) => t.to)
-    expect(vorher).not.toContain('/feed')
-    const nachher = sichtbareTabs(ECHTE_TABS, {
-      isAdmin: false,
-      gestartet: true,
-      aktiveAddons: new Set(),
-    }).map((t) => t.to)
-    expect(nachher).toContain('/feed')
-  })
-
-  it('zeigt den Challenges-Tab nur bei aktivem Add-on', () => {
-    const ohne = sichtbareTabs(ECHTE_TABS, {
-      isAdmin: false, gestartet: true, aktiveAddons: new Set<string>(),
-    })
-    expect(ohne.find((t) => t.to === '/challenges')).toBeUndefined()
-    const mit = sichtbareTabs(ECHTE_TABS, {
-      isAdmin: false, gestartet: true, aktiveAddons: new Set(['challenges']),
-    })
-    expect(mit.find((t) => t.to === '/challenges')?.label).toBe('Challenges')
+describe('arenaEntryPath', () => {
+  it('prefers challenges, then wetten, then home', () => {
+    expect(arenaEntryPath(new Set(['challenges', 'sidebets']))).toBe('/arena/challenges')
+    expect(arenaEntryPath(new Set(['sidebets']))).toBe('/arena/wetten')
+    expect(arenaEntryPath(new Set())).toBe('/')
   })
 })
