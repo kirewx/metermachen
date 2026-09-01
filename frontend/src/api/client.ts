@@ -5,15 +5,19 @@ export type Me = {
   avatar: string
   is_admin: boolean
 }
+export type FactorChange = { id: number; factor: number; valid_from: string }
 export type Category = {
   id: number
   name: string
-  factor: number
+  factor: number // der heute gültige Faktor (Backend berechnet)
+  base_factor: number
   color: string
   icon: string
   default_km: number
   is_active: boolean
   strava_sport_types: string[]
+  pending_changes: FactorChange[]
+  history: FactorChange[]
 }
 export type Milestone = { km: number; label: string; icon: string }
 export type Season = {
@@ -406,10 +410,24 @@ export const api = {
   logout: () => request<unknown>('/api/auth/logout', { method: 'POST' }),
   me: () => request<Me>('/api/auth/me'),
   categories: () => request<Category[]>('/api/categories'),
-  createCategory: (b: Omit<Category, 'id' | 'is_active'>) =>
-    request<Category>('/api/categories', post(b)),
-  patchCategory: (id: number, b: Partial<Omit<Category, 'id'>>) =>
-    request<Category>(`/api/categories/${id}`, patch(b)),
+  createCategory: (b: {
+    name: string
+    factor: number
+    color: string
+    icon: string
+    default_km: number
+    strava_sport_types: string[]
+  }) => request<Category>('/api/categories', post(b)),
+  patchCategory: (
+    id: number,
+    b: Partial<Omit<Category, 'id' | 'base_factor' | 'pending_changes' | 'history'>>,
+  ) => request<Category>(`/api/categories/${id}`, patch(b)),
+  createFactorChange: (categoryId: number, b: { factor: number; valid_from: string }) =>
+    request<FactorChange>(`/api/categories/${categoryId}/factor-changes`, post(b)),
+  deleteFactorChange: (categoryId: number, changeId: number) =>
+    request<void>(`/api/categories/${categoryId}/factor-changes/${changeId}`, {
+      method: 'DELETE',
+    }),
   seasons: () => request<Season[]>('/api/seasons'),
   createSeason: (b: { year: number; goal_km: number; milestones?: Milestone[] }) =>
     request<Season>('/api/seasons', post(b)),
