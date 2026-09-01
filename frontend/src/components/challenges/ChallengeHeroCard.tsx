@@ -13,7 +13,7 @@ export default function ChallengeHeroCard({ ch }: { ch: Challenge }) {
   const pct = Math.round(fortschritt(ch, wert) * 100)
   return (
     <Link
-      to={`/challenges/${ch.id}`}
+      to={`/arena/challenges/${ch.id}`}
       className="block min-w-[86%] shrink-0 snap-start rounded-2xl border-2 border-accent bg-card p-4"
     >
       <p className="text-[10px] font-bold uppercase tracking-widest text-accent">

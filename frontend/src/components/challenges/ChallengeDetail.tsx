@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { Challenge, ChallengeStanding } from '../../api/client'
 import Avatar from '../ui/Avatar'
@@ -76,6 +76,9 @@ export default function ChallengeDetail() {
   const hoechster = Math.max(...ch.standings.map((s) => s.value), 1)
   return (
     <div className="mx-auto max-w-xl space-y-4">
+      <Link to="/arena/challenges" className="text-xs font-bold text-accent hover:underline">
+        ← Arena
+      </Link>
       <header className="rounded-2xl border border-line bg-card p-4">
         <h1 className="text-lg font-extrabold text-ink">{ch.title}</h1>
         <p className="mt-1 text-[11px] text-ink-mute">
