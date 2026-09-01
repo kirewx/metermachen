@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+  <!--
+    Full-bleed source for the home-screen / PWA icons (apple-touch-icon.png, app-icon-*.png).
+    Unlike favicon.svg it has no rounded corners and no transparency: iOS applies its own
+    corner mask and paints transparent areas black. The wave is scaled down so it stays
+    inside the 80% "maskable" safe zone used by Android launcher shapes.
+    Regenerate the PNGs with: node scripts/render-icons.mjs
+  -->
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="64" height="64" fill="#0a0f12"/>
+  <path d="M4 40 H9 L20.9 25 L24.75 40 L35.6 25 L38.75 40 L50.3 25 L55.2 40 H60"
+    transform="translate(32 32) scale(0.76) translate(-32 -32)"
+    fill="none" stroke="#00e5ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+</svg>
