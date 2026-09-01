@@ -3,13 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#050508" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MeterMachen</title>
     <script>
-      document.documentElement.classList.toggle(
-        'dark',
-        localStorage.getItem('theme') !== 'hell',
-      )
+      (() => {
+        const dark = localStorage.getItem('theme') !== 'hell'
+        document.documentElement.classList.toggle('dark', dark)
+        // Keep the browser chrome (Android URL bar, PWA title bar) in sync with the app theme.
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', dark ? '#050508' : '#f4f7f9')
+      })()
     </script>
   </head>
   <body>
