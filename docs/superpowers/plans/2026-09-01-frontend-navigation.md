@@ -58,7 +58,7 @@
 - Modify: `backend/app/routers/achievements.py:183-369`
 - Create: `backend/tests/test_achievements_profile.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # backend/tests/test_achievements_profile.py
@@ -111,12 +111,12 @@ def test_user_achievements_404_for_unknown_or_inactive(client, session):
     assert client.get(f"/api/achievements/user/{tom.id}").status_code == 404
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && .venv/Scripts/python.exe -m pytest tests/test_achievements_profile.py -q`
 Expected: 2 failures with 404 or 405 instead of 200/404 (route does not exist; `/user/1` currently falls through to nothing).
 
-- [ ] **Step 3: Extract `achievements_for()` and add the endpoint**
+- [x] **Step 3: Extract `achievements_for()` and add the endpoint**
 
 In `backend/app/routers/achievements.py` replace the `achievements` endpoint (lines 183-369) with:
 
@@ -157,12 +157,12 @@ def user_achievements(user_id: int, session: Session = Depends(get_session)):
 
 Concretely: cut lines 191-369 (from `cats = {...}` to `return out`) into `achievements_for`, keep every line as it is (they only use `user.id`, `user_acts`, `session`).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && .venv/Scripts/python.exe -m pytest tests/test_achievements_profile.py tests/test_achievements.py -q`
 Expected: all pass (the existing achievements tests guard the extraction).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/routers/achievements.py backend/tests/test_achievements_profile.py
@@ -177,7 +177,7 @@ git commit -m "feat(achievements): read-only endpoint for another member's unloc
 - Modify: `backend/app/routers/achievements.py`
 - Modify: `backend/tests/test_achievements_profile.py`
 
-- [ ] **Step 1: Write the failing tests** (append to the test file)
+- [x] **Step 1: Write the failing tests** (append to the test file)
 
 ```python
 HIDDEN_KEYS = {
@@ -214,12 +214,12 @@ def test_hidden_admin_forbidden_for_members(client, session):
     assert client.get("/api/achievements/hidden").status_code == 403
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && .venv/Scripts/python.exe -m pytest tests/test_achievements_profile.py -q`
 Expected: the two new tests fail (404 or 405).
 
-- [ ] **Step 3: Add the models and endpoint**
+- [x] **Step 3: Add the models and endpoint**
 
 In `backend/app/routers/achievements.py`: import `require_admin` from `..deps`, then add directly above `class ShowcasePatch`:
 
@@ -268,12 +268,12 @@ def hidden_achievements_admin(session: Session = Depends(get_session)):
     ]
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && .venv/Scripts/python.exe -m pytest tests/test_achievements_profile.py -q`
 Expected: 5 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/routers/achievements.py backend/tests/test_achievements_profile.py
@@ -288,7 +288,7 @@ git commit -m "feat(achievements): admin overview of hidden achievements and the
 - Modify: `frontend/src/api/client.ts` (types near line 160, calls near line 482)
 - Modify: `frontend/src/api/client.test.ts`
 
-- [ ] **Step 1: Write the failing tests** (append to `client.test.ts`)
+- [x] **Step 1: Write the failing tests** (append to `client.test.ts`)
 
 ```ts
 describe('achievement endpoints', () => {
@@ -306,12 +306,12 @@ describe('achievement endpoints', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/api/client.test.ts`
 Expected: 2 failures, `api.userAchievements is not a function`.
 
-- [ ] **Step 3: Add types and calls**
+- [x] **Step 3: Add types and calls**
 
 After the `Achievement` type:
 
@@ -340,12 +340,12 @@ After `patchAchievement` in `api`:
     request<HiddenAchievementAdmin[]>('/api/achievements/hidden'),
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `cd frontend && npx vitest run src/api/client.test.ts`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api/client.ts frontend/src/api/client.test.ts
@@ -360,7 +360,7 @@ git commit -m "feat(api): client calls for member achievements and hidden admin 
 - Modify: `frontend/src/components/ui/tabs.ts`
 - Modify: `frontend/src/components/ui/tabs.test.ts` (rewrite)
 
-- [ ] **Step 1: Rewrite the test file**
+- [x] **Step 1: Rewrite the test file**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -406,12 +406,12 @@ describe('arenaEntryPath', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/components/ui/tabs.test.ts`
 Expected: type/runtime failures (`arenaEntryPath` missing, labels differ).
 
-- [ ] **Step 3: Rewrite `tabs.ts`**
+- [x] **Step 3: Rewrite `tabs.ts`**
 
 ```ts
 export type Tab = {
@@ -457,12 +457,12 @@ export function arenaEntryPath(aktiveAddons: Set<string>): string {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `cd frontend && npx vitest run src/components/ui/tabs.test.ts`
 Expected: 6 passed. (`Layout.tsx` still passes `isAdmin`; TypeScript tolerates the extra property only until Task 10, where Layout is rewritten. `npx tsc -b` is run at the end.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/ui/tabs.ts frontend/src/components/ui/tabs.test.ts
@@ -485,7 +485,7 @@ git commit -m "feat(nav): four tabs with Arena and MyMeters, arenaEntryPath help
 - Create: `frontend/src/components/achievements/AchievementsSection.test.tsx`
 - Source: `frontend/src/pages/MeineAktivitaeten.tsx:183-462`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Copy the `achievements` fixture array from `MeineAktivitaeten.test.tsx:16-61` into a `const FIXTURES: Achievement[]` and write:
 
@@ -557,12 +557,12 @@ describe('AchievementsSection', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/components/achievements`
 Expected: module not found.
 
-- [ ] **Step 3: Create the files**
+- [x] **Step 3: Create the files**
 
 `constants.ts`:
 
@@ -691,12 +691,12 @@ export default function AchievementsSection({ achievements, onToggle }: Props) {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `cd frontend && npx vitest run src/components/achievements`
 Expected: 8 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/achievements
@@ -712,7 +712,7 @@ git commit -m "refactor(achievements): card components in their own folder, no l
 
 No separate unit test: it is covered through `Profil.test.tsx` in Task 8.
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```tsx
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -745,12 +745,12 @@ export default function ProfileAchievements({ userId, own }: Props) {
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `cd frontend && npx tsc -b`
 Expected: no errors in the new file (errors elsewhere are addressed in later tasks; if any appear now, they must reference only Layout.tsx `isAdmin`).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/achievements/ProfileAchievements.tsx
@@ -766,7 +766,7 @@ git commit -m "feat(achievements): profile achievements loader for own and other
 - Create: `frontend/src/pages/MyMeters.test.tsx`
 - Delete: `frontend/src/pages/MeineAktivitaeten.tsx`, `frontend/src/pages/MeineAktivitaeten.test.tsx`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `MyMeters.test.tsx`: copy `MeineAktivitaeten.test.tsx`, import `MyMeters from './MyMeters'`, drop the `achievements` mock entry and the whole `describe('Achievements')` block, keep the two list tests, and add:
 
@@ -778,12 +778,12 @@ git commit -m "feat(achievements): profile achievements loader for own and other
   })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/pages/MyMeters.test.tsx`
 Expected: module not found.
 
-- [ ] **Step 3: Create `MyMeters.tsx`**
+- [x] **Step 3: Create `MyMeters.tsx`**
 
 Copy `MeineAktivitaeten.tsx` lines 1-181, then:
 - line 3: `import { api, type Activity, type ActivityInput } from '../api/client'` (drop `Achievement`)
@@ -793,7 +793,7 @@ Copy `MeineAktivitaeten.tsx` lines 1-181, then:
 - add a doc comment above the component: `// MyMeters: quick entry plus the own entries of the season. Achievements live on the profile.`
 Nothing after line 181 is copied.
 
-- [ ] **Step 4: Delete the old page and test, run**
+- [x] **Step 4: Delete the old page and test, run**
 
 ```bash
 git rm frontend/src/pages/MeineAktivitaeten.tsx frontend/src/pages/MeineAktivitaeten.test.tsx
@@ -801,7 +801,7 @@ git rm frontend/src/pages/MeineAktivitaeten.tsx frontend/src/pages/MeineAktivita
 Run: `cd frontend && npx vitest run src/pages/MyMeters.test.tsx`
 Expected: 3 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/pages/MyMeters.tsx frontend/src/pages/MyMeters.test.tsx
@@ -819,7 +819,7 @@ git commit -m "feat(mymeters): activities page becomes MyMeters without the achi
 - Create: `frontend/src/components/profile/SettingsSection.test.tsx`
 - Delete: `frontend/src/components/ui/ProfilModal.tsx`, `frontend/src/components/ui/ProfilModal.test.tsx`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 Copy `ProfilModal.test.tsx` to `SettingsSection.test.tsx` with these changes: import `SettingsSection from './SettingsSection'`; mock path `'../../api/client'` gains `logout: () => logout()` with `const logout = vi.fn()`; Toast mock path becomes `'../ui/Toast'`; `renderModal` becomes `renderSection` and wraps in `MemoryRouter`:
 
@@ -859,12 +859,12 @@ describe('SettingsSection footer', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/components/profile/SettingsSection.test.tsx`
 Expected: module not found.
 
-- [ ] **Step 3: Create `SettingsSection.tsx`**
+- [x] **Step 3: Create `SettingsSection.tsx`**
 
 Start from `ProfilModal.tsx`. Changes:
 - imports: drop `Modal`; add `import { Link } from 'react-router-dom'`, `import Card from '../ui/Card'`, `import SectionTitle from '../ui/SectionTitle'`, `import Icon from '../ui/Icon'`; other `./X` imports become `../ui/X`.
@@ -889,7 +889,7 @@ Start from `ProfilModal.tsx`. Changes:
         </div>
 ```
 
-- [ ] **Step 4: Delete the modal, run**
+- [x] **Step 4: Delete the modal, run**
 
 ```bash
 git rm frontend/src/components/ui/ProfilModal.tsx frontend/src/components/ui/ProfilModal.test.tsx
@@ -897,7 +897,7 @@ git rm frontend/src/components/ui/ProfilModal.tsx frontend/src/components/ui/Pro
 Run: `cd frontend && npx vitest run src/components/profile/SettingsSection.test.tsx`
 Expected: all pass (7 Strava tests + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/profile/SettingsSection.tsx frontend/src/components/profile/SettingsSection.test.tsx
@@ -912,7 +912,7 @@ git commit -m "feat(profile): settings section with logout replaces the profile 
 - Modify: `frontend/src/pages/Profil.tsx`
 - Modify: `frontend/src/pages/Profil.test.tsx`
 
-- [ ] **Step 1: Extend the test**
+- [x] **Step 1: Extend the test**
 
 Add to the `api` mock: `achievements`, `userAchievements`, `patchAchievement`, `stravaStatus`, `patchMe`, `logout`:
 
@@ -951,12 +951,12 @@ and `vi.mock('../components/ui/Toast', () => ({ useToast: () => vi.fn() }))`. Th
   })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/pages/Profil.test.tsx`
 Expected: the two new tests fail (texts missing).
 
-- [ ] **Step 3: Modify `Profil.tsx`**
+- [x] **Step 3: Modify `Profil.tsx`**
 
 Imports: add `import ProfileAchievements from '../components/achievements/ProfileAchievements'` and `import SettingsSection from '../components/profile/SettingsSection'`. Between the Sportarten card and the Letzte Aktivitäten card insert:
 
@@ -973,12 +973,12 @@ After the Letzte Aktivitäten card, as the last child of the outer `div`:
       {me && me.id === user.user_id && <SettingsSection me={me} />}
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `cd frontend && npx vitest run src/pages/Profil.test.tsx`
 Expected: 9 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/pages/Profil.tsx frontend/src/pages/Profil.test.tsx
@@ -995,7 +995,7 @@ git commit -m "feat(profile): trophy room and settings section on the profile pa
 - Create: `frontend/src/App.test.tsx`
 - Modify: `frontend/src/components/challenges/ChallengeHeroCard.tsx:16`, `ChallengeRow.tsx:10`, `ChallengeDetail.tsx`
 
-- [ ] **Step 1: Write the Arena test**
+- [x] **Step 1: Write the Arena test**
 
 ```tsx
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -1056,7 +1056,7 @@ describe('Arena', () => {
 })
 ```
 
-- [ ] **Step 2: Write the App routing test**
+- [x] **Step 2: Write the App routing test**
 
 ```tsx
 // frontend/src/App.test.tsx
@@ -1139,12 +1139,12 @@ describe('App routes', () => {
 })
 ```
 
-- [ ] **Step 3: Run both to verify failure**
+- [x] **Step 3: Run both to verify failure**
 
 Run: `cd frontend && npx vitest run src/pages/Arena.test.tsx src/App.test.tsx`
 Expected: Arena module missing; App test fails on MyMeters import / routes.
 
-- [ ] **Step 4: Create `Arena.tsx`**
+- [x] **Step 4: Create `Arena.tsx`**
 
 ```tsx
 import { useQuery } from '@tanstack/react-query'
@@ -1186,7 +1186,7 @@ export default function Arena() {
 }
 ```
 
-- [ ] **Step 5: Rewrite the logged-in routes in `App.tsx`**
+- [x] **Step 5: Rewrite the logged-in routes in `App.tsx`**
 
 Replace the `MeineAktivitaeten` import with `import MyMeters from './pages/MyMeters'`, add `import Arena from './pages/Arena'`, `import { arenaEntryPath } from './components/ui/tabs'`, and `useParams` to the react-router import. Replace `sidebetsAktiv` with:
 
@@ -1238,7 +1238,7 @@ Logged-in routes:
     </Routes>
 ```
 
-- [ ] **Step 6: Update challenge links**
+- [x] **Step 6: Update challenge links**
 
 `ChallengeHeroCard.tsx:16` and `ChallengeRow.tsx:10`: `` to={`/arena/challenges/${ch.id}`} ``. In `ChallengeDetail.tsx` add `Link` to the react-router import and render, as the first child of its top-level container:
 
@@ -1248,12 +1248,12 @@ Logged-in routes:
       </Link>
 ```
 
-- [ ] **Step 7: Run the tests**
+- [x] **Step 7: Run the tests**
 
 Run: `cd frontend && npx vitest run src/pages/Arena.test.tsx src/App.test.tsx src/pages/Challenges.test.tsx src/components/challenges`
 Expected: all pass. If `App.test.tsx` fails because Layout renders something needing more API mocks, add that call to the mock rather than mocking Layout.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add frontend/src/pages/Arena.tsx frontend/src/pages/Arena.test.tsx frontend/src/App.tsx frontend/src/App.test.tsx frontend/src/components/challenges
@@ -1268,7 +1268,7 @@ git commit -m "feat(nav): Arena with nested Challenges/Wetten routes, MyMeters r
 - Modify: `frontend/src/components/ui/Layout.tsx`
 - Create: `frontend/src/components/ui/Layout.test.tsx`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 ```tsx
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -1329,12 +1329,12 @@ describe('Layout', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/components/ui/Layout.test.tsx`
 Expected: failures (avatar is a button, logout exists, tabs differ).
 
-- [ ] **Step 3: Rewrite the bar and footer in `Layout.tsx`**
+- [x] **Step 3: Rewrite the bar and footer in `Layout.tsx`**
 
 - Remove the `ProfilModal` import, the `profilOffen` state, the `logout` function, and `useQueryClient` if unused.
 - `sichtbareTabs(TABS, { gestartet, aktiveAddons })`.
@@ -1369,12 +1369,12 @@ Expected: failures (avatar is a button, logout exists, tabs differ).
 - Footer: before the Datenschutz link add `<NavLink to="/regeln" className="hover:text-accent">Regeln</NavLink><span className="mx-2">·</span>`.
 - Remove `{profilOffen && <ProfilModal … />}`.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `cd frontend && npx vitest run src/components/ui/Layout.test.tsx`
 Expected: 3 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/ui/Layout.tsx frontend/src/components/ui/Layout.test.tsx
@@ -1390,7 +1390,7 @@ git commit -m "feat(nav): avatar opens the profile, admin gear in the top bar, R
 - Modify: `frontend/src/pages/Admin.tsx:43-55`
 - Modify: `frontend/src/pages/Admin.test.tsx`
 
-- [ ] **Step 1: Extend the Admin test**
+- [x] **Step 1: Extend the Admin test**
 
 Add to the api mock:
 
@@ -1417,12 +1417,12 @@ describe('Admin hidden achievements', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd frontend && npx vitest run src/pages/Admin.test.tsx`
 Expected: the new test fails (Kletterkönig not found).
 
-- [ ] **Step 3: Create the section and mount it**
+- [x] **Step 3: Create the section and mount it**
 
 `HiddenAchievementsAdmin.tsx`:
 
@@ -1468,12 +1468,12 @@ export default function HiddenAchievementsAdmin() {
 
 In `Admin.tsx`: `import HiddenAchievementsAdmin from '../components/admin/HiddenAchievementsAdmin'` and add `<HiddenAchievementsAdmin />` after `<Einladungen />`.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `cd frontend && npx vitest run src/pages/Admin.test.tsx`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/admin/HiddenAchievementsAdmin.tsx frontend/src/pages/Admin.tsx frontend/src/pages/Admin.test.tsx
@@ -1484,35 +1484,35 @@ git commit -m "feat(admin): read-only list of hidden achievements and their unlo
 
 ### Task 13: Full verification and PR
 
-- [ ] **Step 1: Frontend suite, lint, types**
+- [x] **Step 1: Frontend suite, lint, types**
 
 ```bash
 cd frontend && npx vitest run && npx eslint . && npx tsc -b
 ```
 Expected: vitest all green; eslint reports only the pre-existing errors in `Feed.tsx`/`ReactionBar.tsx` (compare against `git stash`-free baseline: run `git diff --stat main -- src/pages/Feed.tsx src/components/feed/ReactionBar.tsx` and confirm those files are untouched); tsc clean.
 
-- [ ] **Step 2: Backend suite**
+- [x] **Step 2: Backend suite**
 
 ```bash
 cd backend && .venv/Scripts/python.exe -m pytest -q
 ```
 Expected: all pass.
 
-- [ ] **Step 3: Grep for leftovers**
+- [x] **Step 3: Grep for leftovers**
 
 ```bash
 grep -rn "MeineAktivitaeten\|ProfilModal\|adminOnly\|isAdmin" frontend/src
 ```
 Expected: no matches.
 
-- [ ] **Step 4: Production build**
+- [x] **Step 4: Production build**
 
 ```bash
 cd frontend && npm run build
 ```
 Expected: build succeeds.
 
-- [ ] **Step 5: Push and open the PR**
+- [x] **Step 5: Push and open the PR**
 
 ```bash
 git push -u origin feature/frontend-navigation
