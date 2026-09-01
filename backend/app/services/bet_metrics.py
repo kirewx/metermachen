@@ -11,13 +11,14 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Activity, Category
+from ..models import Activity
+from .factors import FactorResolver
 
 
 def scaled_km(
     session: Session, user_id: int, start: date_type, end: date_type
 ) -> float:
-    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     acts = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
@@ -25,14 +26,8 @@ def scaled_km(
             Activity.date <= end,
         )
     ).all()
-    return round(
-        sum(
-            a.distance_km * cats[a.category_id].factor
-            for a in acts
-            if a.category_id in cats
-        ),
-        2,
-    )
+    # Unbekannte Kategorien liefern Faktor 0.0 — wie das frühere Überspringen.
+    return round(sum(resolver.mm(a) for a in acts), 2)
 
 
 def group_scaled_km(
@@ -49,7 +44,7 @@ def longest_streak(
 ) -> int:
     """Längste Serie von Tagen mit >= STREAK_MIN_MM gewerteten km (Kategorie-
     Faktor, ohne Admin-Handicap — wie alle Wett-Metriken) im Zeitraum."""
-    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     per_day: dict[date_type, float] = defaultdict(float)
     for a in session.exec(
         select(Activity).where(
@@ -58,9 +53,7 @@ def longest_streak(
             Activity.date <= end,
         )
     ).all():
-        cat = cats.get(a.category_id)
-        if cat is not None:
-            per_day[a.date] += a.distance_km * cat.factor
+        per_day[a.date] += resolver.mm(a)
     best = run = 0
     day = start
     while day <= end:

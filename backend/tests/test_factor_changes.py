@@ -3,7 +3,9 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Activity, CategoryFactorChange
+from app.models import Activity, CategoryFactorChange, Challenge
+from app.services import bet_metrics
+from app.services.challenges import metric_mm
 from app.services.factors import FactorResolver
 from tests.conftest import login, make_category, make_user
 
@@ -142,3 +144,35 @@ def test_factor_change_loeschen(client, session):
     assert r.status_code == 409  # Historie ist unantastbar
     r = client.delete(f"/api/categories/{cat.id}/factor-changes/9999")
     assert r.status_code == 404
+
+
+def test_wett_metriken_rechnen_datumsabhaengig(client, session):
+    user = make_user(session)
+    cat = make_category(session, name="Schwimmen", factor=30.0, icon="schwimmen")
+    make_change(session, cat, factor=25.0, valid_from=date(2026, 9, 1))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 8, 31), distance_km=2.0))  # 60 MM
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 9, 1), distance_km=2.0))   # 50 MM
+    session.commit()
+    assert bet_metrics.scaled_km(
+        session, user.id, date(2026, 8, 1), date(2026, 9, 30)
+    ) == 110.0
+
+
+def test_challenge_metrik_rechnet_datumsabhaengig(client, session):
+    user = make_user(session)
+    cat = make_category(session, name="Schwimmen", factor=30.0, icon="schwimmen")
+    make_change(session, cat, factor=25.0, valid_from=date(2026, 9, 1))
+    ch = Challenge(
+        title="Test", creator_id=user.id, mode="ziel", target=1000.0, metric="mm",
+        join_mode="auto", period_start=date(2026, 8, 1), period_end=date(2026, 9, 30),
+        status="laufend",
+    )
+    session.add(ch)
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 8, 31), distance_km=2.0))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 9, 1), distance_km=2.0))
+    session.commit()
+    assert metric_mm(session, user.id, ch) == 110.0
