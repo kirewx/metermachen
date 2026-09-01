@@ -37,6 +37,20 @@ class Category(SQLModel, table=True):
     strava_sport_types: str = "[]"  # JSON-Liste gemappter Strava-Sportarten, z.B. ["Run","TrailRun"]
 
 
+class CategoryFactorChange(SQLModel, table=True):
+    """Faktor-Änderung ab Stichtag (Spec 2026-09-01). Category.factor bleibt
+    der Ur-Faktor vor der ältesten Änderung; maßgeblich ist das
+    Aktivitätsdatum — nie rückwirkend."""
+
+    __table_args__ = (UniqueConstraint("category_id", "valid_from"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    category_id: int = Field(foreign_key="category.id", index=True)
+    factor: float
+    valid_from: date_type
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class StravaConnection(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", unique=True, index=True)

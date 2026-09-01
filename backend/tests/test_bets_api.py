@@ -67,8 +67,11 @@ def test_create_and_accept_duell_flow(client, session):
 
     r = client.get("/api/bets")
     assert r.status_code == 200
-    assert len(r.json()) == 1
-    assert r.json()[0]["standing"] == {}  # Zeitraum noch nicht gestartet
+    # Seit 08/2026 legt GET /api/bets lazy den Monats-Tipp an — deshalb
+    # gezielt das Duell prüfen statt die Listenlänge.
+    duelle = [b for b in r.json() if b["type"] == "duell"]
+    assert len(duelle) == 1
+    assert duelle[0]["standing"] == {}  # Zeitraum noch nicht gestartet
 
 
 def test_create_bet_validation_error_ist_400(client, session):

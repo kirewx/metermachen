@@ -21,6 +21,7 @@ from ..models import (
     FeedReaction,
     User,
 )
+from .factors import FactorResolver
 from .season_window import current_season, in_window, season_window
 
 REACTION_EMOJIS = ("👏", "🔥", "💪", "😂", "😮")
@@ -46,7 +47,7 @@ def _emit(session: Session, *, type_: str, user_id: int | None = None,
     session.commit()
 
 
-def _activity_payload(act: Activity, cat: Category) -> dict:
+def _activity_payload(act: Activity, cat: Category, resolver: FactorResolver) -> dict:
     strava_url = (
         f"https://www.strava.com/activities/{act.external_id}"
         if act.source == "strava" and act.external_id
@@ -55,7 +56,7 @@ def _activity_payload(act: Activity, cat: Category) -> dict:
     return {
         "category": {"name": cat.name, "icon": cat.icon, "color": cat.color},
         "distance_km": act.distance_km,
-        "mm": round(act.distance_km * cat.factor, 2),
+        "mm": round(resolver.mm(act), 2),
         "titel": act.note,
         "datum": act.date.isoformat(),
         "strava_url": strava_url,
@@ -67,7 +68,7 @@ def activity_event(session: Session, act: Activity) -> None:
     if cat is None:
         return
     _emit(session, type_="activity", user_id=act.user_id, activity_id=act.id,
-          payload=_activity_payload(act, cat))
+          payload=_activity_payload(act, cat, FactorResolver.load(session)))
 
 
 def _challenge_totals(session: Session) -> dict[int, float]:
@@ -79,6 +80,7 @@ def _challenge_totals(session: Session) -> dict[int, float]:
     window = season_window(season)
     users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     totals: dict[int, float] = {uid: 0.0 for uid in users}
     for a in session.exec(
         select(Activity).where(Activity.date >= season.start_date)
@@ -87,9 +89,7 @@ def _challenge_totals(session: Session) -> dict[int, float]:
             continue
         if not in_window(a.date, window):
             continue
-        totals[a.user_id] += (
-            a.distance_km * cats[a.category_id].factor * users[a.user_id].km_factor
-        )
+        totals[a.user_id] += resolver.mm(a) * users[a.user_id].km_factor
     return totals
 
 
@@ -201,14 +201,13 @@ def _emit_recap(session: Session, type_: str, period: str, label: str,
                 von: date_type, bis: date_type, faellig: datetime) -> None:
     users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     mm: dict[int, float] = {uid: 0.0 for uid in users}
     for a in session.exec(
         select(Activity).where(Activity.date >= von, Activity.date <= bis)
     ).all():
         if a.user_id in users and a.category_id in cats:
-            mm[a.user_id] += (
-                a.distance_km * cats[a.category_id].factor * users[a.user_id].km_factor
-            )
+            mm[a.user_id] += resolver.mm(a) * users[a.user_id].km_factor
     per_user = sorted(
         (
             {"user_id": uid, "name": users[uid].display_name, "mm": round(km, 1)}
@@ -335,6 +334,7 @@ def backfill_feed_events(session: Session) -> None:
     ]
     acts.sort(key=lambda a: (a.date, a.start_time or time_type(12, 0), a.id))
     milestones = json.loads(season.milestones_json or "[]")
+    resolver = FactorResolver.load(session)
 
     def order(totals: dict[int, float]) -> list[int]:
         return [uid for uid, _ in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))]
@@ -349,10 +349,10 @@ def backfill_feed_events(session: Session) -> None:
         session.add(FeedEvent(
             season_year=season.year, type="activity", user_id=a.user_id,
             activity_id=a.id, created_at=ts,
-            payload_json=json.dumps(_activity_payload(a, cat)),
+            payload_json=json.dumps(_activity_payload(a, cat, resolver)),
         ))
         vorher = totals[a.user_id]
-        totals[a.user_id] += a.distance_km * cat.factor * users[a.user_id].km_factor
+        totals[a.user_id] += resolver.mm(a) * users[a.user_id].km_factor
         for m in milestones:
             if vorher < m["km"] <= totals[a.user_id]:
                 session.add(FeedEvent(

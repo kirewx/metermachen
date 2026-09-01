@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 
 from ..models import Activity, Category, Challenge, ChallengeParticipant, User
 from . import feed
+from .factors import FactorResolver
 
 # Karenz nach Challenge-Ende: Einfrieren erst am Folgetag um 06:00 deutscher
 # Zeit. Deckt einen ausstehenden Strava-Sync und eine Aktivitaet kurz vor
@@ -55,7 +56,8 @@ def _rows(
 
 
 def metric_mm(session: Session, user_id: int, ch: Challenge) -> float:
-    return round(sum(a.distance_km * c.factor for a, c in _rows(session, user_id, ch)), 2)
+    resolver = FactorResolver.load(session)
+    return round(sum(resolver.mm(a) for a, _ in _rows(session, user_id, ch)), 2)
 
 
 def metric_anzahl(session: Session, user_id: int, ch: Challenge) -> int:
@@ -66,9 +68,10 @@ def per_day(
     session: Session, user_id: int, ch: Challenge, bis: date_type | None = None
 ) -> dict[date_type, float]:
     """MM je Kalendertag im Zeitraum (Kategorie-gefiltert)."""
+    resolver = FactorResolver.load(session)
     tage: dict[date_type, float] = defaultdict(float)
-    for a, c in _rows(session, user_id, ch, bis):
-        tage[a.date] += a.distance_km * c.factor
+    for a, _ in _rows(session, user_id, ch, bis):
+        tage[a.date] += resolver.mm(a)
     return tage
 
 

@@ -36,6 +36,7 @@ from ..services.achievements import (
     stufen_key,
     warmup_mm,
 )
+from ..services.factors import FactorResolver
 from ..services.season_window import current_season
 
 router = APIRouter(prefix="/api/achievements", tags=["achievements"])
@@ -288,7 +289,11 @@ def achievements(
     # gewerteten Warm-up-MM (Kategorie-Faktor, ohne Handicap)
     season = current_season(session)
     start = season.start_date if season else None
-    mm = warmup_mm(user_acts, cats, start) if start is not None else 0.0
+    mm = (
+        warmup_mm(user_acts, FactorResolver.load(session), start)
+        if start is not None
+        else 0.0
+    )
     key, title, description, icon = FRUEHSTARTER_DEF
     ul = own.get(key)
     out.append(

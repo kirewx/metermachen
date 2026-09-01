@@ -5,7 +5,7 @@ from datetime import time as time_type
 
 from pydantic import BaseModel, Field, field_validator
 
-from .models import AddOn, Category, Season
+from .models import AddOn, Category, CategoryFactorChange, Season
 
 
 class Milestone(BaseModel):
@@ -33,27 +33,56 @@ class CategoryPatch(BaseModel):
     strava_sport_types: list[str] | None = None
 
 
+class FactorChangeCreate(BaseModel):
+    factor: float = Field(gt=0)
+    valid_from: date_type
+
+
+class FactorChangeOut(BaseModel):
+    id: int
+    factor: float
+    valid_from: date_type
+
+
 class CategoryOut(BaseModel):
     id: int
     name: str
-    factor: float
+    factor: float  # der HEUTE gültige Faktor (berechnet, nie gespeichert)
+    base_factor: float  # Ur-Faktor vor der ältesten Änderung
     color: str
     icon: str
     default_km: float
     is_active: bool
     strava_sport_types: list[str]
+    pending_changes: list[FactorChangeOut] = []
+    history: list[FactorChangeOut] = []
 
     @classmethod
-    def from_category(cls, cat: Category) -> "CategoryOut":
+    def from_category(
+        cls, cat: Category, changes: list[CategoryFactorChange] | None = None
+    ) -> "CategoryOut":
+        changes = sorted(changes or [], key=lambda c: c.valid_from)
+        heute = date_type.today()
+        wirksam = [c for c in changes if c.valid_from <= heute]
         return cls(
             id=cat.id,
             name=cat.name,
-            factor=cat.factor,
+            factor=wirksam[-1].factor if wirksam else cat.factor,
+            base_factor=cat.factor,
             color=cat.color,
             icon=cat.icon,
             default_km=cat.default_km,
             is_active=cat.is_active,
             strava_sport_types=json.loads(cat.strava_sport_types or "[]"),
+            pending_changes=[
+                FactorChangeOut(id=c.id, factor=c.factor, valid_from=c.valid_from)
+                for c in changes
+                if c.valid_from > heute
+            ],
+            history=[
+                FactorChangeOut(id=c.id, factor=c.factor, valid_from=c.valid_from)
+                for c in wirksam
+            ],
         )
 
 

@@ -5,6 +5,7 @@ import {
   api,
   type AddOn,
   type AdminUser,
+  type Category,
   type Invite,
   type Milestone,
   type ResetLink,
@@ -200,6 +201,11 @@ function AddOns() {
   )
 }
 
+const datumKurz = (iso: string) => {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 function Kategorien() {
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -213,6 +219,31 @@ function Kategorien() {
   })
   const leer = { name: '', factor: '1', color: '#00b3cc', icon: 'medaille', default_km: '10' }
   const [neu, setNeu] = useState(leer)
+  const [faktorKat, setFaktorKat] = useState<Category | null>(null)
+  const [neuFaktor, setNeuFaktor] = useState('')
+  const [gueltigAb, setGueltigAb] = useState(() => new Date().toISOString().slice(0, 10))
+  const createChange = useMutation({
+    mutationFn: () =>
+      api.createFactorChange(faktorKat!.id, {
+        factor: parseFloat(neuFaktor),
+        valid_from: gueltigAb,
+      }),
+    onSuccess: () => {
+      setFaktorKat(null)
+      setNeuFaktor('')
+      refresh()
+    },
+    onError: (e) => toast(e.message),
+  })
+  const deleteChange = useMutation({
+    mutationFn: ({ catId, changeId }: { catId: number; changeId: number }) =>
+      api.deleteFactorChange(catId, changeId),
+    onSuccess: () => {
+      setFaktorKat(null)
+      refresh()
+    },
+    onError: (e) => toast(e.message),
+  })
   const create = useMutation({
     mutationFn: () =>
       api.createCategory({
@@ -242,17 +273,20 @@ function Kategorien() {
           >
             <Icon name={c.icon} size={20} className="text-accent" />
             <span className="min-w-24 flex-1 text-sm font-bold text-ink">{c.name}</span>
-            <Input
-              label="Faktor"
-              type="number"
-              step="0.5"
-              defaultValue={c.factor}
-              className="w-20"
-              onBlur={(e) => {
-                const factor = parseFloat(e.target.value)
-                if (factor > 0 && factor !== c.factor) patch.mutate({ id: c.id, factor })
-              }}
-            />
+            <div className="flex min-w-28 flex-col">
+              <span className="text-xs font-semibold text-ink-mute">Faktor</span>
+              <span className="font-mono tabular-nums text-accent">
+                ×{c.factor}
+                {c.pending_changes.length > 0 && (
+                  <span className="ml-1 text-xs text-ink-mute">
+                    → ab {datumKurz(c.pending_changes[0].valid_from)} ×{c.pending_changes[0].factor}
+                  </span>
+                )}
+              </span>
+            </div>
+            <Button variant="ghost" onClick={() => setFaktorKat(c)}>
+              Faktor ändern
+            </Button>
             <Input
               label="Standard-km"
               type="number"
@@ -311,6 +345,73 @@ function Kategorien() {
           Kategorie anlegen
         </Button>
       </div>
+      <Modal
+        open={faktorKat !== null}
+        onClose={() => setFaktorKat(null)}
+        title={`Faktor für ${faktorKat?.name ?? ''} ändern`}
+      >
+        <p className="mb-3 text-sm text-ink-mute">
+          Gilt ab dem Stichtag für Aktivitäten ab diesem Datum — nie rückwirkend. Aktuell: ×
+          {faktorKat?.factor}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Input
+            label="Neuer Faktor"
+            type="number"
+            step="0.5"
+            className="w-24"
+            value={neuFaktor}
+            onChange={(e) => setNeuFaktor(e.target.value)}
+          />
+          <Input
+            label="Gültig ab"
+            type="date"
+            value={gueltigAb}
+            onChange={(e) => setGueltigAb(e.target.value)}
+          />
+        </div>
+        <Button
+          className="mt-3"
+          disabled={!(parseFloat(neuFaktor) > 0) || !gueltigAb}
+          onClick={() => createChange.mutate()}
+        >
+          Änderung anlegen
+        </Button>
+        {(faktorKat?.pending_changes.length ?? 0) > 0 && (
+          <div className="mt-4 space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-mute">
+              Anstehend
+            </p>
+            {faktorKat!.pending_changes.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-sm">
+                <span>
+                  ab {datumKurz(p.valid_from)}: ×{p.factor}
+                </span>
+                <Button
+                  variant="ghost"
+                  aria-label={`Änderung ab ${datumKurz(p.valid_from)} löschen`}
+                  onClick={() => deleteChange.mutate({ catId: faktorKat!.id, changeId: p.id })}
+                >
+                  Löschen
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {(faktorKat?.history.length ?? 0) > 0 && (
+          <div className="mt-4 space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-mute">
+              Historie
+            </p>
+            <p className="text-sm text-ink-mute">
+              Ur-Faktor: ×{faktorKat!.base_factor}
+              {faktorKat!.history.map((h) => (
+                <span key={h.id}> · ab {datumKurz(h.valid_from)}: ×{h.factor}</span>
+              ))}
+            </p>
+          </div>
+        )}
+      </Modal>
     </Collapsible>
   )
 }
