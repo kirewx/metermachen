@@ -77,3 +77,68 @@ def test_categories_ohne_aenderungen_wie_bisher(client, session):
     assert c["factor"] == 4.0
     assert c["base_factor"] == 4.0
     assert c["pending_changes"] == [] and c["history"] == []
+
+
+def test_factor_change_anlegen_nur_admin(client, session):
+    make_user(session)
+    cat = make_category(session)
+    login(client)
+    r = client.post(
+        f"/api/categories/{cat.id}/factor-changes",
+        json={"factor": 25.0, "valid_from": date.today().isoformat()},
+    )
+    assert r.status_code == 403
+
+
+def test_factor_change_anlegen_validierung(client, session):
+    make_user(session, username="chef", is_admin=True)
+    cat = make_category(session)
+    login(client, username="chef")
+    gestern = (date.today() - timedelta(days=1)).isoformat()
+    r = client.post(
+        f"/api/categories/{cat.id}/factor-changes",
+        json={"factor": 25.0, "valid_from": gestern},
+    )
+    assert r.status_code == 400  # nicht rückwirkend
+    r = client.post(
+        f"/api/categories/{cat.id}/factor-changes",
+        json={"factor": 0, "valid_from": date.today().isoformat()},
+    )
+    assert r.status_code == 422  # factor > 0
+    r = client.post(
+        "/api/categories/999/factor-changes",
+        json={"factor": 25.0, "valid_from": date.today().isoformat()},
+    )
+    assert r.status_code == 404
+
+
+def test_factor_change_anlegen_und_duplikat(client, session):
+    make_user(session, username="chef", is_admin=True)
+    cat = make_category(session)
+    login(client, username="chef")
+    morgen = (date.today() + timedelta(days=1)).isoformat()
+    r = client.post(
+        f"/api/categories/{cat.id}/factor-changes",
+        json={"factor": 25.0, "valid_from": morgen},
+    )
+    assert r.status_code == 201
+    assert r.json()["factor"] == 25.0
+    r = client.post(
+        f"/api/categories/{cat.id}/factor-changes",
+        json={"factor": 20.0, "valid_from": morgen},
+    )
+    assert r.status_code == 409  # gleicher Tag doppelt
+
+
+def test_factor_change_loeschen(client, session):
+    make_user(session, username="chef", is_admin=True)
+    cat = make_category(session)
+    heute = make_change(session, cat, factor=25.0, valid_from=date.today())
+    alt = make_change(session, cat, factor=28.0, valid_from=date(2026, 1, 1))
+    login(client, username="chef")
+    r = client.delete(f"/api/categories/{cat.id}/factor-changes/{heute.id}")
+    assert r.status_code == 204  # valid_from >= heute → löschbar (Vertipper-Korrektur)
+    r = client.delete(f"/api/categories/{cat.id}/factor-changes/{alt.id}")
+    assert r.status_code == 409  # Historie ist unantastbar
+    r = client.delete(f"/api/categories/{cat.id}/factor-changes/9999")
+    assert r.status_code == 404
