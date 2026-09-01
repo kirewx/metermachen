@@ -3,29 +3,39 @@ export type Tab = {
   label: string
   icon: string
   end: boolean
-  adminOnly: boolean
   abStart: boolean
-  addon?: string
+  // Visible if at least one of these add-ons is active.
+  addons?: string[]
 }
 
 export const TABS: Tab[] = [
-  { to: '/', label: 'Vergleich', icon: 'fahne', end: true, adminOnly: false, abStart: false },
-  { to: '/feed', label: 'Feed', icon: 'chart', end: false, adminOnly: false, abStart: true },
-  { to: '/aktivitaeten', label: 'Aktivitäten', icon: 'blitz', end: false, adminOnly: false, abStart: false },
-  { to: '/challenges', label: 'Challenges', icon: 'pokal', end: false, adminOnly: false, abStart: false, addon: 'challenges' },
-  { to: '/wetten', label: 'Wetten', icon: 'medaille', end: false, adminOnly: false, abStart: false, addon: 'sidebets' },
-  { to: '/regeln', label: 'Regeln', icon: 'notiz', end: false, adminOnly: false, abStart: false },
-  { to: '/admin', label: 'Admin', icon: 'zahnrad', end: false, adminOnly: true, abStart: false },
+  { to: '/', label: 'Vergleich', icon: 'fahne', end: true, abStart: false },
+  { to: '/feed', label: 'Feed', icon: 'chart', end: false, abStart: true },
+  {
+    to: '/arena',
+    label: 'Arena',
+    icon: 'pokal',
+    end: false,
+    abStart: false,
+    addons: ['challenges', 'sidebets'],
+  },
+  { to: '/mymeters', label: 'MyMeters', icon: 'blitz', end: false, abStart: false },
 ]
 
 export function sichtbareTabs(
   tabs: Tab[],
-  opts: { isAdmin: boolean; gestartet: boolean; aktiveAddons: Set<string> },
+  opts: { gestartet: boolean; aktiveAddons: Set<string> },
 ): Tab[] {
   return tabs.filter(
     (t) =>
-      (!t.adminOnly || opts.isAdmin) &&
       (!t.abStart || opts.gestartet) &&
-      (!t.addon || opts.aktiveAddons.has(t.addon)),
+      (!t.addons || t.addons.some((key) => opts.aktiveAddons.has(key))),
   )
+}
+
+// Where /arena lands: challenges first, bets second, home if neither is on.
+export function arenaEntryPath(aktiveAddons: Set<string>): string {
+  if (aktiveAddons.has('challenges')) return '/arena/challenges'
+  if (aktiveAddons.has('sidebets')) return '/arena/wetten'
+  return '/'
 }
