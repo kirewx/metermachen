@@ -69,8 +69,23 @@ vi.mock('../api/client', () => ({
     userActivities: vi.fn().mockResolvedValue([
       { id: 7, category_id: 2, date: '2026-03-01', distance_km: 40, duration_min: null, start_time: null, elevation_m: 780, note: 'Feierabendrunde', scaled_km: 40, edited: false, source: 'manual', strava_url: null },
     ]),
+    achievements: vi.fn().mockResolvedValue([
+      { key: 'hattrick', title: 'Hattrick', description: 'Drei Aktivitäten an einem Tag.', icon: 'blitz',
+        achieved: true, progress: 1, parts: [], hidden: true, tier: null, discipline: null,
+        unlocked_at: '2026-08-02T10:00:00Z', emoji: '🎩', showcased: true, claimed_by: null },
+    ]),
+    userAchievements: vi.fn().mockResolvedValue([
+      { key: 'startschuss', title: 'Startschuss', description: 'Deine erste Aktivität ist im Kasten.',
+        icon: 'fahne', achieved: true, progress: 1, parts: [{ label: 'Gesamt', current_km: 0.01, target_km: 0.01 }],
+        hidden: false, tier: null, discipline: null, unlocked_at: null, emoji: null, showcased: null, claimed_by: null },
+    ]),
+    patchAchievement: vi.fn().mockResolvedValue({}),
+    stravaStatus: vi.fn().mockResolvedValue({ enabled: false, connected: false }),
+    patchMe: vi.fn(),
+    logout: vi.fn().mockResolvedValue(undefined),
   },
 }))
+vi.mock('../components/ui/Toast', () => ({ useToast: () => vi.fn() }))
 
 function renderProfil(pfad = '/profil/1?jahr=2026') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -137,5 +152,20 @@ describe('Profilseite', () => {
   it('erklärt es, wenn es die Person in dieser Saison nicht gibt', async () => {
     renderProfil('/profil/99?jahr=2026')
     expect(await screen.findByText(/Dieses Mitglied gibt es/)).toBeInTheDocument()
+  })
+
+  it("shows another member's unlocked achievements without toggles or settings", async () => {
+    renderProfil()
+    expect(await screen.findByText('Startschuss')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /wird getragen/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Einstellungen')).not.toBeInTheDocument()
+  })
+
+  it('shows the own trophy room with toggles and the settings section', async () => {
+    renderProfil('/profil/2?jahr=2026')
+    expect(await screen.findByText('Hattrick')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /wird getragen/ })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Anzeigename')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Logout/ })).toBeInTheDocument()
   })
 })

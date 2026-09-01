@@ -2,8 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import ProfileAchievements from '../components/achievements/ProfileAchievements'
 import { formatHm } from '../components/comparison/monatsFarbe'
 import AktivitaetenListe from '../components/profile/AktivitaetenListe'
+import SettingsSection from '../components/profile/SettingsSection'
 import { profilAchsen } from '../components/profile/achsen'
 import Spinnennetz from '../components/profile/Spinnennetz'
 import { bestimmeTyp } from '../components/profile/typ'
@@ -178,9 +180,16 @@ export default function Profil() {
       </Card>
 
       <Card>
+        <SectionTitle>Achievements</SectionTitle>
+        <ProfileAchievements userId={user.user_id} own={me?.id === user.user_id} />
+      </Card>
+
+      <Card>
         <SectionTitle>Letzte Aktivitäten</SectionTitle>
         <AktivitaetenListe userId={id} year={year} />
       </Card>
+
+      {me && me.id === user.user_id && <SettingsSection me={me} />}
     </div>
   )
 }
