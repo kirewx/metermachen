@@ -158,6 +158,19 @@ export type Achievement = {
   timer_hours?: number | null
   timer_running?: boolean | null
 }
+export type HiddenUnlock = {
+  user_id: number
+  display_name: string
+  avatar: string
+  unlocked_at: string
+}
+export type HiddenAchievementAdmin = {
+  key: string
+  title: string
+  description: string
+  emoji: string | null
+  unlocks: HiddenUnlock[]
+}
 export type Invite = {
   id: number
   token: string
@@ -482,6 +495,10 @@ export const api = {
   achievements: () => request<Achievement[]>('/api/achievements'),
   patchAchievement: (key: string, showcased: boolean) =>
     request<{ key: string; showcased: boolean }>(`/api/achievements/${key}`, patch({ showcased })),
+  userAchievements: (userId: number) =>
+    request<Achievement[]>(`/api/achievements/user/${userId}`),
+  hiddenAchievementsAdmin: () =>
+    request<HiddenAchievementAdmin[]>('/api/achievements/hidden'),
   comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
   lastSeenComparison: (year: number) =>
     request<LastSeen | null>(`/api/comparison/${year}/last-seen`),

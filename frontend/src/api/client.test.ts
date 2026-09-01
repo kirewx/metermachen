@@ -41,3 +41,17 @@ describe('request()', () => {
     await expect(api.me()).rejects.toMatchObject({ status: 500, message: 'Fehler 500' })
   })
 })
+
+describe('achievement endpoints', () => {
+  it('userAchievements calls /api/achievements/user/<id>', async () => {
+    mockFetch(200, [])
+    await api.userAchievements(7)
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/achievements/user/7', expect.anything())
+  })
+
+  it('hiddenAchievementsAdmin calls /api/achievements/hidden', async () => {
+    mockFetch(200, [])
+    await api.hiddenAchievementsAdmin()
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/achievements/hidden', expect.anything())
+  })
+})
