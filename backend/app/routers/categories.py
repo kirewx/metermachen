@@ -1,10 +1,11 @@
 import json
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..deps import get_session, require_admin
-from ..models import Category
+from ..models import Category, CategoryFactorChange
 from ..schemas import CategoryCreate, CategoryOut, CategoryPatch
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
@@ -15,7 +16,10 @@ router = APIRouter(prefix="/api/categories", tags=["categories"])
 @router.get("", response_model=list[CategoryOut])
 def list_categories(session: Session = Depends(get_session)):
     cats = session.exec(select(Category).order_by(Category.id)).all()
-    return [CategoryOut.from_category(c) for c in cats]
+    by_cat: dict[int, list[CategoryFactorChange]] = defaultdict(list)
+    for ch in session.exec(select(CategoryFactorChange)).all():
+        by_cat[ch.category_id].append(ch)
+    return [CategoryOut.from_category(c, by_cat.get(c.id)) for c in cats]
 
 
 @router.post(
@@ -48,4 +52,11 @@ def patch_category(
     session.add(cat)
     session.commit()
     session.refresh(cat)
-    return CategoryOut.from_category(cat)
+    factor_changes = list(
+        session.exec(
+            select(CategoryFactorChange).where(
+                CategoryFactorChange.category_id == cat.id
+            )
+        ).all()
+    )
+    return CategoryOut.from_category(cat, factor_changes)
