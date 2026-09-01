@@ -34,6 +34,11 @@ vi.mock('../api/client', () => ({
     createAddon: vi.fn().mockResolvedValue({}),
     patchAddon: vi.fn().mockResolvedValue({}),
     deleteAddon: vi.fn().mockResolvedValue(undefined),
+    hiddenAchievementsAdmin: vi.fn().mockResolvedValue([
+      { key: 'kletterkoenig', title: 'Kletterkönig', description: '1000 Höhenmeter an einem Tag.', emoji: '🏔️', unlocks: [] },
+      { key: 'hattrick', title: 'Hattrick', description: 'Drei Aktivitäten an einem Tag.', emoji: '🎩',
+        unlocks: [{ user_id: 2, display_name: 'Lisa', avatar: 'icon:rad', unlocked_at: '2026-08-02T10:00:00Z' }] },
+    ]),
   },
 }))
 vi.mock('../components/ui/Toast', () => ({ useToast: () => vi.fn() }))
@@ -100,5 +105,16 @@ describe('Admin Strava-Zuordnung', () => {
       expect(patchCategory).toHaveBeenCalledWith(1, { strava_sport_types: [] })
       expect(patchCategory).toHaveBeenCalledWith(2, { strava_sport_types: ['Run'] })
     })
+  })
+})
+
+describe('Admin hidden achievements', () => {
+  it('lists every hidden achievement with its unlockers', async () => {
+    renderAdmin()
+    const section = (await screen.findByText('Kletterkönig')).closest('section')!
+    const s = within(section)
+    expect(s.getByText('noch niemand')).toBeInTheDocument()
+    expect(s.getByText('Hattrick')).toBeInTheDocument()
+    expect(s.getByText(/Lisa · 2\.8\.2026/)).toBeInTheDocument()
   })
 })
