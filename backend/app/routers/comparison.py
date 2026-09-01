@@ -17,6 +17,7 @@ from ..models import (
     utcnow,
 )
 from ..services.achievements import SHOWCASE_INFO
+from ..services.factors import FactorResolver
 from ..services.season_window import in_window, season_window
 from ..schemas import (
     Auszeichnung,
@@ -114,6 +115,7 @@ def compute_comparison(
             letzter_tag = heute
         elevation_months = _monatsachse(erster_tag, max(letzter_tag, erster_tag))
 
+    resolver = FactorResolver.load(session)
     result_users = []
     for user in users:
         acts = by_user.get(user.id, [])
@@ -125,7 +127,7 @@ def compute_comparison(
         hm_running = 0.0
         factor = user.km_factor if phase == "challenge" else 1.0
         for a, c in acts:
-            scaled = round(a.distance_km * c.factor * factor, 2)
+            scaled = round(a.distance_km * resolver.factor(c.id, a.date) * factor, 2)
             running = round(running + scaled, 2)
             real_running = round(real_running + a.distance_km, 2)
             # Höhenmeter bleiben roh: weder Kategorie- noch Personen-Faktor.

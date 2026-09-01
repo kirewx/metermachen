@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..models import AchievementUnlock, Activity, Category, User, utcnow
+from .factors import FactorResolver
 from .season_window import current_season, season_window
 
 RAD, LAUF, SCHWIMM = "rad", "lauf", "schwimm"
@@ -180,19 +181,18 @@ _NACHT_ENDE = time_type(3, 0)
 _MESZ = timezone(timedelta(hours=2))
 
 
-def _gewertete_km(act: Activity, cats: dict[int, Category]) -> float:
-    """MM einer einzelnen Aktivität: Kategorie-Faktor, ohne Admin-Handicap —
-    gleiche Rechnung wie Testphasen-Sieger/Warm-up-Vergleich."""
-    cat = cats.get(act.category_id)
-    return act.distance_km * cat.factor if cat else 0.0
+def _gewertete_km(act: Activity, resolver: FactorResolver) -> float:
+    """MM einer einzelnen Aktivität: Kategorie-Faktor (datumsabhängig), ohne
+    Admin-Handicap — gleiche Rechnung wie Testphasen-Sieger/Warm-up-Vergleich."""
+    return resolver.mm(act)
 
 
 def warmup_mm(
-    acts: list[Activity], cats: dict[int, Category], start: date_type
+    acts: list[Activity], resolver: FactorResolver, start: date_type
 ) -> float:
     """Gewertete km der Warm-up-Phase (vor Challenge-Start, im Season-Jahr)."""
     return sum(
-        _gewertete_km(act, cats) for act in acts
+        _gewertete_km(act, resolver) for act in acts
         if act.date < start and act.date.year == start.year
     )
 
@@ -230,6 +230,7 @@ def check_unlocks(session: Session, user_id: int) -> None:
     Idempotent; bereits vergebene Unlocks werden nie zurückgenommen."""
     have = _existing_keys(session, user_id)
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     acts = session.exec(select(Activity).where(Activity.user_id == user_id)).all()
 
     # Stufen (rohe km je Bucket) + Erster-Bonus direkt nach dem Gold-Insert
@@ -290,18 +291,18 @@ def check_unlocks(session: Session, user_id: int) -> None:
     if "langstreckenguru" not in have:
         treffer = next(
             (act for act in sorted(acts, key=lambda a: a.date)
-             if _gewertete_km(act, cats) > 200.0),
+             if _gewertete_km(act, resolver) > 200.0),
             None,
         )
         if treffer is not None and _unlock(
             session, user_id, "langstreckenguru",
             {"datum": treffer.date.isoformat(),
-             "mm": round(_gewertete_km(treffer, cats), 2)},
+             "mm": round(_gewertete_km(treffer, resolver), 2)},
         ):
             have.add("langstreckenguru")
 
     if "kurzstreckenprofi" not in have:
-        kurze = [act for act in acts if _gewertete_km(act, cats) < 5.0]
+        kurze = [act for act in acts if _gewertete_km(act, resolver) < 5.0]
         if len(kurze) > 5 and _unlock(
             session, user_id, "kurzstreckenprofi", {"anzahl": len(kurze)}
         ):
@@ -325,7 +326,7 @@ def check_unlocks(session: Session, user_id: int) -> None:
     # Frühstarter zählt Warm-up-MM und darf schon WÄHREND der Warm-up-Phase
     # freischalten — deshalb vor dem today<start-Guard.
     if "fruehstarter" not in have and start is not None:
-        mm = warmup_mm(acts, cats, start)
+        mm = warmup_mm(acts, resolver, start)
         if mm > FRUEHSTARTER_ZIEL_MM and _unlock(
             session, user_id, "fruehstarter", {"mm": round(mm, 2)}
         ):
@@ -392,6 +393,7 @@ def fuehrungs_zeit(session: Session, user_id: int) -> tuple[float, bool]:
     if user_id not in users:
         return 0.0, False
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     stmt = select(Activity).where(Activity.date >= start)
     if saison_ende is not None:
         stmt = stmt.where(Activity.date <= saison_ende)
@@ -416,9 +418,7 @@ def fuehrungs_zeit(session: Session, user_id: int) -> tuple[float, bool]:
         if vorn == user_id:
             sekunden += (t - prev).total_seconds()
         prev = t
-        kum[a.user_id] += (
-            a.distance_km * cats[a.category_id].factor * users[a.user_id].km_factor
-        )
+        kum[a.user_id] += resolver.mm(a) * users[a.user_id].km_factor
         stand = {uid: round(km, 2) for uid, km in kum.items() if km > 0}
         best = max(stand.values(), default=0.0)
         fuehrende = [uid for uid, km in stand.items() if km == best]
@@ -434,6 +434,7 @@ def _testphasen_platz1(session: Session, user_id: int, start: date_type) -> dict
     bekommen alle Erstplatzierten das Achievement (jeweils in ihrem Lauf)."""
     aktive = {u.id for u in session.exec(select(User).where(User.is_active)).all()}
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     sums: dict[int, float] = defaultdict(float)
     for act in session.exec(select(Activity).where(Activity.date < start)).all():
         if act.user_id not in aktive or act.date.year != start.year:
@@ -441,7 +442,7 @@ def _testphasen_platz1(session: Session, user_id: int, start: date_type) -> dict
         cat = cats.get(act.category_id)
         if cat is None:
             continue
-        sums[act.user_id] += act.distance_km * cat.factor
+        sums[act.user_id] += resolver.mm(act)
     if not sums:
         return None
     best = round(max(sums.values()), 2)
@@ -460,6 +461,7 @@ def _wochenkoenig_fenster(
     if user_id not in users:
         return None
     cats = {c.id: c for c in session.exec(select(Category)).all()}
+    resolver = FactorResolver.load(session)
     tages_km: dict[date_type, dict[int, float]] = defaultdict(lambda: defaultdict(float))
     acts = session.exec(
         select(Activity).where(Activity.date >= start, Activity.date <= today)
@@ -468,7 +470,7 @@ def _wochenkoenig_fenster(
         cat, u = cats.get(act.category_id), users.get(act.user_id)
         if cat is None or u is None:
             continue
-        tages_km[act.date][act.user_id] += act.distance_km * cat.factor * u.km_factor
+        tages_km[act.date][act.user_id] += resolver.mm(act) * u.km_factor
     kum: dict[int, float] = defaultdict(float)
     streak = 0
     d = start

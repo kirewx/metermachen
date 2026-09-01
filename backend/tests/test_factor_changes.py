@@ -3,7 +3,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Activity, CategoryFactorChange, Challenge
+from app.models import Activity, CategoryFactorChange, Challenge, Season
 from app.services import bet_metrics
 from app.services.challenges import metric_mm
 from app.services.factors import FactorResolver
@@ -176,3 +176,19 @@ def test_challenge_metrik_rechnet_datumsabhaengig(client, session):
                          date=date(2026, 9, 1), distance_km=2.0))
     session.commit()
     assert metric_mm(session, user.id, ch) == 110.0
+
+
+def test_comparison_rechnet_datumsabhaengig(client, session):
+    user = make_user(session)
+    cat = make_category(session, name="Schwimmen", factor=30.0, icon="schwimmen")
+    make_change(session, cat, factor=25.0, valid_from=date(2026, 9, 1))
+    session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20)))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 8, 31), distance_km=2.0))  # 60 MM
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 9, 1), distance_km=2.0))   # 50 MM
+    session.commit()
+    login(client)
+    erik = client.get("/api/comparison/2026").json()["users"][0]
+    assert erik["total_scaled_km"] == 110.0
+    assert [s["scaled_km"] for s in erik["segments"]] == [60.0, 50.0]
