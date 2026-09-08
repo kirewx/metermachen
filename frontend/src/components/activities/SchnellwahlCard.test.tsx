@@ -167,4 +167,21 @@ describe('SchnellwahlCard', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1)
     freigeben()
   })
+
+  it('preview and label use the factor valid on the chosen date', async () => {
+    const schwimmen: Category = {
+      id: 4, name: 'Schwimmen', factor: 25, base_factor: 30, color: '#0af', icon: 'schwimmen',
+      default_km: 2, is_active: true, strava_sport_types: [],
+      history: [{ id: 1, factor: 25, valid_from: '2026-09-01' }], pending_changes: [],
+    }
+    render(<SchnellwahlCard categories={[schwimmen]} onSubmit={vi.fn()} />)
+    expect(screen.getByText(/= 50\.0 km gewertet/)).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Schwimmen · 25x' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }))
+    const datum = screen.getByLabelText('Datum')
+    await userEvent.clear(datum)
+    await userEvent.type(datum, '2026-08-31')
+    expect(screen.getByText(/= 60\.0 km gewertet/)).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Schwimmen · 30x' })).toBeInTheDocument()
+  })
 })

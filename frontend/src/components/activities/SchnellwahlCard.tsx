@@ -6,6 +6,7 @@ import Icon from '../ui/Icon'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Stepper from '../ui/Stepper'
+import { factorOn } from './factorOn'
 
 const heute = () => new Date().toISOString().slice(0, 10)
 
@@ -90,7 +91,10 @@ export default function SchnellwahlCard({
       })
   }
 
-  const gewertet = kategorie && Number.isFinite(km) ? (km * kategorie.factor).toFixed(1) : '0.0'
+  // Preview with the factor valid on the chosen date, so backdated entries
+  // across a factor cutover show what the backend will actually save.
+  const gewertet =
+    kategorie && Number.isFinite(km) ? (km * factorOn(kategorie, date)).toFixed(1) : '0.0'
   const datumText = date === heute() ? 'heute' : date
 
   return (
@@ -108,7 +112,7 @@ export default function SchnellwahlCard({
           >
             {aktive.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} · {c.factor}x
+                {c.name} · {factorOn(c, date)}x
               </option>
             ))}
           </Select>

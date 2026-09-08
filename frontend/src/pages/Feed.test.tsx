@@ -96,6 +96,17 @@ describe('Feed', () => {
     )
   })
 
+  it('shows no clock time on entries because members sit in different time zones', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <Feed />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByText(/Feierabendrunde/)).toBeInTheDocument())
+    expect(screen.queryAllByText(/^\d{1,2}:\d{2}$/)).toHaveLength(0)
+  })
+
   it('zeigt die Achievement-Beschreibung beim Klick', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(

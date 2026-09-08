@@ -7,6 +7,7 @@ from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
 from ..models import utcnow
 from ..services import feed
 from ..services.achievements import check_unlocks
+from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
 
 router = APIRouter(prefix="/api/activities", tags=["activities"])
@@ -19,7 +20,9 @@ def _validate_category(session: Session, category_id: int) -> Category:
     return cat
 
 
-def _to_out(activity: Activity, factor: float) -> ActivityOut:
+def _to_out(activity: Activity, resolver: FactorResolver) -> ActivityOut:
+    # The factor depends on the activity date (cutover changes), never on the
+    # category's stored base factor alone.
     strava_url = (
         f"https://www.strava.com/activities/{activity.external_id}"
         if activity.source == "strava" and activity.external_id
@@ -34,7 +37,7 @@ def _to_out(activity: Activity, factor: float) -> ActivityOut:
         start_time=activity.start_time,
         elevation_m=activity.elevation_m,
         note=activity.note,
-        scaled_km=round(activity.distance_km * factor, 2),
+        scaled_km=round(resolver.mm(activity), 2),
         edited=activity.updated_at is not None,
         source=activity.source,
         strava_url=strava_url,
@@ -55,13 +58,13 @@ def list_my_activities(
     session: Session = Depends(get_session),
 ):
     acts = session.exec(
-        select(Activity, Category)
-        .join(Category, Activity.category_id == Category.id)
+        select(Activity)
         .where(Activity.user_id == user.id)
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
     window = window_bounds(session, year)
-    return [_to_out(a, c.factor) for a, c in acts if in_window(a.date, window)]
+    resolver = FactorResolver.load(session)
+    return [_to_out(a, resolver) for a in acts if in_window(a.date, window)]
 
 
 @router.post("", response_model=ActivityOut, status_code=201)
@@ -70,7 +73,7 @@ def create_activity(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    cat = _validate_category(session, data.category_id)
+    _validate_category(session, data.category_id)
     order_before = feed.challenge_order(session)
     total_before = feed.challenge_total(session, user.id)
     act = Activity(user_id=user.id, **data.model_dump())
@@ -81,7 +84,7 @@ def create_activity(
     feed.activity_event(session, act)
     feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
     feed.rank_events(session, order_before, feed.challenge_order(session))
-    return _to_out(act, cat.factor)
+    return _to_out(act, FactorResolver.load(session))
 
 
 @router.patch("/{activity_id}", response_model=ActivityOut)
@@ -112,8 +115,7 @@ def patch_activity(
     # Kein neues activity-Event beim Bearbeiten — Spec B5.
     feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
     feed.rank_events(session, order_before, feed.challenge_order(session))
-    cat = session.get(Category, act.category_id)
-    return _to_out(act, cat.factor)
+    return _to_out(act, FactorResolver.load(session))
 
 
 @router.delete("/{activity_id}", status_code=204)
