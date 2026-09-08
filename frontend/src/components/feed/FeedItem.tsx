@@ -42,7 +42,6 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
             )}
             <span className="font-bold text-ink">{ev.display_name}</span>
             <span className="text-ink-mute">· {ev.payload.category?.name}</span>
-            <Zeit iso={ev.created_at} />
           </div>
           <p className="mt-0.5 break-words text-[13px] text-ink-soft">
             {ev.payload.titel ? `„${ev.payload.titel}" — ` : ''}
@@ -78,7 +77,6 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
             </span>
             <b className="text-accent">{ev.payload.neuer_rang}</b>
           </span>
-          <Zeit iso={ev.created_at} />
         </div>
       )}
       {(ev.type === 'achievement' || ev.type === 'milestone') && (
@@ -122,7 +120,6 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
               </>
             )}
           </span>
-          <Zeit iso={ev.created_at} />
         </div>
       )}
       {ev.type === 'challenge_start' && (
@@ -134,7 +131,6 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
               <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
             )}
           </span>
-          <Zeit iso={ev.created_at} />
         </div>
       )}
       {ev.type === 'challenge_qualified' && (
@@ -144,7 +140,6 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
             <b>{ev.display_name}</b> hat das Ziel geknackt —{' '}
             <b className="text-accent">{ev.payload.title}</b>
           </span>
-          <Zeit iso={ev.created_at} />
         </div>
       )}
       {ev.type === 'challenge_sieger' && (
@@ -156,7 +151,6 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
               <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
             )}
           </span>
-          <Zeit iso={ev.created_at} />
         </div>
       )}
       {ev.type === 'challenge_end' && (
@@ -173,20 +167,10 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
               'niemand hat es geschafft'
             )}
           </span>
-          <Zeit iso={ev.created_at} />
         </div>
       )}
       {(ev.type === 'recap_week' || ev.type === 'recap_month') && <RecapCard ev={ev} />}
       <ReactionBar ev={ev} />
     </div>
-  )
-}
-
-function Zeit({ iso }: { iso: string }) {
-  const t = new Date(iso)
-  return (
-    <span className="ml-auto shrink-0 text-[11px] text-ink-mute">
-      {t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-    </span>
   )
 }
