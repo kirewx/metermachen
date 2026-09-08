@@ -6,8 +6,9 @@ from sqlmodel import Session, select
 
 from .. import auth, config
 from ..deps import get_current_user, get_session, require_admin
-from ..models import Activity, Category, Invite, StravaConnection, User, utcnow
+from ..models import Activity, Invite, StravaConnection, User, utcnow
 from ..schemas import ActivityOut
+from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
 from .activities import _to_out
 from .auth_router import MeOut
@@ -114,13 +115,13 @@ def user_activities(
     if user is None or not user.is_active:
         raise HTTPException(status_code=404, detail="User nicht gefunden")
     rows = session.exec(
-        select(Activity, Category)
-        .join(Category, Activity.category_id == Category.id)
+        select(Activity)
         .where(Activity.user_id == user_id)
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
     window = window_bounds(session, year)
-    return [_to_out(a, c.factor) for a, c in rows if in_window(a.date, window)]
+    resolver = FactorResolver.load(session)
+    return [_to_out(a, resolver) for a in rows if in_window(a.date, window)]
 
 
 @router.patch("/me", response_model=MeOut)

@@ -2,7 +2,7 @@ from datetime import date
 
 from sqlmodel import select
 
-from app.models import Activity, StravaConnection, User
+from app.models import Activity, CategoryFactorChange, StravaConnection, User
 from tests.conftest import login, make_category, make_user
 
 
@@ -190,6 +190,28 @@ def test_user_activities_lists_members_entries(client, session):
     assert body[0]["scaled_km"] == 20.0
     assert body[0]["elevation_m"] == 120.0
     assert body[0]["strava_url"] == "https://www.strava.com/activities/42"
+
+
+def test_user_activities_use_factor_valid_on_activity_date(client, session):
+    # Regression: the profile list showed the base factor result after a
+    # factor cutover while the profile totals were already correct.
+    make_user(session)
+    lisa = make_user(session, username="lisa")
+    cat = make_category(session, name="Schwimmen", factor=30.0, icon="schwimmen")
+    session.add(
+        CategoryFactorChange(category_id=cat.id, factor=25.0, valid_from=date(2026, 9, 1))
+    )
+    session.add(Activity(user_id=lisa.id, category_id=cat.id, date=date(2026, 8, 31),
+                         distance_km=2.0))
+    session.add(Activity(user_id=lisa.id, category_id=cat.id, date=date(2026, 9, 1),
+                         distance_km=2.0))
+    session.commit()
+    login(client)
+    body = client.get(f"/api/users/{lisa.id}/activities", params={"year": 2026}).json()
+    assert {a["date"]: a["scaled_km"] for a in body} == {
+        "2026-08-31": 60.0,
+        "2026-09-01": 50.0,
+    }
 
 
 def test_user_activities_requires_login(client, session):

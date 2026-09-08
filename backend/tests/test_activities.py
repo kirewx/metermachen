@@ -166,3 +166,43 @@ def test_hoehenmeter_duerfen_nicht_negativ_sein(client, session):
     cat = make_category(session)
     login(client)
     assert create_activity(client, cat.id, elevation_m=-10).status_code == 422
+
+
+def _swimming_with_cutover(session):
+    """Swimming counts x30, from 2026-09-01 on only x25."""
+    from app.models import CategoryFactorChange
+
+    cat = make_category(session, name="Schwimmen", factor=30.0, icon="schwimmen")
+    session.add(
+        CategoryFactorChange(category_id=cat.id, factor=25.0, valid_from=date(2026, 9, 1))
+    )
+    session.commit()
+    return cat
+
+
+def test_scaled_km_uses_factor_valid_on_activity_date(client, session):
+    # Regression: create/list multiplied with the stored base factor, so the
+    # activity lists showed "2.0 -> 60.0" after the cutover while the totals
+    # already counted x25.
+    make_user(session)
+    cat = _swimming_with_cutover(session)
+    login(client)
+    before = create_activity(client, cat.id, date="2026-08-31", distance_km=2.0)
+    after = create_activity(client, cat.id, date="2026-09-01", distance_km=2.0)
+    assert before.json()["scaled_km"] == 60.0
+    assert after.json()["scaled_km"] == 50.0
+    listed = client.get("/api/activities", params={"year": 2026}).json()
+    assert {a["date"]: a["scaled_km"] for a in listed} == {
+        "2026-08-31": 60.0,
+        "2026-09-01": 50.0,
+    }
+
+
+def test_patch_rescales_with_factor_of_new_date(client, session):
+    make_user(session)
+    cat = _swimming_with_cutover(session)
+    login(client)
+    act_id = create_activity(client, cat.id, date="2026-08-31", distance_km=2.0).json()["id"]
+    r = client.patch(f"/api/activities/{act_id}", json={"date": "2026-09-01"})
+    assert r.status_code == 200, r.text
+    assert r.json()["scaled_km"] == 50.0
