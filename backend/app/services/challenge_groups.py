@@ -6,8 +6,9 @@ per-person standings so that freezing and the feed can use it without a
 circular import; this module builds on top of that.
 """
 
+import random
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, select
 
@@ -34,6 +35,7 @@ def default_name(index: int) -> str:
 
 
 def _active_ids(session: Session) -> set[int]:
+    # Used by validate_groups() (next task).
     return {u.id for u in session.exec(select(User).where(User.is_active)).all()}
 
 
@@ -64,3 +66,38 @@ def seeding(
     values = [(uid, seeding_value(session, uid, ch, heute)) for uid in ids]
     values.sort(key=lambda t: (-t[1], t[0]))
     return values
+
+
+def draw(
+    session: Session,
+    ch: Challenge,
+    heute: date_type,
+    jetzt: datetime | None,
+    rng: random.Random | None = None,
+) -> list[dict]:
+    """Seeded random draw. Pots of group_count by seeding rank; inside a pot
+    the assignment to groups is random; the partial last pot goes to random
+    distinct groups, so sizes differ by at most one. Existing names are kept
+    by group id. Writes groups_json / groups_drawn_at on ch but does NOT
+    commit — the caller decides (create wants to validate before commit)."""
+    rng = rng or random.Random()
+    n = ch.group_count or 0
+    if n < 1:
+        raise ValueError("Gruppen-Challenge ohne Gruppenanzahl")
+    order = [uid for uid, _ in seeding(session, ch, heute)]
+    if len(order) < n:
+        raise TooFewPeople("Weniger Personen als Gruppen")
+    names = {g["id"]: g["name"] for g in svc.groups(ch)}
+    result = [
+        {"id": i + 1, "name": names.get(i + 1, default_name(i)), "member_ids": []}
+        for i in range(n)
+    ]
+    for start in range(0, len(order), n):
+        pot = order[start:start + n]
+        rng.shuffle(pot)
+        targets = list(range(n)) if len(pot) == n else rng.sample(range(n), len(pot))
+        for uid, gi in zip(pot, targets):
+            result[gi]["member_ids"].append(uid)
+    svc.set_groups(ch, result)
+    ch.groups_drawn_at = jetzt or datetime.now(timezone.utc)
+    return result

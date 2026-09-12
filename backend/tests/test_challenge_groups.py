@@ -247,3 +247,91 @@ def test_seeding_days_one_counts_only_yesterday(session):
     add_activity(session, u.id, lauf.id, heute - timedelta(days=1), 10.0)
     add_activity(session, u.id, lauf.id, heute - timedelta(days=2), 10.0)
     assert cg.seeding_value(session, u.id, ch, heute) == 10.0
+
+
+# --- draw -------------------------------------------------------------------
+
+def _seeded_users(session, n, heute):
+    """n users; user k has (k+1) × 10 MM yesterday, so seeding order = reverse creation."""
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    users = [make_user(session, username=f"u{k}") for k in range(n)]
+    for k, u in enumerate(users):
+        add_activity(session, u.id, lauf.id, heute - timedelta(days=1), (k + 1) * 10.0)
+    return users
+
+
+def test_draw_spreads_every_pot_over_distinct_groups(session):
+    heute = date(2026, 9, 12)
+    users = _seeded_users(session, 9, heute)
+    ch = make_team_challenge(session, group_count=3)
+    gruppen = cg.draw(session, ch, heute, jetzt=None, rng=random.Random(7))
+    assert [g["name"] for g in gruppen] == ["Gruppe A", "Gruppe B", "Gruppe C"]
+    assert sorted(uid for g in gruppen for uid in g["member_ids"]) == sorted(u.id for u in users)
+    order = [uid for uid, _ in cg.seeding(session, ch, heute)]
+    for start in range(0, 9, 3):
+        pot = order[start:start + 3]
+        gruppen_ids = {next(g["id"] for g in gruppen if uid in g["member_ids"]) for uid in pot}
+        assert len(gruppen_ids) == 3, f"pot {pot} not spread"
+    assert svc.groups(ch) == gruppen
+    assert ch.groups_drawn_at is not None
+
+
+def test_draw_partial_last_pot_sizes_differ_by_at_most_one(session):
+    heute = date(2026, 9, 12)
+    _seeded_users(session, 8, heute)
+    ch = make_team_challenge(session, group_count=3)
+    gruppen = cg.draw(session, ch, heute, jetzt=None, rng=random.Random(3))
+    sizes = sorted(len(g["member_ids"]) for g in gruppen)
+    assert sizes == [2, 3, 3]
+
+
+def test_draw_keeps_existing_names(session):
+    heute = date(2026, 9, 12)
+    _seeded_users(session, 4, heute)
+    ch = make_team_challenge(session, group_count=2)
+    svc.set_groups(ch, [{"id": 1, "name": "Die Flitzer", "member_ids": []},
+                        {"id": 2, "name": "Gruppe B", "member_ids": []}])
+    gruppen = cg.draw(session, ch, heute, jetzt=None, rng=random.Random(1))
+    assert [g["name"] for g in gruppen] == ["Die Flitzer", "Gruppe B"]
+
+
+def test_draw_is_random_inside_a_pot(session):
+    heute = date(2026, 9, 12)
+    _seeded_users(session, 6, heute)
+    ch = make_team_challenge(session, group_count=2)
+    seen = set()
+    for seed in range(10):
+        gruppen = cg.draw(session, ch, heute, jetzt=None, rng=random.Random(seed))
+        seen.add(tuple(gruppen[0]["member_ids"]))
+    assert len(seen) > 1
+
+
+def test_draw_uses_given_timestamp(session):
+    from datetime import datetime, timezone
+
+    heute = date(2026, 9, 12)
+    _seeded_users(session, 2, heute)
+    ch = make_team_challenge(session, group_count=2)
+    jetzt = datetime(2026, 9, 12, 8, 0, tzinfo=timezone.utc)
+    cg.draw(session, ch, heute, jetzt=jetzt)
+    assert ch.groups_drawn_at == jetzt
+
+
+def test_draw_needs_at_least_group_count_people(session):
+    import pytest
+
+    heute = date(2026, 9, 12)
+    make_user(session, username="anna")
+    ch = make_team_challenge(session, group_count=2)
+    with pytest.raises(cg.TooFewPeople):
+        cg.draw(session, ch, heute, jetzt=None)
+
+
+def test_draw_needs_a_positive_group_count(session):
+    import pytest
+
+    heute = date(2026, 9, 12)
+    _seeded_users(session, 2, heute)
+    ch = make_team_challenge(session, group_count=0)
+    with pytest.raises(ValueError):
+        cg.draw(session, ch, heute, jetzt=None)
