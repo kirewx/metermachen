@@ -390,7 +390,13 @@ def challenge_start_event(session: Session, ch: Challenge) -> None:
     _emit(
         session,
         type_="challenge_start",
-        payload={"challenge_id": ch.id, "title": ch.title, "prize": ch.prize},
+        payload={
+            "challenge_id": ch.id,
+            "title": ch.title,
+            "prize": ch.prize,
+            "team_mode": ch.team_mode,
+            "group_count": ch.group_count,
+        },
     )
 
 
@@ -412,7 +418,29 @@ def challenge_qualified_event(session: Session, ch: Challenge, user_id: int) -> 
     )
 
 
-def challenge_end_event(session: Session, ch: Challenge, gewinner_ids: list[int]) -> None:
+def challenge_group_qualified_event(session: Session, ch: Challenge, gruppe: dict) -> None:
+    """Group challenges: one event per (challenge, group). Idempotent, user_id None."""
+    for ev in session.exec(
+        select(FeedEvent).where(FeedEvent.type == "challenge_qualified")
+    ).all():
+        p = json.loads(ev.payload_json or "{}")
+        if p.get("challenge_id") == ch.id and p.get("group_id") == gruppe["id"]:
+            return
+    _emit(
+        session,
+        type_="challenge_qualified",
+        payload={
+            "challenge_id": ch.id, "title": ch.title,
+            "group_id": gruppe["id"], "group_name": gruppe["name"],
+            "member_ids": gruppe["member_ids"],
+        },
+    )
+
+
+def challenge_end_event(
+    session: Session, ch: Challenge, gewinner_ids: list[int],
+    gewinner_gruppen: list[str] | None = None,
+) -> None:
     _emit(
         session,
         type_="challenge_end",
@@ -426,11 +454,15 @@ def challenge_end_event(session: Session, ch: Challenge, gewinner_ids: list[int]
                 for u in session.exec(select(User)).all()
                 if u.id in gewinner_ids
             ],
+            "gewinner_gruppen": gewinner_gruppen or [],
         },
     )
 
 
-def challenge_sieger_event(session: Session, ch: Challenge, user_id: int) -> None:
+def challenge_sieger_event(
+    session: Session, ch: Challenge, user_id: int | None,
+    group_id: int | None = None, gruppe: str | None = None,
+) -> None:
     """Bei einer Korrektur wird das vorhandene Event umgeschrieben statt ein
     zweites anzulegen — sonst staenden zwei widersprechende Meldungen im Feed."""
     payload = {
@@ -438,6 +470,8 @@ def challenge_sieger_event(session: Session, ch: Challenge, user_id: int) -> Non
         "title": ch.title,
         "prize": ch.prize,
         "user_id": user_id,
+        "group_id": group_id,
+        "gruppe": gruppe,
     }
     for ev in session.exec(
         select(FeedEvent).where(FeedEvent.type == "challenge_sieger")

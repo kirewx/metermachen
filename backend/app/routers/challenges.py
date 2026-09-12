@@ -408,7 +408,9 @@ def set_sieger(
 ):
     ch = _geladene_challenge(session, challenge_id)
     try:
-        svc.setze_sieger(session, ch, data.user_id, datetime.now(timezone.utc))
+        svc.setze_sieger(
+            session, ch, datetime.now(timezone.utc), user_id=data.user_id
+        )
     except svc.NichtQualifiziert as e:
         raise HTTPException(status_code=422, detail=str(e))
     except ValueError as e:

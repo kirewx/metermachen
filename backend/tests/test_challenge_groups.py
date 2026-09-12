@@ -406,3 +406,118 @@ def test_save_groups_opt_in_adds_participant_rows(session):
         select(ChallengeParticipant).where(ChallengeParticipant.challenge_id == ch.id)
     ).all()
     assert sorted(r.user_id for r in rows) == sorted([a.id, b.id])
+
+
+# --- lifecycle, freeze, sieger ---------------------------------------------
+
+from app.models import Season  # noqa: E402
+
+
+def _season(session):
+    session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20)))
+    session.commit()
+
+
+def test_teilnehmer_of_team_challenge_are_active_group_members(session):
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    c = make_user(session, username="carla")
+    make_user(session, username="dora")  # active but not in a group
+    c.is_active = False
+    session.add(c)
+    session.commit()
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([a.id, c.id], [b.id])))
+    assert svc.teilnehmer_ids(session, ch) == sorted([a.id, b.id])
+
+
+def test_team_challenge_without_groups_does_not_start(session):
+    _season(session)
+    make_user(session, username="anna")
+    ch = make_team_challenge(
+        session, period_start=date(2026, 8, 1), period_end=date(2026, 8, 31), status="geplant",
+    )
+    svc.resolve_due(session, datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc))
+    session.refresh(ch)
+    assert ch.status == "geplant"
+    svc.set_groups(ch, groups_of([1], [2]))
+    session.add(ch)
+    session.commit()
+    svc.resolve_due(session, datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc))
+    session.refresh(ch)
+    assert ch.status == "laufend"
+
+
+def test_freeze_writes_groups_and_group_winners(session):
+    _season(session)
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    c = make_user(session, username="carla")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    ch = make_team_challenge(
+        session, target=100.0, period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+        status="laufend", groups_json=json.dumps(groups_of([a.id, b.id], [c.id])),
+    )
+    add_activity(session, a.id, lauf.id, date(2026, 8, 5), 150.0)
+    add_activity(session, b.id, lauf.id, date(2026, 8, 5), 70.0)   # A: 220/2 = 110 ✓
+    add_activity(session, c.id, lauf.id, date(2026, 8, 5), 90.0)   # B: 90 ✗
+    svc.resolve_due(session, datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc))
+    session.refresh(ch)
+    assert ch.status == "beendet"
+    ergebnis = json.loads(ch.result_json)
+    assert ergebnis["gewinner_group_ids"] == [1]
+    assert sorted(ergebnis["gewinner_ids"]) == sorted([a.id, b.id])
+    g = ergebnis["groups"]
+    assert [(x["id"], x["value"], x["rank"], x["geschafft"]) for x in g] == [(1, 110.0, 1, True), (2, 90.0, 2, False)]
+    assert "members" not in g[0]  # only the compact record is frozen
+    assert len(ergebnis["entries"]) == 3
+
+
+def _finished_team(session):
+    """Finished target group challenge: group 1 (anna, ben) qualified, group 2 (carla) not."""
+    anna = make_user(session, username="anna", is_admin=True)
+    ben = make_user(session, username="ben")
+    carla = make_user(session, username="carla")
+    ch = make_team_challenge(
+        session, period_start=date(2026, 8, 1), period_end=date(2026, 8, 31), status="beendet",
+        groups_json=json.dumps(groups_of([anna.id, ben.id], [carla.id])),
+        result_json=json.dumps({
+            "entries": [
+                {"user_id": anna.id, "value": 150.0, "rank": 1, "geschafft": True},
+                {"user_id": ben.id, "value": 70.0, "rank": 3, "geschafft": False},
+                {"user_id": carla.id, "value": 90.0, "rank": 2, "geschafft": False},
+            ],
+            "groups": [
+                {"id": 1, "name": "Gruppe A", "member_ids": [anna.id, ben.id], "sum": 220.0, "value": 110.0, "rank": 1, "geschafft": True},
+                {"id": 2, "name": "Gruppe B", "member_ids": [carla.id], "sum": 90.0, "value": 90.0, "rank": 2, "geschafft": False},
+            ],
+            "gewinner_ids": [anna.id, ben.id],
+            "gewinner_group_ids": [1],
+        }),
+    )
+    return ch, anna, ben, carla
+
+
+def test_sieger_can_be_a_group_or_a_member_of_a_winning_group(session):
+    _season(session)
+    ch, anna, ben, carla = _finished_team(session)
+    jetzt = datetime(2026, 9, 2, tzinfo=timezone.utc)
+    svc.setze_sieger(session, ch, jetzt, group_id=1)
+    assert svc.sieger_group_id(ch) == 1 and svc.sieger_id(ch) is None
+    svc.setze_sieger(session, ch, jetzt, user_id=ben.id)
+    assert svc.sieger_id(ch) == ben.id and svc.sieger_group_id(ch) is None
+    with pytest.raises(svc.NichtQualifiziert):
+        svc.setze_sieger(session, ch, jetzt, user_id=carla.id)
+    with pytest.raises(svc.NichtQualifiziert):
+        svc.setze_sieger(session, ch, jetzt, group_id=2)
+
+
+def test_sieger_group_id_rejected_on_non_team_challenge(session):
+    _season(session)
+    anna = make_user(session, username="anna")
+    ch = make_team_challenge(
+        session, team_mode=False, group_count=None, status="beendet",
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+        result_json=json.dumps({"entries": [], "gewinner_ids": [anna.id]}),
+    )
+    with pytest.raises(svc.NichtQualifiziert):
+        svc.setze_sieger(session, ch, datetime(2026, 9, 2, tzinfo=timezone.utc), group_id=1)
