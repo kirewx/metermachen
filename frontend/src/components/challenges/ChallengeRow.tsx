@@ -10,6 +10,8 @@ function winnerName(ch: Challenge): string | null {
   const entered = siegerText(ch)
   if (entered !== null) return entered
   if (ch.team_mode) {
+    // Several winning groups are listed side by side on purpose (spec §4:
+    // "else the winning group names joined") — no draw narrows them down.
     const namen = ch.groups.filter((g) => g.geschafft).map((g) => g.name)
     return namen.length > 0 ? namen.join(', ') : null
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Challenge } from '../../api/client'
-import { einheit, fortschritt, meineGruppe, wertungText } from './wertung'
+import type { Challenge, ChallengeStanding } from '../../api/client'
+import { einheit, fortschritt, gruppeVon, meineGruppe, siegerText, wertungText } from './wertung'
 
 const basis: Challenge = {
   id: 1, title: 'T', description: '', prize: null, creator_id: 1,
@@ -75,12 +75,9 @@ describe('wertungText for group challenges', () => {
       'Rangliste: meiste Aktivitäten pro Kopf aus allen Sportarten, Top 1 · 3 Gruppen',
     )
   })
-  it('keeps a streak days-in-a-row, never per head', () => {
+  it('names the group count on a streak target too', () => {
     expect(wertungText({ ...teamBase, metric: 'streak', target: 10, streak_min_mm: 6 }, [])).toBe(
       'Ziel: 10 Tage am Stück mit mindestens 6 MM aus allen Sportarten · 3 Gruppen',
-    )
-    expect(wertungText({ ...teamBase, mode: 'rangliste', top_n: 1, metric: 'streak' }, [])).toBe(
-      'Rangliste: längste Serie aus allen Sportarten, Top 1 · 3 Gruppen',
     )
   })
   it('leaves the group count out while it is unknown', () => {
@@ -96,5 +93,59 @@ describe('meineGruppe', () => {
     expect(meineGruppe({ ...teamBase, meine_gruppe_id: null })).toBeNull()
     expect(meineGruppe({ ...teamBase, meine_gruppe_id: 99 })).toBeNull()
     expect(meineGruppe(basis)).toBeNull()
+  })
+})
+
+function mitglied(user_id: number, display_name: string): ChallengeStanding {
+  return {
+    user_id, display_name, avatar: '🦊', value: 100, rank: user_id,
+    geschafft: false, nicht_mehr_schaffbar: false,
+  }
+}
+
+const teamMitMitgliedern: Challenge = {
+  ...teamBase,
+  standings: [mitglied(1, 'Rick'), mitglied(2, 'Mia')],
+  groups: [
+    { ...teamBase.groups[0], members: [mitglied(1, 'Rick')] },
+    { ...teamBase.groups[1], members: [mitglied(2, 'Mia')] },
+  ],
+}
+
+describe('gruppeVon', () => {
+  it('finds the group by its members, else null', () => {
+    expect(gruppeVon(teamMitMitgliedern, 1)?.name).toBe('Gruppe A')
+    expect(gruppeVon(teamMitMitgliedern, 2)?.name).toBe('Gruppe B')
+    expect(gruppeVon(teamMitMitgliedern, 99)).toBeNull()
+  })
+})
+
+describe('siegerText', () => {
+  it('is null while nobody is entered', () => {
+    expect(siegerText(teamMitMitgliedern)).toBeNull()
+    expect(siegerText(basis)).toBeNull()
+  })
+
+  it('names the winning group', () => {
+    expect(siegerText({ ...teamMitMitgliedern, sieger_group_id: 1 })).toBe('Gruppe A')
+  })
+
+  it('names a winning person together with their group', () => {
+    expect(siegerText({ ...teamMitMitgliedern, sieger_id: 2 })).toBe('Mia (Gruppe B)')
+  })
+
+  it('names a winner without a group plainly', () => {
+    expect(siegerText({ ...basis, standings: [mitglied(1, 'Rick')], sieger_id: 1 })).toBe('Rick')
+  })
+
+  it('falls back to the group member when the standings do not list them', () => {
+    expect(siegerText({ ...teamMitMitgliedern, standings: [], sieger_id: 2 })).toBe(
+      'Mia (Gruppe B)',
+    )
+  })
+
+  it('says unbekannt for an id nobody carries', () => {
+    expect(siegerText({ ...teamMitMitgliedern, sieger_group_id: 99 })).toBe('unbekannt')
+    expect(siegerText({ ...teamMitMitgliedern, sieger_id: 99 })).toBe('unbekannt')
   })
 })

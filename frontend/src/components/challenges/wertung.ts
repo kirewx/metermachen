@@ -19,8 +19,9 @@ function kategorienText(ch: Challenge, kategorien: KategorieName[]): string {
 /** Menschenlesbare Beschreibung der Wertung, z.B. "Ziel: 300 MM aus allen Sportarten". */
 export function wertungText(ch: Challenge, kategorien: KategorieName[]): string {
   const aus = `aus ${kategorienText(ch, kategorien)}`
-  // A streak counts days in a row, so it is never divided by the group size.
-  const proKopf = ch.team_mode && ch.metric !== 'streak' ? ' pro Kopf' : ''
+  // Group challenges allow only mm and anzahl (backend rejects streak), so
+  // per-head wording applies to every team text.
+  const proKopf = ch.team_mode ? ' pro Kopf' : ''
   const gruppen =
     ch.team_mode && typeof ch.group_count === 'number' ? ` · ${ch.group_count} Gruppen` : ''
   if (ch.mode === 'rangliste') {
@@ -44,9 +45,9 @@ export function meineGruppe(ch: Challenge): ChallengeGroup | null {
   return ch.groups.find((g) => g.id === ch.meine_gruppe_id) ?? null
 }
 
-/** The group a person belongs to, by the members list. */
-export function gruppeVon(ch: Challenge, userId: number): ChallengeGroup | undefined {
-  return ch.groups.find((g) => g.members.some((m) => m.user_id === userId))
+/** The group a person belongs to, by the members list, or null. */
+export function gruppeVon(ch: Challenge, userId: number): ChallengeGroup | null {
+  return ch.groups.find((g) => g.members.some((m) => m.user_id === userId)) ?? null
 }
 
 /** "Gruppe A", "Mia (Gruppe A)" or "Mia"; null while no winner is entered. */
@@ -55,8 +56,13 @@ export function siegerText(ch: Challenge): string | null {
     return ch.groups.find((g) => g.id === ch.sieger_group_id)?.name ?? 'unbekannt'
   }
   if (ch.sieger_id == null) return null
-  const name = ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ?? 'unbekannt'
-  const gruppe = ch.team_mode ? gruppeVon(ch, ch.sieger_id) : undefined
+  const gruppe = ch.team_mode ? gruppeVon(ch, ch.sieger_id) : null
+  // Somebody who left the challenge is gone from the standings but still
+  // listed in the frozen group snapshot.
+  const name =
+    ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ??
+    gruppe?.members.find((m) => m.user_id === ch.sieger_id)?.display_name ??
+    'unbekannt'
   return gruppe ? `${name} (${gruppe.name})` : name
 }
 

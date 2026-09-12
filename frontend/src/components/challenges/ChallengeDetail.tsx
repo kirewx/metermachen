@@ -61,9 +61,12 @@ function siegerOptionen(ch: Challenge): { value: string; label: string }[] {
   ]
 }
 
-function parseWahl(wahl: string): SiegerWahl {
+/** "g:3" / "u:7" back into a winner choice; null for the empty placeholder. */
+function parseWahl(wahl: string): SiegerWahl | null {
   const [art, id] = wahl.split(':')
-  return art === 'g' ? { group_id: Number(id) } : { user_id: Number(id) }
+  if (art === 'g') return { group_id: Number(id) }
+  if (art === 'u') return { user_id: Number(id) }
+  return null
 }
 
 export default function ChallengeDetail() {
@@ -98,6 +101,7 @@ export default function ChallengeDetail() {
   if (!ch) return <p className="p-8 text-sm text-ink-mute">Lädt…</p>
 
   const hoechster = Math.max(...ch.standings.map((s) => s.value), 1)
+  const sieger = siegerText(ch)
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <Link to="/arena/challenges" className="text-xs font-bold text-accent hover:underline">
@@ -141,9 +145,9 @@ export default function ChallengeDetail() {
 
       {ch.status === 'beendet' && ch.mode === 'ziel' && (
         <section className="rounded-2xl border border-accent bg-card p-3">
-          {siegerText(ch) !== null ? (
+          {sieger !== null ? (
             <p className="text-sm font-bold text-ink">
-              🏆 Sieger: {siegerText(ch)}
+              🏆 Sieger: {sieger}
               {ch.prize && (
                 <span className="font-normal text-ink-mute"> — {ch.prize}</span>
               )}
@@ -164,7 +168,10 @@ export default function ChallengeDetail() {
                 ))}
               </Select>
               <button
-                onClick={() => wahl && siegerSetzen.mutate(parseWahl(wahl))}
+                onClick={() => {
+                  const gewaehlt = parseWahl(wahl)
+                  if (gewaehlt) siegerSetzen.mutate(gewaehlt)
+                }}
                 disabled={!wahl || siegerSetzen.isPending}
                 className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
               >

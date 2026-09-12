@@ -173,10 +173,14 @@ describe('ChallengeDetail', () => {
     expect(labels).toEqual(['– bitte wählen –', 'Gruppe A', 'Rick (Gruppe A)', 'Mia (Gruppe A)'])
     fireEvent.change(select, { target: { value: 'g:1' } })
     fireEvent.click(screen.getByText('Sieger eintragen'))
-    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { group_id: 1 }))
+    await waitFor(() =>
+      expect(api.setChallengeSieger).toHaveBeenNthCalledWith(1, 1, { group_id: 1 }),
+    )
     fireEvent.change(select, { target: { value: 'u:2' } })
     fireEvent.click(screen.getByText('Sieger eintragen'))
-    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { user_id: 2 }))
+    await waitFor(() =>
+      expect(api.setChallengeSieger).toHaveBeenNthCalledWith(2, 1, { user_id: 2 }),
+    )
   })
 
   it('shows the group winner band', async () => {
