@@ -6,8 +6,9 @@ import random
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from sqlmodel import select
 
-from app.models import Activity, Challenge, ChallengeParticipant
+from app.models import Activity, Challenge, ChallengeParticipant, FeedEvent, Season
 from app.services import challenge_groups as cg
 from app.services import challenges as svc
 from tests.conftest import make_category, make_user
@@ -393,8 +394,6 @@ def test_save_groups_rejects_bad_lists(session):
 
 
 def test_save_groups_opt_in_adds_participant_rows(session):
-    from sqlmodel import select
-
     a = make_user(session, username="anna")
     b = make_user(session, username="ben")
     ch = make_team_challenge(session, group_count=2, join_mode="opt_in")
@@ -434,9 +433,6 @@ def test_validate_groups_rejects_non_team_challenge(session):
 
 # --- lifecycle, freeze, sieger ---------------------------------------------
 
-from app.models import Season  # noqa: E402
-
-
 def _season(session):
     session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20)))
     session.commit()
@@ -456,14 +452,15 @@ def test_teilnehmer_of_team_challenge_are_active_group_members(session):
 
 def test_team_challenge_without_groups_does_not_start(session):
     _season(session)
-    make_user(session, username="anna")
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
     ch = make_team_challenge(
         session, period_start=date(2026, 8, 1), period_end=date(2026, 8, 31), status="geplant",
     )
     svc.resolve_due(session, datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc))
     session.refresh(ch)
     assert ch.status == "geplant"
-    svc.set_groups(ch, groups_of([1], [2]))
+    svc.set_groups(ch, groups_of([a.id], [b.id]))
     session.add(ch)
     session.commit()
     svc.resolve_due(session, datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc))
@@ -494,6 +491,22 @@ def test_freeze_writes_groups_and_group_winners(session):
     assert [(x["id"], x["value"], x["rank"], x["geschafft"]) for x in g] == [(1, 110.0, 1, True), (2, 90.0, 2, False)]
     assert "members" not in g[0]  # only the compact record is frozen
     assert len(ergebnis["entries"]) == 3
+
+
+def test_freeze_of_a_non_team_challenge_writes_no_group_keys(session):
+    _season(session)
+    a = make_user(session, username="anna")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    ch = make_team_challenge(
+        session, team_mode=False, group_count=None, target=100.0,
+        period_start=date(2026, 8, 1), period_end=date(2026, 8, 31), status="laufend",
+    )
+    add_activity(session, a.id, lauf.id, date(2026, 8, 5), 150.0)
+    svc.resolve_due(session, datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc))
+    session.refresh(ch)
+    ergebnis = json.loads(ch.result_json)
+    assert "groups" not in ergebnis and "gewinner_group_ids" not in ergebnis
+    assert ergebnis["gewinner_ids"] == [a.id]
 
 
 def _finished_team(session):
@@ -533,6 +546,29 @@ def test_sieger_can_be_a_group_or_a_member_of_a_winning_group(session):
         svc.setze_sieger(session, ch, jetzt, user_id=carla.id)
     with pytest.raises(svc.NichtQualifiziert):
         svc.setze_sieger(session, ch, jetzt, group_id=2)
+
+
+def test_sieger_person_in_team_mode_carries_the_group_name_into_the_feed(session):
+    _season(session)
+    ch, anna, ben, carla = _finished_team(session)
+    svc.setze_sieger(session, ch, datetime(2026, 9, 2, tzinfo=timezone.utc), user_id=ben.id)
+    ev = session.exec(
+        select(FeedEvent).where(FeedEvent.type == "challenge_sieger")
+    ).one()
+    payload = json.loads(ev.payload_json)
+    assert payload["user_id"] == ben.id
+    assert payload["group_id"] == 1 and payload["gruppe"] == "Gruppe A"
+
+
+def test_setze_sieger_needs_exactly_one_of_user_id_and_group_id(session):
+    _season(session)
+    ch, anna, ben, carla = _finished_team(session)
+    jetzt = datetime(2026, 9, 2, tzinfo=timezone.utc)
+    # NichtQualifiziert is a ValueError, so match the message of the plain one
+    with pytest.raises(ValueError, match="Entweder"):
+        svc.setze_sieger(session, ch, jetzt)
+    with pytest.raises(ValueError, match="Entweder"):
+        svc.setze_sieger(session, ch, jetzt, user_id=ben.id, group_id=1)
 
 
 def test_sieger_group_id_rejected_on_non_team_challenge(session):

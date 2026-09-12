@@ -421,7 +421,10 @@ def challenge_qualified_event(session: Session, ch: Challenge, user_id: int) -> 
 def challenge_group_qualified_event(session: Session, ch: Challenge, gruppe: dict) -> None:
     """Group challenges: one event per (challenge, group). Idempotent, user_id None."""
     for ev in session.exec(
-        select(FeedEvent).where(FeedEvent.type == "challenge_qualified")
+        select(FeedEvent).where(
+            FeedEvent.type == "challenge_qualified",
+            FeedEvent.user_id.is_(None),  # type: ignore[union-attr]
+        )
     ).all():
         p = json.loads(ev.payload_json or "{}")
         if p.get("challenge_id") == ch.id and p.get("group_id") == gruppe["id"]:

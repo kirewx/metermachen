@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Challenge, ChallengeParticipant, User, utcnow
+from ..models import Challenge, ChallengeParticipant, utcnow
 from . import challenges as svc
 from .factors import FactorResolver
 
@@ -32,10 +32,6 @@ def default_name(index: int) -> str:
     if index < len(GROUP_LETTERS):
         return f"Gruppe {GROUP_LETTERS[index]}"
     return f"Gruppe {index + 1}"
-
-
-def _active_ids(session: Session) -> set[int]:
-    return {u.id for u in session.exec(select(User).where(User.is_active)).all()}
 
 
 def pool(session: Session, ch: Challenge) -> list[int]:
@@ -117,7 +113,7 @@ def validate_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[di
         raise InvalidGroups("Keine Gruppen-Challenge")
     if len(raw) != ch.group_count:
         raise InvalidGroups(f"Es müssen genau {ch.group_count} Gruppen sein")
-    active = _active_ids(session)
+    active = svc.active_ids(session)
     seen_ids: set[int] = set()
     seen_users: set[int] = set()
     clean = []

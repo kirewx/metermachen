@@ -196,14 +196,15 @@ def streak_noch_moeglich(
     return laufend + resttage >= ch.target
 
 
-def _active_ids(session: Session) -> set[int]:
+def active_ids(session: Session) -> set[int]:
+    """Ids of all active users — the base set every participant list starts from."""
     return {u.id for u in session.exec(select(User).where(User.is_active)).all()}
 
 
 def eligible_ids(session: Session, ch: Challenge) -> list[int]:
     """Active users who may take part: everyone for join_mode 'auto',
     the joined ones for 'opt_in'. Group membership is not considered here."""
-    aktive = _active_ids(session)
+    aktive = active_ids(session)
     if ch.join_mode == "auto":
         return sorted(aktive)
     rows = session.exec(
@@ -218,7 +219,7 @@ def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
     """Who is scored. Group challenges: active members of any group. Otherwise
     every eligible user (see eligible_ids). Inactive users drop out in every case."""
     if ch.team_mode:
-        aktive = _active_ids(session)
+        aktive = active_ids(session)
         return sorted(uid for uid in group_member_ids(ch) if uid in aktive)
     return eligible_ids(session, ch)
 
@@ -319,6 +320,7 @@ def ist_vorlaeufig(ch: Challenge, heute: date_type) -> bool:
     return ch.status == "laufend" and heute > ch.period_end
 
 
+# "size" is dropped: len(member_ids) is authoritative.
 FROZEN_GROUP_KEYS = ("id", "name", "member_ids", "sum", "value", "rank", "geschafft")
 
 
@@ -358,8 +360,8 @@ def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
     for ch in session.exec(
         select(Challenge).where(Challenge.status == "geplant").order_by(Challenge.id)
     ).all():
-        if ch.team_mode and not groups(ch):
-            continue  # a group challenge only starts once the groups are drawn
+        if ch.team_mode and not group_member_ids(ch):
+            continue  # starts only once groups are drawn and non-empty
         if heute >= ch.period_start:
             ch.status = "laufend"
             session.add(ch)
@@ -408,30 +410,40 @@ def setze_sieger(
     group_id: int | None = None,
 ) -> None:
     """Record the offline-drawn prize winner: a person, or (group challenges
-    only) a whole group. Overwritable — a typo must be correctable."""
+    only) a whole group. Overwritable — a typo must be correctable.
+
+    The group is read from the frozen snapshot, not from groups_json: a rename
+    after the freeze must not change what the feed says about the result."""
+    if (user_id is None) == (group_id is None):
+        raise ValueError("Entweder user_id oder group_id")
     if ch.mode != "ziel":
         raise ValueError("Ranglisten haben ihren Sieger bereits")
     if ch.status != "beendet":
         raise ValueError("Erst nach dem Ende der Challenge")
     ergebnis = json.loads(ch.result_json or "{}")
+    eingefrorene_gruppen = ergebnis.get("groups", [])
     gruppe: dict | None = None
     if group_id is not None:
         if not ch.team_mode:
             raise NichtQualifiziert("Diese Challenge hat keine Gruppen")
-        if group_id not in ergebnis.get("gewinner_group_ids", []):
+        gruppe = next(
+            (g for g in eingefrorene_gruppen if g["id"] == group_id), None
+        )
+        if gruppe is None or group_id not in ergebnis.get("gewinner_group_ids", []):
             raise NichtQualifiziert("Diese Gruppe hat das Ziel nicht erreicht")
-        gruppe = next(g for g in groups(ch) if g["id"] == group_id)
         ergebnis["sieger"] = {"group_id": group_id, "gesetzt_am": jetzt.isoformat()}
     else:
         if user_id not in ergebnis.get("gewinner_ids", []):
             raise NichtQualifiziert("Diese Person hat das Ziel nicht erreicht")
-        gruppe = group_of(ch, user_id) if ch.team_mode else None
+        gruppe = next(
+            (g for g in eingefrorene_gruppen if user_id in g["member_ids"]), None
+        )
         ergebnis["sieger"] = {"user_id": user_id, "gesetzt_am": jetzt.isoformat()}
     ch.result_json = json.dumps(ergebnis)
     session.add(ch)
     session.commit()
     feed.challenge_sieger_event(
-        session, ch, user_id=user_id if group_id is None else None,
+        session, ch, user_id=user_id,
         group_id=gruppe["id"] if gruppe else None,
         gruppe=gruppe["name"] if gruppe else None,
     )
