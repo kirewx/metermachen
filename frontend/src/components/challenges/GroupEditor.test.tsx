@@ -143,7 +143,9 @@ describe('GroupEditor', () => {
     await waitFor(() =>
       expect(screen.getByText(/Setzliste konnte nicht geladen werden: nope/)).toBeInTheDocument(),
     )
-    // Tom comes from ch.unassigned, so the pool is still assignable.
+    // Names come from the challenge itself: placed members stay readable...
+    expect(screen.getByTestId('editor-group-1')).toHaveTextContent('Rick')
+    // ...and Tom, from ch.unassigned, is still assignable.
     const frei = screen.getByTestId('editor-unassigned')
     expect(within(frei).getAllByTestId('person-name').map((n) => n.textContent)).toEqual(['Tom'])
     fireEvent.change(screen.getByLabelText('Tom verschieben'), { target: { value: 'g:2' } })

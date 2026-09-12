@@ -158,14 +158,15 @@ export default function GroupEditor() {
   if (seeding === undefined && !seedingError)
     return <p className="p-8 text-sm text-ink-mute">Lädt…</p>
 
-  // Seeding gone: fall back to the pool the challenge itself reports, so the
-  // groups stay editable — only the values are missing, not the people.
+  // Seeding gone: fall back to everyone the challenge itself reports, placed
+  // members included, so the groups stay editable and stay readable — only the
+  // values are missing, not the people.
   const setzliste: Person[] =
     seeding ??
-    ch.unassigned.map((u) => ({
-      user_id: u.user_id,
-      display_name: u.display_name,
-      avatar: u.avatar,
+    [...ch.groups.flatMap((g) => g.members), ...ch.unassigned].map((p) => ({
+      user_id: p.user_id,
+      display_name: p.display_name,
+      avatar: p.avatar,
       value: 0,
     }))
   const personen = new Map<number, Person>(setzliste.map((p) => [p.user_id, p]))
