@@ -150,3 +150,86 @@ def test_rows_between_uses_window_and_category_filter(session):
     add_activity(session, u.id, lauf.id, date(2026, 8, 9), 10.0)
     rows = svc.rows_between(session, u.id, ch, date(2026, 8, 2), date(2026, 8, 8))
     assert [a.date for a, _ in rows] == [date(2026, 8, 5)]
+
+
+# --- pool and seeding --------------------------------------------------------
+
+def test_pool_auto_is_all_active_users(session):
+    from app.services import challenge_groups as cg
+
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    c = make_user(session, username="carla")
+    c.is_active = False
+    session.add(c)
+    session.commit()
+    ch = make_team_challenge(session, join_mode="auto")
+    assert cg.pool(session, ch) == sorted([a.id, b.id])
+
+
+def test_pool_opt_in_is_joined_active_users(session):
+    from app.services import challenge_groups as cg
+
+    a = make_user(session, username="anna")
+    make_user(session, username="ben")
+    ch = make_team_challenge(session, join_mode="opt_in")
+    session.add(ChallengeParticipant(challenge_id=ch.id, user_id=a.id))
+    session.commit()
+    assert cg.pool(session, ch) == [a.id]
+
+
+def test_seeding_window_is_last_n_days_up_to_yesterday(session):
+    from app.services import challenge_groups as cg
+
+    u = make_user(session, username="anna")
+    lauf = make_category(session, name="Joggen", factor=2.0)
+    heute = date(2026, 9, 12)
+    ch = make_team_challenge(session, seeding_days=7)
+    add_activity(session, u.id, lauf.id, heute, 100.0)                      # today: excluded
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=1), 10.0)   # in
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=7), 10.0)   # in (7 days back)
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=8), 10.0)   # out
+    assert cg.seeding_value(session, u.id, ch, heute) == 40.0  # 2 × 10 km × factor 2
+
+
+def test_seeding_uses_category_filter_and_ignores_km_factor(session):
+    from app.services import challenge_groups as cg
+
+    u = make_user(session, username="anna")
+    u.km_factor = 5.0
+    session.add(u)
+    session.commit()
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    rad = make_category(session, name="Rad", factor=1.0)
+    heute = date(2026, 9, 12)
+    ch = make_team_challenge(session, category_ids_json=json.dumps([lauf.id]))
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=2), 10.0)
+    add_activity(session, u.id, rad.id, heute - timedelta(days=2), 50.0)
+    assert cg.seeding_value(session, u.id, ch, heute) == 10.0
+
+
+def test_seeding_anzahl_counts_activities(session):
+    from app.services import challenge_groups as cg
+
+    u = make_user(session, username="anna")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    heute = date(2026, 9, 12)
+    ch = make_team_challenge(session, metric="anzahl")
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=2), 1.0)
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=3), 1.0)
+    assert cg.seeding_value(session, u.id, ch, heute) == 2.0
+
+
+def test_seeding_sorted_desc_ties_by_user_id(session):
+    from app.services import challenge_groups as cg
+
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    c = make_user(session, username="carla")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    heute = date(2026, 9, 12)
+    ch = make_team_challenge(session)
+    add_activity(session, b.id, lauf.id, heute - timedelta(days=1), 30.0)
+    add_activity(session, a.id, lauf.id, heute - timedelta(days=1), 10.0)
+    add_activity(session, c.id, lauf.id, heute - timedelta(days=1), 10.0)
+    assert cg.seeding(session, ch, heute) == [(b.id, 30.0), (a.id, 10.0), (c.id, 10.0)]
