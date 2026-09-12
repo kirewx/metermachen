@@ -523,3 +523,69 @@ def test_challenge_events_start_qualifiziert_ende(session):
     assert json.loads(ende[0].payload_json)["gewinner_ids"] == [anna.id]
 
     assert timedelta(0) == timedelta(0)  # Import bleibt genutzt
+
+
+def test_group_challenge_feed_payloads(session):
+    import json
+    from datetime import date, datetime, timezone
+
+    from sqlmodel import select
+
+    from app.models import Activity, Challenge, FeedEvent, Season
+    from app.services import challenges as svc
+    from tests.conftest import make_category, make_user
+
+    anna = make_user(session, username="anna")
+    ben = make_user(session, username="ben")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20)))
+    session.commit()
+    ch = Challenge(
+        title="Teams", creator_id=anna.id, mode="ziel", target=100.0, metric="mm",
+        join_mode="auto", period_start=date(2026, 8, 1), period_end=date(2026, 8, 31),
+        status="geplant", team_mode=True, group_count=2,
+        groups_json=json.dumps([
+            {"id": 1, "name": "Gruppe A", "member_ids": [anna.id]},
+            {"id": 2, "name": "Gruppe B", "member_ids": [ben.id]},
+        ]),
+    )
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+
+    svc.resolve_due(session, datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc))
+    start = next(e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_start")
+    assert json.loads(start.payload_json)["group_count"] == 2
+
+    session.add(Activity(user_id=anna.id, category_id=lauf.id, date=date(2026, 8, 5), distance_km=120.0))
+    session.add(Activity(user_id=ben.id, category_id=lauf.id, date=date(2026, 8, 5), distance_km=150.0))
+    session.commit()
+    session.refresh(ch)
+    eintraege = svc.standings(session, ch, date(2026, 8, 6))
+    svc.emit_qualified(session, ch, eintraege)
+    svc.emit_qualified(session, ch, eintraege)
+    qualifiziert = [e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_qualified"]
+    assert len(qualifiziert) == 2
+    assert all(e.user_id is None for e in qualifiziert)
+    assert {json.loads(e.payload_json)["group_name"] for e in qualifiziert} == {"Gruppe A", "Gruppe B"}
+
+    svc.resolve_due(session, datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc))
+    ende = next(e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_end")
+    payload = json.loads(ende.payload_json)
+    assert sorted(payload["gewinner_gruppen"]) == ["Gruppe A", "Gruppe B"]
+    assert sorted(payload["gewinner_ids"]) == sorted([anna.id, ben.id])
+
+    session.refresh(ch)
+    svc.setze_sieger(session, ch, datetime(2026, 9, 2, tzinfo=timezone.utc), group_id=1)
+    sieger = [e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_sieger"]
+    assert len(sieger) == 1
+    assert sieger[0].user_id is None
+    p = json.loads(sieger[0].payload_json)
+    assert (p["user_id"], p["group_id"], p["gruppe"]) == (None, 1, "Gruppe A")
+
+    svc.setze_sieger(session, ch, datetime(2026, 9, 2, tzinfo=timezone.utc), user_id=anna.id)
+    sieger = [e for e in session.exec(select(FeedEvent)).all() if e.type == "challenge_sieger"]
+    assert len(sieger) == 1
+    p = json.loads(sieger[0].payload_json)
+    assert (p["user_id"], p["group_id"], p["gruppe"]) == (anna.id, 1, "Gruppe A")
+    assert sieger[0].user_id == anna.id

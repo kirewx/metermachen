@@ -30,8 +30,15 @@ export default function Challenges() {
   const nachEnde = (a: Challenge, b: Challenge) =>
     a.period_end.localeCompare(b.period_end)
   const dabei = alle.filter((c) => c.status === 'laufend' && c.bin_dabei).sort(nachEnde)
-  const offen = alle.filter((c) => c.kann_beitreten && c.status === 'laufend')
-  const geplant = alle.filter((c) => c.status === 'geplant').sort(nachEnde)
+  // Group challenges can only be joined while planned (the draw needs the pool),
+  // so they are invited early; other opt_in challenges once they run.
+  const offen = alle.filter(
+    (c) => c.kann_beitreten && (c.status === 'laufend' || c.team_mode),
+  )
+  const offenIds = new Set(offen.map((c) => c.id))
+  const geplant = alle
+    .filter((c) => c.status === 'geplant' && !offenIds.has(c.id))
+    .sort(nachEnde)
   const beendet = alle
     .filter((c) => c.status === 'beendet')
     .sort((a, b) => b.period_end.localeCompare(a.period_end))

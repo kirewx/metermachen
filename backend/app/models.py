@@ -240,6 +240,15 @@ class Challenge(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
     resolved_at: datetime | None = None
 
+    # Group challenges (spec 2026-09-12). Groups live in groups_json:
+    # [{"id": 1, "name": "Gruppe A", "member_ids": [3, 7]}]. Ids are small
+    # integers unique within the challenge, not database ids.
+    team_mode: bool = False
+    group_count: int | None = None  # required when team_mode, >= 2
+    seeding_days: int = 30  # window for the seeding list
+    groups_json: str = "[]"
+    groups_drawn_at: datetime | None = None
+
 
 class ChallengeParticipant(SQLModel, table=True):
     """Nur fuer join_mode='opt_in'. Bei 'auto' sind alle aktiven User dabei,

@@ -66,6 +66,40 @@ describe('ChallengeRow (finished)', () => {
   })
 })
 
+describe('ChallengeRow for group challenges', () => {
+  const team = challenge({
+    status: 'beendet',
+    team_mode: true,
+    sieger_id: null,
+    sieger_group_id: null,
+    gewinner_ids: [1, 2],
+    standings: [standing(1, 'Rick', 1), standing(2, 'Mia', 2), standing(3, 'Lea', 3)],
+    groups: [
+      { id: 1, name: 'Gruppe A', size: 2, sum: 220, value: 110, rank: 1, geschafft: true,
+        members: [standing(1, 'Rick', 1), standing(2, 'Mia', 2)] },
+      { id: 2, name: 'Gruppe B', size: 1, sum: 90, value: 90, rank: 2, geschafft: false,
+        members: [standing(3, 'Lea', 3)] },
+    ],
+  } as Partial<Challenge>)
+
+  it('shows the single winning group', () => {
+    renderRow(team)
+    expect(screen.getByText('🏆 Gruppe A')).toBeInTheDocument()
+  })
+  it('shows the entered group winner', () => {
+    renderRow({ ...team, sieger_group_id: 1 })
+    expect(screen.getByText('🏆 Gruppe A')).toBeInTheDocument()
+  })
+  it('shows the entered person winner with their group', () => {
+    renderRow({ ...team, sieger_id: 2 })
+    expect(screen.getByText('🏆 Mia (Gruppe A)')).toBeInTheDocument()
+  })
+  it('lists several winning groups', () => {
+    renderRow({ ...team, groups: team.groups.map((g) => ({ ...g, geschafft: true })) })
+    expect(screen.getByText('🏆 Gruppe A, Gruppe B')).toBeInTheDocument()
+  })
+})
+
 describe('ChallengeRow (planned)', () => {
   it('shows title and start date', () => {
     renderRow(challenge({ status: 'geplant', period_start: '2026-10-01', resolved_at: null }))

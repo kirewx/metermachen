@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { Challenge, ChallengeInput } from '../../api/client'
 import Button from '../ui/Button'
@@ -21,6 +22,9 @@ const LEER: ChallengeInput = {
   join_mode: 'auto',
   period_start: '',
   period_end: '',
+  team_mode: false,
+  group_count: 3,
+  seeding_days: 30,
 }
 
 export default function ChallengesAdmin() {
@@ -55,6 +59,15 @@ export default function ChallengesAdmin() {
 
   const set = <K extends keyof ChallengeInput>(k: K, v: ChallengeInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
+
+  const buildPayload = (): ChallengeInput => {
+    const payload: ChallengeInput = { ...form, prize: form.prize || null }
+    if (!payload.team_mode) {
+      delete payload.group_count
+      delete payload.seeding_days
+    }
+    return payload
+  }
 
   return (
     <Card>
@@ -93,14 +106,14 @@ export default function ChallengesAdmin() {
             onChange={(e) => set('metric', e.target.value as Challenge['metric'])}
           >
             <option value="mm">MM</option>
-            <option value="streak">Streak (Tage am Stück)</option>
+            {!form.team_mode && <option value="streak">Streak (Tage am Stück)</option>}
             <option value="anzahl">Anzahl Aktivitäten</option>
           </Select>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {form.mode === 'ziel' ? (
             <Input
-              label="Ziel"
+              label={form.team_mode ? 'Ziel pro Kopf' : 'Ziel'}
               type="number"
               value={String(form.target ?? '')}
               onChange={(e) => set('target', Number(e.target.value))}
@@ -145,6 +158,40 @@ export default function ChallengesAdmin() {
           <option value="opt_in">Beitritt nötig</option>
         </Select>
 
+        <label className="flex items-center gap-2 text-xs font-semibold text-ink">
+          <input
+            type="checkbox"
+            checked={form.team_mode ?? false}
+            onChange={(e) => {
+              const team = e.target.checked
+              setForm((f) => ({
+                ...f,
+                team_mode: team,
+                metric: team && f.metric === 'streak' ? 'mm' : f.metric,
+              }))
+            }}
+          />
+          Gruppen-Challenge
+        </label>
+        {form.team_mode && (
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              label="Anzahl Gruppen"
+              type="number"
+              min={2}
+              value={String(form.group_count ?? 3)}
+              onChange={(e) => set('group_count', Number(e.target.value))}
+            />
+            <Input
+              label="Setzliste: letzte N Tage"
+              type="number"
+              min={1}
+              value={String(form.seeding_days ?? 30)}
+              onChange={(e) => set('seeding_days', Number(e.target.value))}
+            />
+          </div>
+        )}
+
         <fieldset className="rounded-xl border border-line p-2">
           <legend className="px-1 text-[11px] text-ink-mute">
             Kategorien (keine = alle)
@@ -171,10 +218,14 @@ export default function ChallengesAdmin() {
         </fieldset>
 
         <Button
-          onClick={() =>
-            anlegen.mutate({ ...form, prize: form.prize || null })
+          onClick={() => anlegen.mutate(buildPayload())}
+          disabled={
+            anlegen.isPending ||
+            !form.title ||
+            !form.period_start ||
+            !form.period_end ||
+            (form.team_mode && (form.group_count ?? 0) < 2)
           }
-          disabled={anlegen.isPending || !form.title || !form.period_start || !form.period_end}
         >
           Challenge anlegen
         </Button>
@@ -187,6 +238,14 @@ export default function ChallengesAdmin() {
             className="flex items-center gap-2 rounded-xl border border-line p-2 text-sm"
           >
             <span className="min-w-0 flex-1 truncate text-ink">{ch.title}</span>
+            {ch.team_mode && ch.status === 'geplant' && (
+              <Link
+                to={`/arena/challenges/${ch.id}/gruppen`}
+                className="shrink-0 rounded-full border border-accent px-2 py-0.5 text-[11px] font-bold text-accent"
+              >
+                Gruppen
+              </Link>
+            )}
             <span className="shrink-0 text-[11px] text-ink-mute">{ch.status}</span>
             {ch.status !== 'beendet' && (
               <button

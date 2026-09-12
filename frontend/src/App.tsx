@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { api, isUnauthorized } from './api/client'
 import ChallengeDetail from './components/challenges/ChallengeDetail'
+import GroupEditor from './components/challenges/GroupEditor'
 import Layout from './components/ui/Layout'
 import { arenaEntryPath } from './components/ui/tabs'
 import Admin from './pages/Admin'
@@ -98,6 +99,7 @@ export default function App() {
           <Route index element={<Navigate to={arenaEntryPath(aktiveAddons)} replace />} />
           <Route path="challenges" element={<Challenges />} />
           <Route path="challenges/:id" element={<ChallengeDetail />} />
+          <Route path="challenges/:id/gruppen" element={<GroupEditor />} />
           {sidebetsAktiv && <Route path="wetten" element={<Wetten />} />}
         </Route>
         <Route path="/profil/:userId" element={<Profil />} />

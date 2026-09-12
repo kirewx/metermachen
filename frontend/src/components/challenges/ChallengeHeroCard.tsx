@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Challenge } from '../../api/client'
-import { einheit, fortschritt } from './wertung'
+import { einheit, fortschritt, meineGruppe } from './wertung'
 
 function restTage(bis: string): number {
   const ende = new Date(`${bis}T23:59:59`)
@@ -9,7 +9,8 @@ function restTage(bis: string): number {
 
 export default function ChallengeHeroCard({ ch }: { ch: Challenge }) {
   const meins = ch.mein_stand
-  const wert = meins?.value ?? 0
+  const gruppe = meineGruppe(ch)
+  const wert = gruppe ? gruppe.value : (meins?.value ?? 0)
   const pct = Math.round(fortschritt(ch, wert) * 100)
   return (
     <Link
@@ -26,6 +27,7 @@ export default function ChallengeHeroCard({ ch }: { ch: Challenge }) {
           <span className="text-sm font-semibold text-ink-mute">
             {' '}
             / {ch.target} {einheit(ch.metric)}
+            {gruppe && ' pro Kopf'}
           </span>
         )}
       </p>
@@ -34,10 +36,16 @@ export default function ChallengeHeroCard({ ch }: { ch: Challenge }) {
           <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
         </div>
       )}
-      {meins && (
+      {gruppe ? (
         <p className="mt-1 text-[11px] text-ink-mute">
-          Platz {meins.rank} von {ch.standings.length}
+          {gruppe.name} · Platz {gruppe.rank} von {ch.groups.length}
         </p>
+      ) : (
+        meins && (
+          <p className="mt-1 text-[11px] text-ink-mute">
+            Platz {meins.rank} von {ch.standings.length}
+          </p>
+        )
       )}
       {ch.prize && (
         <p className="mt-2 inline-block rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-ink">

@@ -7,6 +7,11 @@ Erst beim Einfrieren wird das Ergebnis in result_json festgeschrieben.
 
 Alle Metriken rechnen ohne User.km_factor: das Admin-Handicap gilt nur im
 Saison-Ranking, eine 300-MM-Huerde soll fuer alle dieselbe Huerde sein.
+
+Group state (Spec 2026-09-12) lives in Challenge.groups_json. The pure group
+helpers and group_standings live in this module rather than a separate one so
+that services/challenge_groups.py (seeding/draw, added next) can import from
+here without a circular import.
 """
 
 import json
@@ -34,18 +39,62 @@ def category_ids(ch: Challenge) -> list[int]:
     return json.loads(ch.category_ids_json or "[]")
 
 
-def _rows(
-    session: Session, user_id: int, ch: Challenge, bis: date_type | None = None
+def groups(ch: Challenge) -> list[dict]:
+    """[{"id": 1, "name": "Gruppe A", "member_ids": [3, 7]}] — empty until drawn.
+    Returns a fresh copy parsed from JSON; write changes back with set_groups."""
+    return json.loads(ch.groups_json or "[]")
+
+
+def set_groups(ch: Challenge, gruppen: list[dict]) -> None:
+    """Only changes the in-memory model; the caller persists (session.add + commit)."""
+    ch.groups_json = json.dumps(gruppen)
+
+
+def group_member_ids(ch: Challenge) -> list[int]:
+    """All member ids across all groups, deduped while preserving order. A person
+    belongs to at most one group (validate_groups enforces it later); the dedupe
+    here is a safety net for the standings path."""
+    return list(dict.fromkeys(uid for g in groups(ch) for uid in g["member_ids"]))
+
+
+def remove_group_member(ch: Challenge, user_id: int) -> None:
+    """Used when a person leaves a planned group challenge. No-op if absent.
+    Only changes the in-memory model; the caller persists (session.add + commit)."""
+    gruppen = groups(ch)
+    for g in gruppen:
+        g["member_ids"] = [uid for uid in g["member_ids"] if uid != user_id]
+    set_groups(ch, gruppen)
+
+
+def group_of(ch: Challenge, user_id: int) -> dict | None:
+    """The group containing user_id, or None. Returns a fresh copy parsed from
+    JSON; write changes back with set_groups."""
+    return next((g for g in groups(ch) if user_id in g["member_ids"]), None)
+
+
+def category_map(session: Session) -> dict[int, Category]:
+    return {c.id: c for c in session.exec(select(Category)).all()}
+
+
+def rows_between(
+    session: Session,
+    user_id: int,
+    ch: Challenge,
+    von: date_type,
+    bis: date_type,
+    cats: dict[int, Category] | None = None,
 ) -> list[tuple[Activity, Category]]:
-    """Aktivitaeten des Users im Challenge-Zeitraum, Kategorie-gefiltert."""
+    """Activities of the user between von and bis (inclusive), category-filtered
+    with the challenge's category list. Pass cats to reuse one category map
+    across a loop over many users."""
     erlaubt = set(category_ids(ch))
-    ende = ch.period_end if bis is None else min(ch.period_end, bis)
-    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    if cats is None:
+        cats = category_map(session)
     acts = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
-            Activity.date >= ch.period_start,
-            Activity.date <= ende,
+            Activity.date >= von,
+            Activity.date <= bis,
         )
     ).all()
     return [
@@ -53,6 +102,14 @@ def _rows(
         for a in acts
         if a.category_id in cats and (not erlaubt or a.category_id in erlaubt)
     ]
+
+
+def _rows(
+    session: Session, user_id: int, ch: Challenge, bis: date_type | None = None
+) -> list[tuple[Activity, Category]]:
+    """Challenge window; bis is clamped to period_end."""
+    ende = ch.period_end if bis is None else min(ch.period_end, bis)
+    return rows_between(session, user_id, ch, ch.period_start, ende)
 
 
 def metric_mm(session: Session, user_id: int, ch: Challenge) -> float:
@@ -150,12 +207,15 @@ def streak_noch_moeglich(
     return laufend + resttage >= ch.target
 
 
-def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
-    """Bei 'auto' alle aktiven User, bei 'opt_in' die Beigetretenen.
-    Inaktive User fallen in beiden Faellen raus."""
-    aktive = {
-        u.id for u in session.exec(select(User).where(User.is_active)).all()
-    }
+def active_ids(session: Session) -> set[int]:
+    """Ids of all active users — the base set every participant list starts from."""
+    return {u.id for u in session.exec(select(User).where(User.is_active)).all()}
+
+
+def eligible_ids(session: Session, ch: Challenge) -> list[int]:
+    """Active users who may take part: everyone for join_mode 'auto',
+    the joined ones for 'opt_in'. Group membership is not considered here."""
+    aktive = active_ids(session)
     if ch.join_mode == "auto":
         return sorted(aktive)
     rows = session.exec(
@@ -164,6 +224,29 @@ def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
         )
     ).all()
     return sorted(r.user_id for r in rows if r.user_id in aktive)
+
+
+def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
+    """Who is scored. Group challenges: active members of any group. Otherwise
+    every eligible user (see eligible_ids). Inactive users drop out in every case."""
+    if ch.team_mode:
+        aktive = active_ids(session)
+        return sorted(uid for uid in group_member_ids(ch) if uid in aktive)
+    return eligible_ids(session, ch)
+
+
+def _rank(items: list[dict]) -> None:
+    """Shared rank on equal value, following rank skipped (1, 2, 2, 4). In place,
+    items must already be sorted by value descending."""
+    letzter_wert = None
+    letzter_rang = 0
+    for i, e in enumerate(items, start=1):
+        if letzter_wert is not None and e["value"] == letzter_wert:
+            e["rank"] = letzter_rang
+        else:
+            e["rank"] = i
+            letzter_rang = i
+            letzter_wert = e["value"]
 
 
 def standings(
@@ -183,16 +266,7 @@ def standings(
         for uid in teilnehmer_ids(session, ch)
     ]
     eintraege.sort(key=lambda e: (-e["value"], e["user_id"]))
-
-    letzter_wert = None
-    letzter_rang = 0
-    for i, e in enumerate(eintraege, start=1):
-        if letzter_wert is not None and e["value"] == letzter_wert:
-            e["rank"] = letzter_rang
-        else:
-            e["rank"] = i
-            letzter_rang = i
-            letzter_wert = e["value"]
+    _rank(eintraege)
 
     for e in eintraege:
         if ch.mode == "ziel":
@@ -204,6 +278,44 @@ def standings(
         else:
             e["geschafft"] = e["rank"] <= ch.top_n
     return eintraege
+
+
+def group_standings(ch: Challenge, eintraege: list[dict]) -> list[dict]:
+    """Aggregate per-person entries (output of standings()) into groups.
+    Pure: members missing from eintraege (inactive) drop out of sum and
+    divisor. Value is per head; target is per head. An empty group (no scored
+    member) is never geschafft."""
+    werte = {e["user_id"]: e["value"] for e in eintraege}
+    result = []
+    for g in groups(ch):
+        members = [
+            {"user_id": uid, "value": werte[uid]} for uid in g["member_ids"] if uid in werte
+        ]
+        members.sort(key=lambda m: (-m["value"], m["user_id"]))
+        total = round(sum(m["value"] for m in members), 2)
+        result.append(
+            {
+                "id": g["id"],
+                "name": g["name"],
+                "member_ids": [m["user_id"] for m in members],
+                "size": len(members),
+                "sum": total,
+                "value": round(total / len(members), 2) if members else 0.0,
+                "rank": 0,
+                "geschafft": False,
+                "members": members,
+            }
+        )
+    result.sort(key=lambda g: (-g["value"], g["id"]))
+    _rank(result)
+    for g in result:
+        if ch.mode == "ziel":
+            g["geschafft"] = (
+                g["size"] > 0 and ch.target is not None and g["value"] >= ch.target
+            )
+        else:
+            g["geschafft"] = g["size"] > 0 and g["rank"] <= ch.top_n
+    return result
 
 
 def freeze_at(ch: Challenge) -> datetime:
@@ -219,23 +331,35 @@ def ist_vorlaeufig(ch: Challenge, heute: date_type) -> bool:
     return ch.status == "laufend" and heute > ch.period_end
 
 
+# "size" is dropped: len(member_ids) is authoritative.
+FROZEN_GROUP_KEYS = ("id", "name", "member_ids", "sum", "value", "rank", "geschafft")
+
+
 def _einfrieren(session: Session, ch: Challenge, jetzt: datetime, heute: date_type) -> None:
     eintraege = standings(session, ch, heute)
-    gewinner = [e["user_id"] for e in eintraege if e["geschafft"]]
-    ch.result_json = json.dumps(
-        {
-            "entries": [
-                {k: e[k] for k in ("user_id", "value", "rank", "geschafft")}
-                for e in eintraege
-            ],
-            "gewinner_ids": gewinner,
-        }
-    )
+    ergebnis: dict = {
+        "entries": [
+            {k: e[k] for k in ("user_id", "value", "rank", "geschafft")}
+            for e in eintraege
+        ],
+    }
+    gewinner_gruppen_namen: list[str] = []
+    if ch.team_mode:
+        gruppen = group_standings(ch, eintraege)
+        sieger_gruppen = [g for g in gruppen if g["geschafft"]]
+        gewinner = [uid for g in sieger_gruppen for uid in g["member_ids"]]
+        gewinner_gruppen_namen = [g["name"] for g in sieger_gruppen]
+        ergebnis["groups"] = [{k: g[k] for k in FROZEN_GROUP_KEYS} for g in gruppen]
+        ergebnis["gewinner_group_ids"] = [g["id"] for g in sieger_gruppen]
+    else:
+        gewinner = [e["user_id"] for e in eintraege if e["geschafft"]]
+    ergebnis["gewinner_ids"] = gewinner
+    ch.result_json = json.dumps(ergebnis)
     ch.status = "beendet"
     ch.resolved_at = jetzt
     session.add(ch)
     session.commit()
-    feed.challenge_end_event(session, ch, gewinner)
+    feed.challenge_end_event(session, ch, gewinner, gewinner_gruppen_namen)
 
 
 def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
@@ -247,6 +371,8 @@ def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
     for ch in session.exec(
         select(Challenge).where(Challenge.status == "geplant").order_by(Challenge.id)
     ).all():
+        if ch.team_mode and not group_member_ids(ch):
+            continue  # starts only once groups are drawn and non-empty
         if heute >= ch.period_start:
             ch.status = "laufend"
             session.add(ch)
@@ -260,9 +386,23 @@ def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
             _einfrieren(session, ch, jetzt, heute)
 
 
-def emit_qualified(session: Session, ch: Challenge, eintraege: list[dict]) -> None:
-    """Feed-Event fuer alle, die das Ziel geknackt haben. Idempotent."""
+def emit_qualified(
+    session: Session,
+    ch: Challenge,
+    eintraege: list[dict],
+    gruppen: list[dict] | None = None,
+) -> None:
+    """Feed event for everyone (or every group) that hit the target. Idempotent.
+    Pass gruppen (the output of group_standings) to reuse an aggregation the
+    caller has already done."""
     if ch.mode != "ziel" or ch.status != "laufend":
+        return
+    if ch.team_mode:
+        if gruppen is None:
+            gruppen = group_standings(ch, eintraege)
+        for g in gruppen:
+            if g["geschafft"]:
+                feed.challenge_group_qualified_event(session, ch, g)
         return
     for e in eintraege:
         if e["geschafft"]:
@@ -277,21 +417,53 @@ def sieger_id(ch: Challenge) -> int | None:
     return json.loads(ch.result_json or "{}").get("sieger", {}).get("user_id")
 
 
+def sieger_group_id(ch: Challenge) -> int | None:
+    return json.loads(ch.result_json or "{}").get("sieger", {}).get("group_id")
+
+
 def setze_sieger(
-    session: Session, ch: Challenge, user_id: int, jetzt: datetime
+    session: Session,
+    ch: Challenge,
+    jetzt: datetime,
+    *,
+    user_id: int | None = None,
+    group_id: int | None = None,
 ) -> None:
-    """Traegt den offline ermittelten Preistraeger ein. Ueberschreibbar —
-    anders als eine Auslosung ist das ein festgehaltener Fakt, und ein
-    Vertipper muss sich korrigieren lassen."""
+    """Record the offline-drawn prize winner: a person, or (group challenges
+    only) a whole group. Overwritable — a typo must be correctable.
+
+    The group is read from the frozen snapshot, not from groups_json: a rename
+    after the freeze must not change what the feed says about the result."""
+    if (user_id is None) == (group_id is None):
+        raise ValueError("Entweder user_id oder group_id")
     if ch.mode != "ziel":
         raise ValueError("Ranglisten haben ihren Sieger bereits")
     if ch.status != "beendet":
         raise ValueError("Erst nach dem Ende der Challenge")
     ergebnis = json.loads(ch.result_json or "{}")
-    if user_id not in ergebnis.get("gewinner_ids", []):
-        raise NichtQualifiziert("Diese Person hat das Ziel nicht erreicht")
-    ergebnis["sieger"] = {"user_id": user_id, "gesetzt_am": jetzt.isoformat()}
+    eingefrorene_gruppen = ergebnis.get("groups", [])
+    gruppe: dict | None = None
+    if group_id is not None:
+        if not ch.team_mode:
+            raise NichtQualifiziert("Diese Challenge hat keine Gruppen")
+        gruppe = next(
+            (g for g in eingefrorene_gruppen if g["id"] == group_id), None
+        )
+        if gruppe is None or group_id not in ergebnis.get("gewinner_group_ids", []):
+            raise NichtQualifiziert("Diese Gruppe hat das Ziel nicht erreicht")
+        ergebnis["sieger"] = {"group_id": group_id, "gesetzt_am": jetzt.isoformat()}
+    else:
+        if user_id not in ergebnis.get("gewinner_ids", []):
+            raise NichtQualifiziert("Diese Person hat das Ziel nicht erreicht")
+        gruppe = next(
+            (g for g in eingefrorene_gruppen if user_id in g["member_ids"]), None
+        )
+        ergebnis["sieger"] = {"user_id": user_id, "gesetzt_am": jetzt.isoformat()}
     ch.result_json = json.dumps(ergebnis)
     session.add(ch)
     session.commit()
-    feed.challenge_sieger_event(session, ch, user_id)
+    feed.challenge_sieger_event(
+        session, ch, user_id=user_id,
+        group_id=gruppe["id"] if gruppe else None,
+        gruppe=gruppe["name"] if gruppe else None,
+    )

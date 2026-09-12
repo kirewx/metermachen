@@ -1,4 +1,4 @@
-import type { Challenge } from '../../api/client'
+import type { Challenge, ChallengeGroup } from '../../api/client'
 
 export type KategorieName = { id: number; name: string }
 
@@ -19,6 +19,11 @@ function kategorienText(ch: Challenge, kategorien: KategorieName[]): string {
 /** Menschenlesbare Beschreibung der Wertung, z.B. "Ziel: 300 MM aus allen Sportarten". */
 export function wertungText(ch: Challenge, kategorien: KategorieName[]): string {
   const aus = `aus ${kategorienText(ch, kategorien)}`
+  // Group challenges allow only mm and anzahl (backend rejects streak), so
+  // per-head wording applies to every team text.
+  const proKopf = ch.team_mode ? ' pro Kopf' : ''
+  const gruppen =
+    ch.team_mode && typeof ch.group_count === 'number' ? ` · ${ch.group_count} Gruppen` : ''
   if (ch.mode === 'rangliste') {
     const was =
       ch.metric === 'streak'
@@ -26,12 +31,39 @@ export function wertungText(ch: Challenge, kategorien: KategorieName[]): string 
         : ch.metric === 'anzahl'
           ? 'meiste Aktivitäten'
           : 'meiste MM'
-    return `Rangliste: ${was} ${aus}, Top ${ch.top_n}`
+    return `Rangliste: ${was}${proKopf} ${aus}, Top ${ch.top_n}${gruppen}`
   }
   if (ch.metric === 'streak') {
-    return `Ziel: ${ch.target} Tage am Stück mit mindestens ${ch.streak_min_mm} MM ${aus}`
+    return `Ziel: ${ch.target} Tage am Stück mit mindestens ${ch.streak_min_mm} MM ${aus}${gruppen}`
   }
-  return `Ziel: ${ch.target} ${einheit(ch.metric)} ${aus}`
+  return `Ziel: ${ch.target} ${einheit(ch.metric)}${proKopf} ${aus}${gruppen}`
+}
+
+/** The group the current user is in, or null (not a group challenge, not drawn, not placed). */
+export function meineGruppe(ch: Challenge): ChallengeGroup | null {
+  if (!ch.team_mode || ch.meine_gruppe_id === null || ch.meine_gruppe_id === undefined) return null
+  return ch.groups.find((g) => g.id === ch.meine_gruppe_id) ?? null
+}
+
+/** The group a person belongs to, by the members list, or null. */
+export function gruppeVon(ch: Challenge, userId: number): ChallengeGroup | null {
+  return ch.groups.find((g) => g.members.some((m) => m.user_id === userId)) ?? null
+}
+
+/** "Gruppe A", "Mia (Gruppe A)" or "Mia"; null while no winner is entered. */
+export function siegerText(ch: Challenge): string | null {
+  if (ch.sieger_group_id != null) {
+    return ch.groups.find((g) => g.id === ch.sieger_group_id)?.name ?? 'unbekannt'
+  }
+  if (ch.sieger_id == null) return null
+  const gruppe = ch.team_mode ? gruppeVon(ch, ch.sieger_id) : null
+  // Somebody who left the challenge is gone from the standings but still
+  // listed in the frozen group snapshot.
+  const name =
+    ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ??
+    gruppe?.members.find((m) => m.user_id === ch.sieger_id)?.display_name ??
+    'unbekannt'
+  return gruppe ? `${name} (${gruppe.name})` : name
 }
 
 /** 0..1 für den Fortschrittsbalken. Ranglisten haben keine Schwelle → 0. */

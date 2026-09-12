@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ChallengeDetail from './ChallengeDetail'
 
 const { detail } = vi.hoisted(() => ({
@@ -31,18 +31,28 @@ vi.mock('../../api/client', () => ({
   },
 }))
 
+function renderDetail() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/challenges/1']}>
+        <Routes>
+          <Route path="/challenges/:id" element={<ChallengeDetail />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
 describe('ChallengeDetail', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue(detail as never)
+  })
+
   it('zeigt Wertung, Vorlaeufig-Hinweis und alle drei Zustaende', async () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/challenges/1']}>
-          <Routes>
-            <Route path="/challenges/:id" element={<ChallengeDetail />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderDetail()
     await waitFor(() =>
       expect(screen.getByText('August bis Stuttgartlauf')).toBeInTheDocument(),
     )
@@ -67,22 +77,13 @@ describe('ChallengeDetail', () => {
         { user_id: 2, display_name: 'Mia', avatar: '🐻', value: 320, rank: 2, geschafft: true, nicht_mehr_schaffbar: false },
       ],
     })
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/challenges/1']}>
-          <Routes>
-            <Route path="/challenges/:id" element={<ChallengeDetail />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderDetail()
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Sieger eintragen' })).toBeInTheDocument(),
     )
-    fireEvent.change(screen.getByLabelText('Sieger'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Sieger'), { target: { value: 'u:2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sieger eintragen' }))
-    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, 2))
+    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { user_id: 2 }))
   })
 
   it('zeigt den eingetragenen Sieger allen', async () => {
@@ -95,17 +96,169 @@ describe('ChallengeDetail', () => {
       sieger_id: 1,
       kann_sieger_setzen: false,
     })
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/challenges/1']}>
-          <Routes>
-            <Route path="/challenges/:id" element={<ChallengeDetail />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderDetail()
     await waitFor(() => expect(screen.getByText(/Sieger: Rick/)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'Sieger eintragen' })).toBeNull()
+  })
+
+  const teamDetail = {
+    ...detail,
+    title: 'Team-Oktober',
+    target: 100,
+    team_mode: true,
+    group_count: 2,
+    seeding_days: 30,
+    groups_drawn: true,
+    meine_gruppe_id: 2,
+    sieger_group_id: null,
+    kann_gruppen_bearbeiten: false,
+    unassigned: [],
+    standings: [
+      { user_id: 1, display_name: 'Rick', avatar: '🦊', value: 150, rank: 1, geschafft: true, nicht_mehr_schaffbar: false },
+      { user_id: 2, display_name: 'Mia', avatar: '🐻', value: 70, rank: 3, geschafft: false, nicht_mehr_schaffbar: false },
+      { user_id: 3, display_name: 'Lea', avatar: '🦉', value: 90, rank: 2, geschafft: false, nicht_mehr_schaffbar: false },
+    ],
+    mein_stand: { user_id: 3, display_name: 'Lea', avatar: '🦉', value: 90, rank: 2, geschafft: false, nicht_mehr_schaffbar: false },
+    groups: [
+      { id: 1, name: 'Gruppe A', size: 2, sum: 220, value: 110, rank: 1, geschafft: true,
+        members: [
+          { user_id: 1, display_name: 'Rick', avatar: '🦊', value: 150, rank: 1, geschafft: true, nicht_mehr_schaffbar: false },
+          { user_id: 2, display_name: 'Mia', avatar: '🐻', value: 70, rank: 3, geschafft: false, nicht_mehr_schaffbar: false },
+        ] },
+      { id: 2, name: 'Gruppe B', size: 1, sum: 90, value: 90, rank: 2, geschafft: false,
+        members: [
+          { user_id: 3, display_name: 'Lea', avatar: '🦉', value: 90, rank: 2, geschafft: false, nicht_mehr_schaffbar: false },
+        ] },
+    ],
+    gewinner_ids: [1, 2],
+  }
+
+  it('shows group cards with the own group first', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue(teamDetail as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Team-Oktober')).toBeInTheDocument())
+    const karten = screen.getAllByTestId('group-card')
+    expect(karten[0]).toHaveTextContent('Gruppe B')
+    expect(karten[0]).toHaveTextContent('noch 10 pro Kopf')
+    expect(karten[1]).toHaveTextContent('Gruppe A')
+    expect(karten[1]).toHaveTextContent('geschafft')
+    expect(karten[1]).toHaveTextContent('220 MM · 110 pro Kopf')
+    expect(karten[1]).toHaveTextContent('Rick')
+    expect(screen.queryByRole('link', { name: /Gruppen bearbeiten/ })).toBeNull()
+  })
+
+  it('tells that groups are not drawn yet and links the admin to the editor', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'geplant', groups_drawn: false, groups: [], meine_gruppe_id: null,
+      kann_gruppen_bearbeiten: true,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Gruppen werden noch ausgelost')).toBeInTheDocument())
+    expect(screen.getByRole('link', { name: /Gruppen bearbeiten/ })).toHaveAttribute(
+      'href', '/arena/challenges/1/gruppen',
+    )
+  })
+
+  it('lets the admin pick a winning group or one of its members', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'beendet', vorlaeufig: false, sieger_id: null, kann_sieger_setzen: true,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByLabelText('Sieger')).toBeInTheDocument())
+    const select = screen.getByLabelText('Sieger') as HTMLSelectElement
+    const labels = Array.from(select.options).map((o) => o.textContent)
+    expect(labels).toEqual(['– bitte wählen –', 'Gruppe A', 'Rick (Gruppe A)', 'Mia (Gruppe A)'])
+    fireEvent.change(select, { target: { value: 'g:1' } })
+    fireEvent.click(screen.getByText('Sieger eintragen'))
+    await waitFor(() =>
+      expect(api.setChallengeSieger).toHaveBeenNthCalledWith(1, 1, { group_id: 1 }),
+    )
+    fireEvent.change(select, { target: { value: 'u:2' } })
+    fireEvent.click(screen.getByText('Sieger eintragen'))
+    await waitFor(() =>
+      expect(api.setChallengeSieger).toHaveBeenNthCalledWith(2, 1, { user_id: 2 }),
+    )
+  })
+
+  it('shows the group winner band', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'beendet', vorlaeufig: false, sieger_group_id: 1, sieger_id: null,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/Sieger: Gruppe A/)).toBeInTheDocument())
+  })
+
+  it('shows a person winner with their group', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'beendet', vorlaeufig: false, sieger_group_id: null, sieger_id: 2,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/Sieger: Mia \(Gruppe A\)/)).toBeInTheDocument())
+  })
+
+  it('ranks the groups in ranking mode', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({ ...teamDetail, mode: 'rangliste' } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Platz 1')).toBeInTheDocument())
+    expect(screen.getByText('Platz 2')).toBeInTheDocument()
+  })
+
+  it('puts a trophy on the winning group and on the winning person', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, sieger_group_id: 1, sieger_id: 1,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getAllByTestId('group-card')).toHaveLength(2))
+    const karten = screen.getAllByTestId('group-card')
+    expect(karten[1]).toHaveTextContent('Gruppe A')
+    expect(within(karten[1]).getByText('🏆')).toBeInTheDocument()
+    expect(within(karten[1]).getByText('Rick 🏆')).toBeInTheDocument()
+  })
+
+  it('marks the own group card', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue(teamDetail as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getAllByTestId('group-card')).toHaveLength(2))
+    const meine = screen.getAllByTestId('group-card')[0]
+    expect(meine).toHaveTextContent('Gruppe B')
+    expect(meine.className).toContain('border-accent')
+    expect(within(meine).getByText('du')).toBeInTheDocument()
+  })
+
+  it('names people who are not placed yet while the challenge is planned', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'geplant',
+      unassigned: [{ user_id: 9, display_name: 'Tom', avatar: '🐸', value: 0, rank: 0, geschafft: false, nicht_mehr_schaffbar: false }],
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/Noch nicht zugeordnet: Tom/)).toBeInTheDocument())
+  })
+
+  it('says when the groups are drawn but still empty', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, groups: [], meine_gruppe_id: null,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Noch keine Gruppen.')).toBeInTheDocument())
+  })
+
+  it('hides Austreten once a group challenge is running', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, join_mode: 'opt_in', status: 'laufend',
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('Team-Oktober')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Austreten' })).toBeNull()
   })
 })
