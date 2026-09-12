@@ -6,6 +6,7 @@ import random
 from datetime import date, timedelta
 
 from app.models import Activity, Challenge, ChallengeParticipant
+from app.services import challenge_groups as cg
 from app.services import challenges as svc
 from tests.conftest import make_category, make_user
 
@@ -155,8 +156,6 @@ def test_rows_between_uses_window_and_category_filter(session):
 # --- pool and seeding --------------------------------------------------------
 
 def test_pool_auto_is_all_active_users(session):
-    from app.services import challenge_groups as cg
-
     a = make_user(session, username="anna")
     b = make_user(session, username="ben")
     c = make_user(session, username="carla")
@@ -168,8 +167,6 @@ def test_pool_auto_is_all_active_users(session):
 
 
 def test_pool_opt_in_is_joined_active_users(session):
-    from app.services import challenge_groups as cg
-
     a = make_user(session, username="anna")
     make_user(session, username="ben")
     ch = make_team_challenge(session, join_mode="opt_in")
@@ -179,8 +176,6 @@ def test_pool_opt_in_is_joined_active_users(session):
 
 
 def test_seeding_window_is_last_n_days_up_to_yesterday(session):
-    from app.services import challenge_groups as cg
-
     u = make_user(session, username="anna")
     lauf = make_category(session, name="Joggen", factor=2.0)
     heute = date(2026, 9, 12)
@@ -193,8 +188,6 @@ def test_seeding_window_is_last_n_days_up_to_yesterday(session):
 
 
 def test_seeding_uses_category_filter_and_ignores_km_factor(session):
-    from app.services import challenge_groups as cg
-
     u = make_user(session, username="anna")
     u.km_factor = 5.0
     session.add(u)
@@ -209,8 +202,6 @@ def test_seeding_uses_category_filter_and_ignores_km_factor(session):
 
 
 def test_seeding_anzahl_counts_activities(session):
-    from app.services import challenge_groups as cg
-
     u = make_user(session, username="anna")
     lauf = make_category(session, name="Joggen", factor=1.0)
     heute = date(2026, 9, 12)
@@ -221,8 +212,6 @@ def test_seeding_anzahl_counts_activities(session):
 
 
 def test_seeding_sorted_desc_ties_by_user_id(session):
-    from app.services import challenge_groups as cg
-
     a = make_user(session, username="anna")
     b = make_user(session, username="ben")
     c = make_user(session, username="carla")
@@ -233,3 +222,28 @@ def test_seeding_sorted_desc_ties_by_user_id(session):
     add_activity(session, a.id, lauf.id, heute - timedelta(days=1), 10.0)
     add_activity(session, c.id, lauf.id, heute - timedelta(days=1), 10.0)
     assert cg.seeding(session, ch, heute) == [(b.id, 30.0), (a.id, 10.0), (c.id, 10.0)]
+
+
+def test_default_name_wraps_after_the_alphabet():
+    assert cg.default_name(25) == "Gruppe Z"
+    assert cg.default_name(26) == "Gruppe 27"
+
+
+def test_seeding_includes_pool_users_without_activities(session):
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    heute = date(2026, 9, 12)
+    ch = make_team_challenge(session)
+    add_activity(session, a.id, lauf.id, heute - timedelta(days=1), 10.0)
+    assert cg.seeding(session, ch, heute) == [(a.id, 10.0), (b.id, 0.0)]
+
+
+def test_seeding_days_one_counts_only_yesterday(session):
+    u = make_user(session, username="anna")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    heute = date(2026, 9, 12)
+    ch = make_team_challenge(session, seeding_days=1)
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=1), 10.0)
+    add_activity(session, u.id, lauf.id, heute - timedelta(days=2), 10.0)
+    assert cg.seeding_value(session, u.id, ch, heute) == 10.0

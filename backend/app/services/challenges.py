@@ -196,9 +196,9 @@ def streak_noch_moeglich(
     return laufend + resttage >= ch.target
 
 
-def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
-    """Bei 'auto' alle aktiven User, bei 'opt_in' die Beigetretenen.
-    Inaktive User fallen in beiden Faellen raus."""
+def eligible_ids(session: Session, ch: Challenge) -> list[int]:
+    """Active users who may take part: everyone for join_mode 'auto',
+    the joined ones for 'opt_in'. Group membership is not considered here."""
     aktive = {
         u.id for u in session.exec(select(User).where(User.is_active)).all()
     }
@@ -210,6 +210,12 @@ def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
         )
     ).all()
     return sorted(r.user_id for r in rows if r.user_id in aktive)
+
+
+def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
+    """Bei 'auto' alle aktiven User, bei 'opt_in' die Beigetretenen.
+    Inaktive User fallen in beiden Faellen raus."""
+    return eligible_ids(session, ch)
 
 
 def _rank(items: list[dict]) -> None:

@@ -6,14 +6,12 @@ per-person standings so that freezing and the feed can use it without a
 circular import; this module builds on top of that.
 """
 
-# random/datetime/timezone: used by draw() (next task)
-import random
 from datetime import date as date_type
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Challenge, ChallengeParticipant, User
+from ..models import Challenge, User
 from . import challenges as svc
 from .factors import FactorResolver
 
@@ -39,21 +37,9 @@ def _active_ids(session: Session) -> set[int]:
     return {u.id for u in session.exec(select(User).where(User.is_active)).all()}
 
 
-def _joined_ids(session: Session, ch: Challenge) -> set[int]:
-    if ch.id is None:
-        return set()
-    rows = session.exec(
-        select(ChallengeParticipant).where(ChallengeParticipant.challenge_id == ch.id)
-    ).all()
-    return {r.user_id for r in rows}
-
-
 def pool(session: Session, ch: Challenge) -> list[int]:
     """Who can be drawn: auto = every active user, opt_in = joined and active."""
-    aktive = _active_ids(session)
-    if ch.join_mode == "auto":
-        return sorted(aktive)
-    return sorted(uid for uid in _joined_ids(session, ch) if uid in aktive)
+    return svc.eligible_ids(session, ch)
 
 
 def seeding_value(session: Session, user_id: int, ch: Challenge, heute: date_type) -> float:
@@ -64,8 +50,10 @@ def seeding_value(session: Session, user_id: int, ch: Challenge, heute: date_typ
     rows = svc.rows_between(session, user_id, ch, von, bis)
     if ch.metric == "anzahl":
         return float(len(rows))
-    resolver = FactorResolver.load(session)
-    return round(sum(resolver.mm(a) for a, _ in rows), 2)
+    if ch.metric == "mm":
+        resolver = FactorResolver.load(session)
+        return round(sum(resolver.mm(a) for a, _ in rows), 2)
+    raise ValueError(f"Unbekannte Metrik: {ch.metric}")
 
 
 def seeding(
@@ -73,6 +61,6 @@ def seeding(
 ) -> list[tuple[int, float]]:
     """(user_id, value) sorted by value desc, ties by user_id. Defaults to the pool."""
     ids = pool(session, ch) if user_ids is None else user_ids
-    werte = [(uid, seeding_value(session, uid, ch, heute)) for uid in ids]
-    werte.sort(key=lambda t: (-t[1], t[0]))
-    return werte
+    values = [(uid, seeding_value(session, uid, ch, heute)) for uid in ids]
+    values.sort(key=lambda t: (-t[1], t[0]))
+    return values
