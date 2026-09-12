@@ -3,7 +3,9 @@
 import copy
 import json
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+import pytest
 
 from app.models import Activity, Challenge, ChallengeParticipant
 from app.services import challenge_groups as cg
@@ -307,19 +309,16 @@ def test_draw_is_random_inside_a_pot(session):
 
 
 def test_draw_uses_given_timestamp(session):
-    from datetime import datetime, timezone
-
     heute = date(2026, 9, 12)
     _seeded_users(session, 2, heute)
     ch = make_team_challenge(session, group_count=2)
     jetzt = datetime(2026, 9, 12, 8, 0, tzinfo=timezone.utc)
-    cg.draw(session, ch, heute, jetzt=jetzt)
+    gruppen = cg.draw(session, ch, heute, jetzt=jetzt)
     assert ch.groups_drawn_at == jetzt
+    assert sorted(len(g["member_ids"]) for g in gruppen) == [1, 1]
 
 
 def test_draw_needs_at_least_group_count_people(session):
-    import pytest
-
     heute = date(2026, 9, 12)
     make_user(session, username="anna")
     ch = make_team_challenge(session, group_count=2)
@@ -327,11 +326,27 @@ def test_draw_needs_at_least_group_count_people(session):
         cg.draw(session, ch, heute, jetzt=None)
 
 
-def test_draw_needs_a_positive_group_count(session):
-    import pytest
-
+def test_draw_needs_at_least_two_groups(session):
     heute = date(2026, 9, 12)
     _seeded_users(session, 2, heute)
-    ch = make_team_challenge(session, group_count=0)
-    with pytest.raises(ValueError):
-        cg.draw(session, ch, heute, jetzt=None)
+    for group_count in (0, 1):
+        ch = make_team_challenge(session, group_count=group_count)
+        with pytest.raises(cg.InvalidGroups):
+            cg.draw(session, ch, heute, jetzt=None)
+
+
+def test_redraw_drops_members_who_left_the_pool(session):
+    heute = date(2026, 9, 12)
+    users = _seeded_users(session, 4, heute)
+    ch = make_team_challenge(session, group_count=2)
+    cg.draw(session, ch, heute, jetzt=None, rng=random.Random(1))
+    renamed = svc.groups(ch)
+    renamed[0]["name"] = "Rakete"
+    svc.set_groups(ch, renamed)
+    left = users[0]
+    left.is_active = False
+    session.add(left)
+    session.commit()
+    gruppen = cg.draw(session, ch, heute, jetzt=None, rng=random.Random(2))
+    assert left.id not in svc.group_member_ids(ch)
+    assert [g["name"] for g in gruppen] == ["Rakete", "Gruppe B"]

@@ -8,11 +8,11 @@ circular import; this module builds on top of that.
 
 import random
 from datetime import date as date_type
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Challenge, User
+from ..models import Challenge, User, utcnow
 from . import challenges as svc
 from .factors import FactorResolver
 
@@ -72,18 +72,20 @@ def draw(
     session: Session,
     ch: Challenge,
     heute: date_type,
-    jetzt: datetime | None,
+    jetzt: datetime | None = None,
     rng: random.Random | None = None,
 ) -> list[dict]:
     """Seeded random draw. Pots of group_count by seeding rank; inside a pot
     the assignment to groups is random; the partial last pot goes to random
     distinct groups, so sizes differ by at most one. Existing names are kept
-    by group id. Writes groups_json / groups_drawn_at on ch but does NOT
+    by group id. Members of a previous draw are discarded; only the current
+    pool is assigned. Writes groups_json / groups_drawn_at on ch but does NOT
     commit — the caller decides (create wants to validate before commit)."""
-    rng = rng or random.Random()
+    if rng is None:
+        rng = random.Random()
     n = ch.group_count or 0
-    if n < 1:
-        raise ValueError("Gruppen-Challenge ohne Gruppenanzahl")
+    if n < 2:
+        raise InvalidGroups("Mindestens 2 Gruppen")
     order = [uid for uid, _ in seeding(session, ch, heute)]
     if len(order) < n:
         raise TooFewPeople("Weniger Personen als Gruppen")
@@ -94,10 +96,9 @@ def draw(
     ]
     for start in range(0, len(order), n):
         pot = order[start:start + n]
-        rng.shuffle(pot)
-        targets = list(range(n)) if len(pot) == n else rng.sample(range(n), len(pot))
+        targets = rng.sample(range(n), len(pot))
         for uid, gi in zip(pot, targets):
             result[gi]["member_ids"].append(uid)
     svc.set_groups(ch, result)
-    ch.groups_drawn_at = jetzt or datetime.now(timezone.utc)
+    ch.groups_drawn_at = jetzt or utcnow()
     return result
