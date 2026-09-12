@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from ..models import Challenge, User, utcnow
+from ..models import Challenge, ChallengeParticipant, User, utcnow
 from . import challenges as svc
 from .factors import FactorResolver
 
@@ -35,7 +35,6 @@ def default_name(index: int) -> str:
 
 
 def _active_ids(session: Session) -> set[int]:
-    # Used by validate_groups() (next task).
     return {u.id for u in session.exec(select(User).where(User.is_active)).all()}
 
 
@@ -102,3 +101,57 @@ def draw(
     svc.set_groups(ch, result)
     ch.groups_drawn_at = jetzt or utcnow()
     return result
+
+
+def _joined_ids(session: Session, ch: Challenge) -> set[int]:
+    rows = session.exec(
+        select(ChallengeParticipant).where(ChallengeParticipant.challenge_id == ch.id)
+    ).all()
+    return {r.user_id for r in rows}
+
+
+def validate_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[dict]:
+    """Normalise and check an edited group list. Returns the clean list or
+    raises InvalidGroups with a German message for the admin."""
+    if len(raw) != ch.group_count:
+        raise InvalidGroups(f"Es müssen genau {ch.group_count} Gruppen sein")
+    active = _active_ids(session)
+    seen_ids: set[int] = set()
+    seen_users: set[int] = set()
+    clean = []
+    for g in raw:
+        gid = int(g["id"])
+        name = str(g.get("name", "")).strip()
+        if gid in seen_ids:
+            raise InvalidGroups("Doppelte Gruppen-ID")
+        seen_ids.add(gid)
+        if not name:
+            raise InvalidGroups("Jede Gruppe braucht einen Namen")
+        members = [int(uid) for uid in g.get("member_ids", [])]
+        if not members:
+            raise InvalidGroups(f"{name} ist leer")
+        for uid in members:
+            if uid in seen_users:
+                raise InvalidGroups("Eine Person steht in zwei Gruppen")
+            if uid not in active:
+                raise InvalidGroups("Unbekannte oder inaktive Person")
+            seen_users.add(uid)
+        clean.append({"id": gid, "name": name, "member_ids": members})
+    return clean
+
+
+def save_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[dict]:
+    """Validate, store, and in opt_in mode make every placed person a
+    participant (placing someone counts as joining). Commits."""
+    clean = validate_groups(session, ch, raw)
+    svc.set_groups(ch, clean)
+    if ch.join_mode == "opt_in":
+        joined = _joined_ids(session, ch)
+        for g in clean:
+            for uid in g["member_ids"]:
+                if uid not in joined:
+                    session.add(ChallengeParticipant(challenge_id=ch.id, user_id=uid))
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    return clean

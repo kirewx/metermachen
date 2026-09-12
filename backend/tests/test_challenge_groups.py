@@ -350,3 +350,59 @@ def test_redraw_drops_members_who_left_the_pool(session):
     gruppen = cg.draw(session, ch, heute, jetzt=None, rng=random.Random(2))
     assert left.id not in svc.group_member_ids(ch)
     assert [g["name"] for g in gruppen] == ["Rakete", "Gruppe B"]
+
+
+# --- validate_groups / save_groups -------------------------------------------
+
+def test_save_groups_accepts_clean_list_and_trims_names(session):
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    ch = make_team_challenge(session, group_count=2)
+    out = cg.save_groups(session, ch, [
+        {"id": 1, "name": "  Flitzer ", "member_ids": [a.id]},
+        {"id": 2, "name": "Gruppe B", "member_ids": [b.id]},
+    ])
+    assert out[0]["name"] == "Flitzer"
+    session.refresh(ch)
+    assert svc.group_member_ids(ch) == [a.id, b.id]
+
+
+def test_save_groups_rejects_bad_lists(session):
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    c = make_user(session, username="carla")
+    c.is_active = False
+    session.add(c)
+    session.commit()
+    ch = make_team_challenge(session, group_count=2)
+    ok = {"id": 2, "name": "B", "member_ids": [b.id]}
+    cases = [
+        ([{"id": 1, "name": "A", "member_ids": [a.id]}], "genau 2 Gruppen"),
+        ([{"id": 1, "name": "A", "member_ids": [a.id, b.id]}, ok], "zwei Gruppen"),
+        ([{"id": 1, "name": "A", "member_ids": [c.id]}, ok], "inaktive"),
+        ([{"id": 1, "name": "A", "member_ids": [999]}, ok], "inaktive"),
+        ([{"id": 1, "name": "  ", "member_ids": [a.id]}, ok], "Namen"),
+        ([{"id": 1, "name": "A", "member_ids": []}, ok], "leer"),
+        ([{"id": 2, "name": "A", "member_ids": [a.id]}, ok], "Gruppen-ID"),
+    ]
+    for gruppen, text in cases:
+        with pytest.raises(cg.InvalidGroups, match=text):
+            cg.save_groups(session, ch, gruppen)
+
+
+def test_save_groups_opt_in_adds_participant_rows(session):
+    from sqlmodel import select
+
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    ch = make_team_challenge(session, group_count=2, join_mode="opt_in")
+    session.add(ChallengeParticipant(challenge_id=ch.id, user_id=a.id))
+    session.commit()
+    cg.save_groups(session, ch, [
+        {"id": 1, "name": "A", "member_ids": [a.id]},
+        {"id": 2, "name": "B", "member_ids": [b.id]},
+    ])
+    rows = session.exec(
+        select(ChallengeParticipant).where(ChallengeParticipant.challenge_id == ch.id)
+    ).all()
+    assert sorted(r.user_id for r in rows) == sorted([a.id, b.id])
