@@ -7,6 +7,11 @@ Erst beim Einfrieren wird das Ergebnis in result_json festgeschrieben.
 
 Alle Metriken rechnen ohne User.km_factor: das Admin-Handicap gilt nur im
 Saison-Ranking, eine 300-MM-Huerde soll fuer alle dieselbe Huerde sein.
+
+Group state (Spec 2026-09-12) lives in Challenge.groups_json. The pure group
+helpers and group_standings live in this module rather than a separate one so
+that services/challenge_groups.py (seeding/draw, added next) can import from
+here without a circular import.
 """
 
 import json
@@ -35,20 +40,26 @@ def category_ids(ch: Challenge) -> list[int]:
 
 
 def groups(ch: Challenge) -> list[dict]:
-    """[{"id": 1, "name": "Gruppe A", "member_ids": [3, 7]}] — empty until drawn."""
+    """[{"id": 1, "name": "Gruppe A", "member_ids": [3, 7]}] — empty until drawn.
+    Returns a fresh copy parsed from JSON; write changes back with set_groups."""
     return json.loads(ch.groups_json or "[]")
 
 
 def set_groups(ch: Challenge, gruppen: list[dict]) -> None:
+    """Only changes the in-memory model; the caller persists (session.add + commit)."""
     ch.groups_json = json.dumps(gruppen)
 
 
 def group_member_ids(ch: Challenge) -> list[int]:
-    return [uid for g in groups(ch) for uid in g["member_ids"]]
+    """All member ids across all groups, deduped while preserving order. A person
+    belongs to at most one group (validate_groups enforces it later); the dedupe
+    here is a safety net for the standings path."""
+    return list(dict.fromkeys(uid for g in groups(ch) for uid in g["member_ids"]))
 
 
 def remove_group_member(ch: Challenge, user_id: int) -> None:
-    """Used when a person leaves a planned group challenge. No-op if absent."""
+    """Used when a person leaves a planned group challenge. No-op if absent.
+    Only changes the in-memory model; the caller persists (session.add + commit)."""
     gruppen = groups(ch)
     for g in gruppen:
         g["member_ids"] = [uid for uid in g["member_ids"] if uid != user_id]
@@ -56,6 +67,8 @@ def remove_group_member(ch: Challenge, user_id: int) -> None:
 
 
 def group_of(ch: Challenge, user_id: int) -> dict | None:
+    """The group containing user_id, or None. Returns a fresh copy parsed from
+    JSON; write changes back with set_groups."""
     return next((g for g in groups(ch) if user_id in g["member_ids"]), None)
 
 
@@ -83,7 +96,7 @@ def rows_between(
 def _rows(
     session: Session, user_id: int, ch: Challenge, bis: date_type | None = None
 ) -> list[tuple[Activity, Category]]:
-    """Aktivitaeten des Users im Challenge-Zeitraum, Kategorie-gefiltert."""
+    """Challenge window; bis is clamped to period_end."""
     ende = ch.period_end if bis is None else min(ch.period_end, bis)
     return rows_between(session, user_id, ch, ch.period_start, ende)
 
@@ -247,7 +260,8 @@ def standings(
 def group_standings(ch: Challenge, eintraege: list[dict]) -> list[dict]:
     """Aggregate per-person entries (output of standings()) into groups.
     Pure: members missing from eintraege (inactive) drop out of sum and
-    divisor. Value is per head; target is per head."""
+    divisor. Value is per head; target is per head. An empty group (no scored
+    member) is never geschafft."""
     werte = {e["user_id"]: e["value"] for e in eintraege}
     result = []
     for g in groups(ch):
@@ -273,9 +287,11 @@ def group_standings(ch: Challenge, eintraege: list[dict]) -> list[dict]:
     _rank(result)
     for g in result:
         if ch.mode == "ziel":
-            g["geschafft"] = ch.target is not None and g["value"] >= ch.target
+            g["geschafft"] = (
+                g["size"] > 0 and ch.target is not None and g["value"] >= ch.target
+            )
         else:
-            g["geschafft"] = g["rank"] <= ch.top_n
+            g["geschafft"] = g["size"] > 0 and g["rank"] <= ch.top_n
     return result
 
 

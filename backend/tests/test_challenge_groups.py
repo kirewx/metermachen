@@ -1,5 +1,6 @@
 """Group challenges (spec 2026-09-12): helpers, seeding, draw, editing."""
 
+import copy
 import json
 import random
 from datetime import date, timedelta
@@ -48,6 +49,19 @@ def test_group_helpers_read_and_remove(session):
     assert svc.group_member_ids(ch) == [1, 3]
 
 
+def test_group_of_returns_group_or_none(session):
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([1, 2], [3])))
+    assert svc.group_of(ch, 3) == {"id": 2, "name": "Gruppe B", "member_ids": [3]}
+    assert svc.group_of(ch, 99) is None
+
+
+def test_group_member_ids_dedupes_a_user_in_two_groups(session):
+    # Not a state validate_groups should ever allow, but group_member_ids is a
+    # safety net for the standings path.
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([1, 2], [2, 3])))
+    assert svc.group_member_ids(ch) == [1, 2, 3]
+
+
 # --- group_standings (pure) -------------------------------------------------
 
 def entry(uid, value):
@@ -86,6 +100,41 @@ def test_group_standings_ignores_members_missing_from_entries(session):
     b = next(g for g in out if g["id"] == 2)
     assert (a["sum"], a["value"], a["size"], a["member_ids"]) == (80.0, 80.0, 1, [1])
     assert (b["sum"], b["value"], b["size"], b["member_ids"]) == (0.0, 0.0, 0, [])
+
+
+def test_group_standings_rounds_sum_and_value(session):
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([1, 2, 3])))
+    e = [entry(1, 33.33), entry(2, 33.33), entry(3, 33.34)]
+    out = svc.group_standings(ch, e)
+    assert (out[0]["sum"], out[0]["value"]) == (100.0, 33.33)
+
+
+def test_group_standings_ziel_without_target_never_geschafft(session):
+    ch = make_team_challenge(
+        session, mode="ziel", target=None, groups_json=json.dumps(groups_of([1], [2]))
+    )
+    e = [entry(1, 500.0), entry(2, 10.0)]
+    out = svc.group_standings(ch, e)
+    assert all(g["geschafft"] is False for g in out)
+
+
+def test_group_standings_empty_group_not_geschafft_in_rangliste(session):
+    ch = make_team_challenge(
+        session, mode="rangliste", top_n=1, groups_json=json.dumps(groups_of([1], [2]))
+    )
+    out = svc.group_standings(ch, [entry(1, 0.0)])  # user 2 missing -> group B is empty
+    a = next(g for g in out if g["id"] == 1)
+    b = next(g for g in out if g["id"] == 2)
+    assert a["rank"] == 1 and a["geschafft"] is True
+    assert b["rank"] == 1 and b["size"] == 0 and b["geschafft"] is False
+
+
+def test_group_standings_does_not_mutate_input(session):
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([1, 2])))
+    e = [entry(1, 10.0), entry(2, 20.0)]
+    before = copy.deepcopy(e)
+    svc.group_standings(ch, e)
+    assert e == before
 
 
 # --- rows_between -----------------------------------------------------------
