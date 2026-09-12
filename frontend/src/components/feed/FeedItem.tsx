@@ -10,6 +10,12 @@ function undListe(namen: string[]): string {
   return `${namen.slice(0, -1).join(', ')} und ${namen[namen.length - 1]}`
 }
 
+/** Winner label for challenge_sieger: "Mia (Gruppe A)", "Mia" or "Gruppe A". */
+function siegerName(ev: FeedEvent): string {
+  if (!ev.display_name) return ev.payload.gruppe ?? ''
+  return ev.payload.gruppe ? `${ev.display_name} (${ev.payload.gruppe})` : ev.display_name
+}
+
 const TYP_FARBE: Record<string, string> = {
   rank_change: '#c084fc',
   achievement: '#fbbf24',
@@ -29,6 +35,9 @@ function borderColor(ev: FeedEvent): string {
 
 export default function FeedItem({ ev }: { ev: FeedEvent }) {
   const [infoOffen, setInfoOffen] = useState(false)
+  const gewinner = ev.payload.gewinner_gruppen?.length
+    ? ev.payload.gewinner_gruppen
+    : (ev.payload.gewinner_namen ?? [])
   return (
     <div
       className="rounded-xl border border-line bg-card p-3"
@@ -146,14 +155,7 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
         <div className="flex items-baseline gap-2 text-sm">
           <span>🏆</span>
           <span className="text-ink">
-            <b>
-              {ev.display_name
-                ? ev.payload.gruppe
-                  ? `${ev.display_name} (${ev.payload.gruppe})`
-                  : ev.display_name
-                : ev.payload.gruppe}
-            </b>{' '}
-            gewinnt <b>{ev.payload.title}</b>
+            <b>{siegerName(ev)}</b> gewinnt <b>{ev.payload.title}</b>
             {ev.payload.prize && (
               <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
             )}
@@ -165,15 +167,12 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
           <span>🏆</span>
           <span className="text-ink">
             <b>{ev.payload.title}</b> ist vorbei —{' '}
-            {(ev.payload.gewinner_gruppen?.length ?? 0) > 0 ? (
+            {gewinner.length > 0 ? (
               <>
-                <b>{undListe(ev.payload.gewinner_gruppen ?? [])}</b>
-                {ev.payload.prize ? ` gewinnt: ${ev.payload.prize}` : ' vorn'}
-              </>
-            ) : ev.payload.gewinner_namen && ev.payload.gewinner_namen.length > 0 ? (
-              <>
-                <b>{undListe(ev.payload.gewinner_namen)}</b>
-                {ev.payload.prize ? ` gewinnt: ${ev.payload.prize}` : ' vorn'}
+                <b>{undListe(gewinner)}</b>
+                {ev.payload.prize
+                  ? ` ${gewinner.length > 1 ? 'gewinnen' : 'gewinnt'}: ${ev.payload.prize}`
+                  : ' vorn'}
               </>
             ) : (
               'niemand hat es geschafft'
