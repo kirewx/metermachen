@@ -2,46 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
-import type { Challenge, ChallengeStanding, SiegerWahl } from '../../api/client'
+import type { Challenge, SiegerWahl } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import Select from '../ui/Select'
 import GroupCard from './GroupCard'
+import WertungsChip from './WertungsChip'
 import { einheit, fortschritt, siegerText, wertungText } from './wertung'
-
-function Chip({ ch, s }: { ch: Challenge; s: ChallengeStanding }) {
-  // Das Theme hat keine Erfolgsfarbe (nur accent/danger/line) — "geschafft"
-  // wird deshalb ueber die gefuellte Akzentflaeche markiert, nicht ueber Gruen.
-  if (ch.mode === 'rangliste')
-    return (
-      <span
-        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-          s.geschafft
-            ? 'bg-accent text-accent-ink'
-            : 'border border-line text-ink-mute'
-        }`}
-      >
-        Platz {s.rank}
-      </span>
-    )
-  if (s.geschafft)
-    return (
-      <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-ink">
-        geschafft
-      </span>
-    )
-  if (s.nicht_mehr_schaffbar)
-    return (
-      <span className="shrink-0 rounded-full border border-danger px-2 py-0.5 text-[10px] font-bold text-danger">
-        nicht mehr
-      </span>
-    )
-  const rest = Math.max((ch.target ?? 0) - s.value, 0)
-  return (
-    <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[10px] font-bold text-ink-mute">
-      noch {Math.round(rest * 100) / 100}
-    </span>
-  )
-}
 
 function GroupSection({ ch }: { ch: Challenge }) {
   const editorLink = ch.kann_gruppen_bearbeiten && (
@@ -72,6 +38,9 @@ function GroupSection({ ch }: { ch: Challenge }) {
       {sortiert.map((g) => (
         <GroupCard key={g.id} ch={ch} g={g} mine={g.id === meine} hoechster={hoechster} />
       ))}
+      {ch.groups.length === 0 && (
+        <p className="p-6 text-center text-sm text-ink-mute">Noch keine Gruppen.</p>
+      )}
     </section>
   )
 }
@@ -229,7 +198,13 @@ export default function ChallengeDetail() {
                   {s.display_name}
                   {s.user_id === ch.sieger_id && ' 🏆'}
                 </span>
-                <Chip ch={ch} s={s} />
+                <WertungsChip
+                  ch={ch}
+                  rank={s.rank}
+                  geschafft={s.geschafft}
+                  value={s.value}
+                  nichtMehr={s.nicht_mehr_schaffbar}
+                />
                 <span className="shrink-0 text-xs font-extrabold text-ink">
                   {s.value} {einheit(ch.metric)}
                 </span>

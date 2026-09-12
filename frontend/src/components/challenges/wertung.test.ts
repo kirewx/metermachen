@@ -48,7 +48,7 @@ describe('wertung', () => {
   })
 })
 
-const teamBase = {
+const teamBase: Challenge = {
   ...basis,
   team_mode: true,
   group_count: 3,
@@ -62,7 +62,7 @@ const teamBase = {
   meine_gruppe_id: 2,
   sieger_group_id: null,
   kann_gruppen_bearbeiten: false,
-} as unknown as Challenge
+}
 
 describe('wertungText for group challenges', () => {
   it('names the per-head target and the group count', () => {
@@ -75,12 +75,26 @@ describe('wertungText for group challenges', () => {
       'Rangliste: meiste Aktivitäten pro Kopf aus allen Sportarten, Top 1 · 3 Gruppen',
     )
   })
+  it('keeps a streak days-in-a-row, never per head', () => {
+    expect(wertungText({ ...teamBase, metric: 'streak', target: 10, streak_min_mm: 6 }, [])).toBe(
+      'Ziel: 10 Tage am Stück mit mindestens 6 MM aus allen Sportarten · 3 Gruppen',
+    )
+    expect(wertungText({ ...teamBase, mode: 'rangliste', top_n: 1, metric: 'streak' }, [])).toBe(
+      'Rangliste: längste Serie aus allen Sportarten, Top 1 · 3 Gruppen',
+    )
+  })
+  it('leaves the group count out while it is unknown', () => {
+    expect(wertungText({ ...teamBase, group_count: null }, [])).toBe(
+      'Ziel: 300 MM pro Kopf aus allen Sportarten',
+    )
+  })
 })
 
 describe('meineGruppe', () => {
   it('returns the own group or null', () => {
     expect(meineGruppe(teamBase)?.name).toBe('Gruppe B')
     expect(meineGruppe({ ...teamBase, meine_gruppe_id: null })).toBeNull()
+    expect(meineGruppe({ ...teamBase, meine_gruppe_id: 99 })).toBeNull()
     expect(meineGruppe(basis)).toBeNull()
   })
 })

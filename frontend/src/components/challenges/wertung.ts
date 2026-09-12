@@ -19,8 +19,10 @@ function kategorienText(ch: Challenge, kategorien: KategorieName[]): string {
 /** Menschenlesbare Beschreibung der Wertung, z.B. "Ziel: 300 MM aus allen Sportarten". */
 export function wertungText(ch: Challenge, kategorien: KategorieName[]): string {
   const aus = `aus ${kategorienText(ch, kategorien)}`
-  const proKopf = ch.team_mode ? ' pro Kopf' : ''
-  const gruppen = ch.team_mode ? ` · ${ch.group_count} Gruppen` : ''
+  // A streak counts days in a row, so it is never divided by the group size.
+  const proKopf = ch.team_mode && ch.metric !== 'streak' ? ' pro Kopf' : ''
+  const gruppen =
+    ch.team_mode && typeof ch.group_count === 'number' ? ` · ${ch.group_count} Gruppen` : ''
   if (ch.mode === 'rangliste') {
     const was =
       ch.metric === 'streak'
@@ -31,7 +33,7 @@ export function wertungText(ch: Challenge, kategorien: KategorieName[]): string 
     return `Rangliste: ${was}${proKopf} ${aus}, Top ${ch.top_n}${gruppen}`
   }
   if (ch.metric === 'streak') {
-    return `Ziel: ${ch.target} Tage am Stück mit mindestens ${ch.streak_min_mm} MM ${aus}`
+    return `Ziel: ${ch.target} Tage am Stück mit mindestens ${ch.streak_min_mm} MM ${aus}${gruppen}`
   }
   return `Ziel: ${ch.target} ${einheit(ch.metric)}${proKopf} ${aus}${gruppen}`
 }
