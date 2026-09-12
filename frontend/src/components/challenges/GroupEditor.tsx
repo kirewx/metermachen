@@ -44,7 +44,7 @@ function MoveSelect({
       }}
       className="rounded-lg border border-line bg-surface px-1.5 py-1 text-[11px] text-ink"
     >
-      <option value="">{current === null ? '→ Gruppe…' : '…'}</option>
+      <option value="">{current === null ? '→ Gruppe…' : 'Verschieben nach…'}</option>
       {groups
         .filter((g) => g.id !== current)
         .map((g) => (
@@ -73,7 +73,7 @@ function PersonRow({
         {person.display_name}
       </span>
       <span className="shrink-0 text-[10px] text-ink-mute">
-        {person.value} {einheit(ch.metric)}
+        {Math.round(person.value * 10) / 10} {einheit(ch.metric)}
       </span>
       <MoveSelect person={person} current={current} groups={groups} onMove={onMove} />
     </li>
@@ -102,6 +102,9 @@ export default function GroupEditor() {
   const serverGroups = ch ? toInputs(ch) : []
   const groups = edited ?? serverGroups
   const dirty = !sameGroups(groups, serverGroups)
+  // Derived, not stored: saving or undoing the edits answers the question by
+  // itself, so a stale "yes" can never redraw over something worth keeping.
+  const fragen = confirmRedraw && dirty
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] })
@@ -130,7 +133,15 @@ export default function GroupEditor() {
     onError: (e: Error) => toast(e.message),
   })
 
-  if (error) return <p className="text-sm text-danger">{error.message}</p>
+  if (error)
+    return (
+      <div className="mx-auto max-w-xl space-y-3">
+        <p className="text-sm text-danger">{error.message}</p>
+        <Link to="/arena/challenges" className="text-xs font-bold text-accent hover:underline">
+          ← Arena
+        </Link>
+      </div>
+    )
   if (!ch) return <p className="p-8 text-sm text-ink-mute">Lädt…</p>
   if (!ch.kann_gruppen_bearbeiten)
     return (
@@ -147,7 +158,16 @@ export default function GroupEditor() {
   if (seeding === undefined && !seedingError)
     return <p className="p-8 text-sm text-ink-mute">Lädt…</p>
 
-  const setzliste = seeding ?? []
+  // Seeding gone: fall back to the pool the challenge itself reports, so the
+  // groups stay editable — only the values are missing, not the people.
+  const setzliste: Person[] =
+    seeding ??
+    ch.unassigned.map((u) => ({
+      user_id: u.user_id,
+      display_name: u.display_name,
+      avatar: u.avatar,
+      value: 0,
+    }))
   const personen = new Map<number, Person>(setzliste.map((p) => [p.user_id, p]))
   // People the seeding list does not cover (no longer active, for instance).
   const personOf = (userId: number): Person =>
@@ -164,10 +184,16 @@ export default function GroupEditor() {
     .sort((a, b) => Number(poolIds.has(b.user_id)) - Number(poolIds.has(a.user_id)) || b.value - a.value)
   const sizes = groups.map((g) => g.member_ids.length)
   const ungleich = sizes.length > 0 && Math.max(...sizes) - Math.min(...sizes) > 1
+  // The backend rejects an empty group, so do not even offer to send one.
+  const leereGruppe = sizes.some((s) => s === 0)
 
+  const bearbeiten = (f: (gs: ChallengeGroupInput[]) => ChallengeGroupInput[]) => {
+    setConfirmRedraw(false)
+    setEdited((cur) => f(cur ?? serverGroups))
+  }
   const move = (userId: number, target: number | null) =>
-    setEdited((cur) =>
-      (cur ?? serverGroups).map((g) => ({
+    bearbeiten((gs) =>
+      gs.map((g) => ({
         ...g,
         member_ids: [
           ...g.member_ids.filter((uid) => uid !== userId),
@@ -176,11 +202,9 @@ export default function GroupEditor() {
       })),
     )
   const rename = (gid: number, name: string) =>
-    setEdited((cur) =>
-      (cur ?? serverGroups).map((g) => (g.id === gid ? { ...g, name } : g)),
-    )
+    bearbeiten((gs) => gs.map((g) => (g.id === gid ? { ...g, name } : g)))
   const redraw = () => {
-    if (dirty && !confirmRedraw) {
+    if (dirty && !fragen) {
       setConfirmRedraw(true)
       return
     }
@@ -200,12 +224,20 @@ export default function GroupEditor() {
           </span>
         )}
         <Button variant="ghost" onClick={redraw} disabled={auslosen.isPending}>
-          {confirmRedraw ? 'Wirklich neu auslosen?' : 'Neu auslosen'}
+          {fragen ? 'Wirklich neu auslosen?' : 'Neu auslosen'}
         </Button>
-        <Button onClick={() => speichern.mutate()} disabled={!dirty || speichern.isPending}>
+        <Button
+          onClick={() => speichern.mutate()}
+          disabled={!dirty || leereGruppe || speichern.isPending}
+        >
           Speichern
         </Button>
       </header>
+      {seedingError && (
+        <p className="rounded-xl border border-danger px-3 py-1.5 text-[11px] text-danger">
+          Setzliste konnte nicht geladen werden: {seedingError.message}
+        </p>
+      )}
       {ungleich && (
         <p className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-1.5 text-[11px] text-ink">
           Die Gruppen sind ungleich groß (Unterschied mehr als eine Person).
@@ -216,7 +248,12 @@ export default function GroupEditor() {
         const summe = g.member_ids.reduce((s, uid) => s + personOf(uid).value, 0)
         const proKopf = g.member_ids.length ? Math.round((summe / g.member_ids.length) * 10) / 10 : 0
         return (
-          <section key={g.id} data-testid={`editor-group-${g.id}`} className="rounded-2xl border border-line bg-card p-3">
+          <section
+            key={g.id}
+            data-testid={`editor-group-${g.id}`}
+            aria-label={`Gruppe ${g.name}`}
+            className="rounded-2xl border border-line bg-card p-3"
+          >
             <div className="flex items-end gap-2">
               <Input
                 label="Name"
@@ -264,7 +301,7 @@ export default function GroupEditor() {
         </ul>
       </section>
       <p className="text-[11px] text-ink-mute">
-        Setzliste: {ch.metric === 'anzahl' ? 'Aktivitäten' : 'MM'} der letzten {ch.seeding_days} Tage.
+        Setzliste: {einheit(ch.metric)} der letzten {ch.seeding_days} Tage.
       </p>
     </div>
   )

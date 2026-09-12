@@ -46,7 +46,8 @@ vi.mock('../../api/client', () => ({
     drawChallengeGroups: vi.fn(),
   },
 }))
-vi.mock('../ui/Toast', () => ({ useToast: () => vi.fn() }))
+const toast = vi.hoisted(() => vi.fn())
+vi.mock('../ui/Toast', () => ({ useToast: () => toast }))
 
 function renderEditor() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -63,6 +64,8 @@ function renderEditor() {
 
 describe('GroupEditor', () => {
   beforeEach(async () => {
+    // The config keeps mocks between tests, so call counts would leak.
+    vi.clearAllMocks()
     const { api } = await import('../../api/client')
     vi.mocked(api.challenge).mockResolvedValue(detail as never)
     vi.mocked(api.challengeSeeding).mockResolvedValue(seeding)
@@ -103,6 +106,60 @@ describe('GroupEditor', () => {
       { id: 2, name: 'Gruppe B', member_ids: [2] },
     ]))
     await waitFor(() => expect(screen.queryByText('ungespeichert')).toBeNull())
+  })
+
+  it('keeps "Speichern" disabled while nothing was edited', async () => {
+    renderEditor()
+    await waitFor(() => expect(screen.getByDisplayValue('Gruppe A')).toBeInTheDocument())
+    expect(screen.getByText('Speichern')).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Tom verschieben'), { target: { value: 'g:2' } })
+    expect(screen.getByText('Speichern')).toBeEnabled()
+  })
+
+  it('refuses to save while a group is empty', async () => {
+    renderEditor()
+    await waitFor(() => expect(screen.getByDisplayValue('Gruppe A')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Lea verschieben'), { target: { value: 'remove' } })
+    expect(screen.getByText('ungespeichert')).toBeInTheDocument()
+    expect(screen.getByText(/eine Gruppe braucht mindestens eine Person/)).toBeInTheDocument()
+    expect(screen.getByText('Speichern')).toBeDisabled()
+  })
+
+  it('reports a failed save via toast and keeps the edits', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.saveChallengeGroups).mockRejectedValue(new Error('kaputt'))
+    renderEditor()
+    await waitFor(() => expect(screen.getByDisplayValue('Gruppe A')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Tom verschieben'), { target: { value: 'g:2' } })
+    fireEvent.click(screen.getByText('Speichern'))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('kaputt'))
+    expect(screen.getByText('ungespeichert')).toBeInTheDocument()
+  })
+
+  it('still lets people be placed when the seeding list fails', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challengeSeeding).mockRejectedValue(new Error('nope'))
+    renderEditor()
+    await waitFor(() =>
+      expect(screen.getByText(/Setzliste konnte nicht geladen werden: nope/)).toBeInTheDocument(),
+    )
+    // Tom comes from ch.unassigned, so the pool is still assignable.
+    const frei = screen.getByTestId('editor-unassigned')
+    expect(within(frei).getAllByTestId('person-name').map((n) => n.textContent)).toEqual(['Tom'])
+    fireEvent.change(screen.getByLabelText('Tom verschieben'), { target: { value: 'g:2' } })
+    expect(screen.getByText('ungespeichert')).toBeInTheDocument()
+  })
+
+  it('drops the redraw confirmation once the edits are undone', async () => {
+    const { api } = await import('../../api/client')
+    renderEditor()
+    await waitFor(() => expect(screen.getByDisplayValue('Gruppe A')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Tom verschieben'), { target: { value: 'g:1' } })
+    fireEvent.click(screen.getByText('Neu auslosen'))
+    expect(screen.getByText('Wirklich neu auslosen?')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tom verschieben'), { target: { value: 'remove' } })
+    expect(screen.getByText('Neu auslosen')).toBeInTheDocument()
+    expect(api.drawChallengeGroups).not.toHaveBeenCalled()
   })
 
   it('warns when group sizes differ by more than one', async () => {
