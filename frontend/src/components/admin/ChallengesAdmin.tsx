@@ -60,6 +60,15 @@ export default function ChallengesAdmin() {
   const set = <K extends keyof ChallengeInput>(k: K, v: ChallengeInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
 
+  const buildPayload = (): ChallengeInput => {
+    const payload: ChallengeInput = { ...form, prize: form.prize || null }
+    if (!payload.team_mode) {
+      delete payload.group_count
+      delete payload.seeding_days
+    }
+    return payload
+  }
+
   return (
     <Card>
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-ink-mute">
@@ -209,10 +218,14 @@ export default function ChallengesAdmin() {
         </fieldset>
 
         <Button
-          onClick={() =>
-            anlegen.mutate({ ...form, prize: form.prize || null })
+          onClick={() => anlegen.mutate(buildPayload())}
+          disabled={
+            anlegen.isPending ||
+            !form.title ||
+            !form.period_start ||
+            !form.period_end ||
+            (form.team_mode && (form.group_count ?? 0) < 2)
           }
-          disabled={anlegen.isPending || !form.title || !form.period_start || !form.period_end}
         >
           Challenge anlegen
         </Button>

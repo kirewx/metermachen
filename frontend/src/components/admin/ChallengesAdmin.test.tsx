@@ -59,4 +59,26 @@ describe('ChallengesAdmin group fields', () => {
     expect(link).toHaveAttribute('href', '/arena/challenges/5/gruppen')
     expect(screen.getAllByRole('link', { name: 'Gruppen' })).toHaveLength(1)
   })
+
+  it('resets a selected streak metric to mm when switching to group mode', () => {
+    renderAdmin()
+    fireEvent.change(screen.getByLabelText('Wertung'), { target: { value: 'streak' } })
+    fireEvent.click(screen.getByLabelText('Gruppen-Challenge'))
+    expect(screen.getByLabelText('Wertung')).toHaveValue('mm')
+  })
+
+  it('does not send group settings for a solo challenge', async () => {
+    const { api } = await import('../../api/client')
+    renderAdmin()
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: 'Solo' } })
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-10-01' } })
+    fireEvent.change(screen.getByLabelText('Ende'), { target: { value: '2026-10-31' } })
+    fireEvent.click(screen.getByText('Challenge anlegen'))
+    await waitFor(() => expect(api.createChallenge).toHaveBeenCalled())
+    const calls = vi.mocked(api.createChallenge).mock.calls
+    const payload = calls[calls.length - 1][0]
+    expect(payload).not.toHaveProperty('group_count', 3)
+    expect(payload.group_count).toBeUndefined()
+    expect(payload.seeding_days).toBeUndefined()
+  })
 })
