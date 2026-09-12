@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Challenge } from '../../api/client'
-import { einheit, fortschritt, wertungText } from './wertung'
+import { einheit, fortschritt, meineGruppe, wertungText } from './wertung'
 
 const basis: Challenge = {
   id: 1, title: 'T', description: '', prize: null, creator_id: 1,
@@ -45,5 +45,42 @@ describe('wertung', () => {
     expect(fortschritt(basis, 150)).toBeCloseTo(0.5)
     expect(fortschritt(basis, 600)).toBe(1)
     expect(fortschritt({ ...basis, mode: 'rangliste', target: null }, 42)).toBe(0)
+  })
+})
+
+const teamBase = {
+  ...basis,
+  team_mode: true,
+  group_count: 3,
+  seeding_days: 30,
+  groups_drawn: true,
+  groups: [
+    { id: 1, name: 'Gruppe A', size: 2, sum: 400, value: 200, rank: 2, geschafft: false, members: [] },
+    { id: 2, name: 'Gruppe B', size: 2, sum: 620, value: 310, rank: 1, geschafft: true, members: [] },
+  ],
+  unassigned: [],
+  meine_gruppe_id: 2,
+  sieger_group_id: null,
+  kann_gruppen_bearbeiten: false,
+} as unknown as Challenge
+
+describe('wertungText for group challenges', () => {
+  it('names the per-head target and the group count', () => {
+    expect(wertungText({ ...teamBase, mode: 'ziel', target: 300, metric: 'mm' }, [])).toBe(
+      'Ziel: 300 MM pro Kopf aus allen Sportarten · 3 Gruppen',
+    )
+  })
+  it('describes the ranking per head', () => {
+    expect(wertungText({ ...teamBase, mode: 'rangliste', top_n: 1, metric: 'anzahl' }, [])).toBe(
+      'Rangliste: meiste Aktivitäten pro Kopf aus allen Sportarten, Top 1 · 3 Gruppen',
+    )
+  })
+})
+
+describe('meineGruppe', () => {
+  it('returns the own group or null', () => {
+    expect(meineGruppe(teamBase)?.name).toBe('Gruppe B')
+    expect(meineGruppe({ ...teamBase, meine_gruppe_id: null })).toBeNull()
+    expect(meineGruppe(basis)).toBeNull()
   })
 })
