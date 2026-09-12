@@ -259,10 +259,11 @@ def test_migrate_adds_group_columns_to_challenge():
             "'auto', '2026-08-01', '2026-08-31', 'beendet', '{}', '2026-08-01 00:00:00')"
         ))
     migrate(engine)
+    migrate(engine)  # second run: idempotent
     with engine.begin() as conn:
         cols = [r[1] for r in conn.execute(text('PRAGMA table_info("challenge")'))]
         assert {"team_mode", "group_count", "seeding_days", "groups_json", "groups_drawn_at"} <= set(cols)
         row = conn.execute(text(
-            "SELECT team_mode, group_count, seeding_days, groups_json FROM challenge"
+            "SELECT team_mode, group_count, seeding_days, groups_json, groups_drawn_at FROM challenge"
         )).fetchone()
-        assert row[0] == 0 and row[1] is None and row[2] == 30 and row[3] == "[]"
+        assert row == (0, None, 30, "[]", None)
