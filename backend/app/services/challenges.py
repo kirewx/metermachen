@@ -72,13 +72,24 @@ def group_of(ch: Challenge, user_id: int) -> dict | None:
     return next((g for g in groups(ch) if user_id in g["member_ids"]), None)
 
 
+def category_map(session: Session) -> dict[int, Category]:
+    return {c.id: c for c in session.exec(select(Category)).all()}
+
+
 def rows_between(
-    session: Session, user_id: int, ch: Challenge, von: date_type, bis: date_type
+    session: Session,
+    user_id: int,
+    ch: Challenge,
+    von: date_type,
+    bis: date_type,
+    cats: dict[int, Category] | None = None,
 ) -> list[tuple[Activity, Category]]:
     """Activities of the user between von and bis (inclusive), category-filtered
-    with the challenge's category list."""
+    with the challenge's category list. Pass cats to reuse one category map
+    across a loop over many users."""
     erlaubt = set(category_ids(ch))
-    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    if cats is None:
+        cats = category_map(session)
     acts = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
@@ -375,12 +386,21 @@ def resolve_due(session: Session, jetzt: datetime | None = None) -> None:
             _einfrieren(session, ch, jetzt, heute)
 
 
-def emit_qualified(session: Session, ch: Challenge, eintraege: list[dict]) -> None:
-    """Feed event for everyone (or every group) that hit the target. Idempotent."""
+def emit_qualified(
+    session: Session,
+    ch: Challenge,
+    eintraege: list[dict],
+    gruppen: list[dict] | None = None,
+) -> None:
+    """Feed event for everyone (or every group) that hit the target. Idempotent.
+    Pass gruppen (the output of group_standings) to reuse an aggregation the
+    caller has already done."""
     if ch.mode != "ziel" or ch.status != "laufend":
         return
     if ch.team_mode:
-        for g in group_standings(ch, eintraege):
+        if gruppen is None:
+            gruppen = group_standings(ch, eintraege)
+        for g in gruppen:
             if g["geschafft"]:
                 feed.challenge_group_qualified_event(session, ch, g)
         return

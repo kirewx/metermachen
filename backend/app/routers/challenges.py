@@ -5,6 +5,8 @@ gleiches Muster wie bets_router.
 """
 
 import json
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import datetime, timezone
 
@@ -153,14 +155,68 @@ def _users(session: Session) -> dict[int, User]:
     return {u.id: u for u in session.exec(select(User)).all()}
 
 
+@dataclass
+class _GroupBlock:
+    """Everything a ChallengeOut says about groups. Empty for non-team
+    challenges, so the response builder needs no second code path."""
+
+    groups: list[GroupOut] = field(default_factory=list)
+    unassigned: list[StandingEntryOut] = field(default_factory=list)
+    pool: list[int] = field(default_factory=list)
+    gewinner_ids: list[int] = field(default_factory=list)
+    gewinner_group_ids: list[int] = field(default_factory=list)
+
+
+def _group_block(
+    session: Session,
+    ch: Challenge,
+    gruppen_roh: list[dict],
+    gruppen_json: list[dict],
+    eintrag: Callable[[dict], StandingEntryOut],
+) -> _GroupBlock:
+    """gruppen_roh is the already aggregated group standing and gruppen_json the
+    already parsed groups_json, so both happen exactly once per response."""
+    # Per-person "geschafft" says nothing in a team challenge — the winners are
+    # exactly the members of the groups that made it.
+    geschaffte = [g for g in gruppen_roh if g["geschafft"]]
+    block = _GroupBlock(
+        groups=[
+            GroupOut(
+                id=g["id"],
+                name=g["name"],
+                size=g["size"],
+                sum=g["sum"],
+                value=g["value"],
+                rank=g["rank"],
+                geschafft=g["geschafft"],
+                members=[eintrag(m) for m in g["members"]],
+            )
+            for g in gruppen_roh
+        ],
+        gewinner_ids=[uid for g in geschaffte for uid in g["member_ids"]],
+        gewinner_group_ids=[g["id"] for g in geschaffte],
+    )
+    if ch.status == "geplant":
+        block.pool = groups_svc.pool(session, ch)
+        zugeteilt = {uid for g in gruppen_json for uid in g["member_ids"]}
+        block.unassigned = [
+            eintrag({"user_id": uid, "value": 0.0})
+            for uid in block.pool
+            if uid not in zugeteilt
+        ]
+    return block
+
+
 def _challenge_out(
     session: Session, ch: Challenge, me: User, heute: date_type
 ) -> ChallengeOut:
     users = _users(session)
     teilnehmer = svc.teilnehmer_ids(session, ch)
+    ergebnis = json.loads(ch.result_json or "{}")
+    sieger = ergebnis.get("sieger") or {}
+    gruppen_json = svc.groups(ch)
     beendet = ch.status == "beendet"
     if beendet:
-        ergebnis = json.loads(ch.result_json or "{}")
         roh = [
             {**e, "nicht_mehr_schaffbar": False} for e in ergebnis.get("entries", [])
         ]
@@ -168,7 +224,6 @@ def _challenge_out(
         gewinner_gruppen = ergebnis.get("gewinner_group_ids", [])
     else:
         roh = svc.standings(session, ch, heute)
-        svc.emit_qualified(session, ch, roh)
         gewinner = [e["user_id"] for e in roh if e["geschafft"]]
         gewinner_gruppen = []
 
@@ -186,42 +241,27 @@ def _challenge_out(
             nicht_mehr_schaffbar=e.get("nicht_mehr_schaffbar", False),
         )
 
-    gruppen: list[GroupOut] = []
-    ohne_gruppe: list[StandingEntryOut] = []
-    pool: list[int] = []
-    if ch.team_mode:
-        gruppen_roh = svc.group_standings(ch, roh)
-        if not beendet:
-            # Per-person "geschafft" says nothing in a team challenge — the
-            # winners are exactly the members of the groups that made it.
-            geschaffte = [g for g in gruppen_roh if g["geschafft"]]
-            gewinner = [uid for g in geschaffte for uid in g["member_ids"]]
-            gewinner_gruppen = [g["id"] for g in geschaffte]
-        gruppen = [
-            GroupOut(
-                id=g["id"],
-                name=g["name"],
-                size=g["size"],
-                sum=g["sum"],
-                value=g["value"],
-                rank=g["rank"],
-                geschafft=g["geschafft"],
-                members=[eintrag(m) for m in g["members"]],
-            )
-            for g in gruppen_roh
-        ]
-        if ch.status == "geplant":
-            pool = groups_svc.pool(session, ch)
-            zugeteilt = set(svc.group_member_ids(ch))
-            ohne_gruppe = [
-                eintrag({"user_id": uid, "value": 0.0})
-                for uid in pool
-                if uid not in zugeteilt
-            ]
+    # A finished team challenge re-aggregates the live groups over the frozen
+    # entries only to attach display data (names, sizes, members); that cannot
+    # diverge from the frozen snapshot because groups are immutable after
+    # "geplant".
+    gruppen_roh = svc.group_standings(ch, roh) if ch.team_mode else None
+    if not beendet:
+        svc.emit_qualified(session, ch, roh, gruppen=gruppen_roh)
+    block = (
+        _group_block(session, ch, gruppen_roh, gruppen_json, eintrag)
+        if gruppen_roh is not None
+        else _GroupBlock()
+    )
+    if ch.team_mode and not beendet:
+        gewinner = block.gewinner_ids
+        gewinner_gruppen = block.gewinner_group_ids
 
-    meine_gruppe = svc.group_of(ch, me.id) if ch.team_mode else None
+    meine_gruppe = next(
+        (g for g in gruppen_json if me.id in g["member_ids"]), None
+    )
     bin_dabei = me.id in teilnehmer or (
-        ch.team_mode and ch.status == "geplant" and me.id in pool
+        ch.team_mode and ch.status == "geplant" and me.id in block.pool
     )
     liste = [eintrag(e) for e in roh]
     return ChallengeOut(
@@ -252,7 +292,7 @@ def _challenge_out(
         standings=liste,
         mein_stand=next((e for e in liste if e.user_id == me.id), None),
         gewinner_ids=gewinner,
-        sieger_id=svc.sieger_id(ch),
+        sieger_id=sieger.get("user_id"),
         kann_sieger_setzen=(
             me.is_admin
             and ch.mode == "ziel"
@@ -263,11 +303,11 @@ def _challenge_out(
         team_mode=ch.team_mode,
         group_count=ch.group_count,
         seeding_days=ch.seeding_days,
-        groups_drawn=len(svc.groups(ch)) > 0,
-        groups=gruppen,
-        unassigned=ohne_gruppe,
+        groups_drawn=len(gruppen_json) > 0,
+        groups=block.groups,
+        unassigned=block.unassigned,
         meine_gruppe_id=meine_gruppe["id"] if meine_gruppe else None,
-        sieger_group_id=svc.sieger_group_id(ch),
+        sieger_group_id=sieger.get("group_id"),
         kann_gruppen_bearbeiten=(
             me.is_admin and ch.team_mode and ch.status == "geplant"
         ),
@@ -321,10 +361,10 @@ def join_challenge(
     heute = date_type.today()
     if ch.join_mode != "opt_in":
         raise HTTPException(status_code=409, detail="Hier sind alle automatisch dabei")
-    if ch.team_mode and ch.status != "geplant":
-        raise HTTPException(status_code=409, detail="Die Gruppen stehen bereits fest")
     if heute > ch.period_end or ch.status == "beendet":
         raise HTTPException(status_code=409, detail="Die Challenge ist vorbei")
+    if ch.team_mode and ch.status != "geplant":
+        raise HTTPException(status_code=409, detail="Die Gruppen stehen bereits fest")
     vorhanden = session.exec(
         select(ChallengeParticipant).where(
             ChallengeParticipant.challenge_id == ch.id,
@@ -401,6 +441,10 @@ def _pruefe_regeln(
         bekannt = {c.id for c in session.exec(select(Category)).all()}
         if not set(category_ids) <= bekannt:
             raise HTTPException(status_code=422, detail="Unbekannte Kategorie")
+    if seeding_days < 1:
+        raise HTTPException(
+            status_code=422, detail="Setzliste braucht mindestens 1 Tag"
+        )
     if team_mode:
         if metric not in ("mm", "anzahl"):
             raise HTTPException(
@@ -408,10 +452,6 @@ def _pruefe_regeln(
             )
         if group_count is None or group_count < 2:
             raise HTTPException(status_code=422, detail="Mindestens 2 Gruppen")
-        if seeding_days < 1:
-            raise HTTPException(
-                status_code=422, detail="Setzliste braucht mindestens 1 Tag"
-            )
 
 
 @router.post(
@@ -446,7 +486,7 @@ def create_challenge(
         period_start=data.period_start,
         period_end=data.period_end,
         team_mode=data.team_mode,
-        group_count=data.group_count,
+        group_count=data.group_count if data.team_mode else None,
         seeding_days=data.seeding_days,
     )
     # In auto mode the pool is already known, so the draw happens right away —
@@ -525,7 +565,7 @@ def patch_challenge(
     ch.period_start = werte["period_start"]
     ch.period_end = werte["period_end"]
     ch.team_mode = werte["team_mode"]
-    ch.group_count = werte["group_count"]
+    ch.group_count = werte["group_count"] if werte["team_mode"] else None
     ch.seeding_days = werte["seeding_days"]
     if gruppen_neu:
         svc.set_groups(ch, [])
@@ -602,8 +642,7 @@ def save_groups(
 def seeding_list(challenge_id: int, session: Session = Depends(get_session)):
     """Every active user with their seeding value, for the group editor."""
     ch = _geladene_challenge(session, challenge_id)
-    if not ch.team_mode:
-        raise HTTPException(status_code=409, detail="Keine Gruppen-Challenge")
+    _nur_team_geplant(ch)
     users = {u.id: u for u in session.exec(select(User).where(User.is_active)).all()}
     return [
         SeedingEntryOut(
@@ -613,7 +652,7 @@ def seeding_list(challenge_id: int, session: Session = Depends(get_session)):
             value=wert,
         )
         for uid, wert in groups_svc.seeding(
-            session, ch, date_type.today(), sorted(users)
+            session, ch, date_type.today(), sorted(users.keys())
         )
     ]
 

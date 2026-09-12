@@ -145,6 +145,75 @@ def test_patch_group_count_clears_groups(session, client):
     assert r.json()["groups_drawn"] is False  # still cleared, no auto redraw
 
 
+def test_patch_seeding_days_keeps_the_drawn_groups(session, client):
+    setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    r = client.patch(f"/api/challenges/{ch_id}", json={"seeding_days": 10})
+    assert r.status_code == 200, r.text
+    assert r.json()["seeding_days"] == 10
+    assert r.json()["groups_drawn"] is True and len(r.json()["groups"]) == 2
+
+
+def test_patch_off_team_mode_clears_groups_and_group_count(session, client):
+    setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    r = client.patch(f"/api/challenges/{ch_id}", json={"team_mode": False})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["team_mode"] is False and out["group_count"] is None
+    assert out["groups_drawn"] is False and out["groups"] == []
+
+
+def test_create_without_team_mode_ignores_group_count(session, client):
+    setup(session)
+    login(client, username="admin")
+    r = client.post("/api/challenges", json=team_body(team_mode=False, group_count=99))
+    assert r.status_code == 201, r.text
+    assert r.json()["group_count"] is None
+
+
+def test_list_contains_the_team_challenge_with_its_groups(session, client):
+    setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    r = client.get("/api/challenges")
+    assert r.status_code == 200, r.text
+    eintrag = next(c for c in r.json() if c["id"] == ch_id)
+    assert eintrag["team_mode"] is True and len(eintrag["groups"]) == 2
+    assert sorted(len(g["members"]) for g in eintrag["groups"]) == [2, 3]
+
+
+def test_placing_a_non_joiner_in_a_group_makes_them_a_participant(session, client):
+    admin, users = setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body(join_mode="opt_in")).json()["id"]
+    for u in users[:2]:
+        login(client, username=u.username)
+        client.post(f"/api/challenges/{ch_id}/join")
+    login(client, username="admin")
+    body = {"groups": [
+        {"id": 1, "name": "A", "member_ids": [users[0].id, users[2].id]},
+        {"id": 2, "name": "B", "member_ids": [users[1].id]},
+    ]}
+    assert client.put(f"/api/challenges/{ch_id}/groups", json=body).status_code == 200
+    login(client, username=users[2].username)  # never pressed "mitmachen"
+    out = client.get(f"/api/challenges/{ch_id}").json()
+    assert out["bin_dabei"] is True and out["meine_gruppe_id"] == 1
+
+
+def test_seeding_on_a_running_challenge_is_409(session, client):
+    setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    ch = session.get(Challenge, ch_id)
+    ch.status = "laufend"
+    session.add(ch)
+    session.commit()
+    assert client.get(f"/api/challenges/{ch_id}/seeding").status_code == 409
+
+
 def test_late_joiner_is_unassigned_and_join_blocked_once_running(session, client):
     admin, users = setup(session)
     login(client, username="admin")

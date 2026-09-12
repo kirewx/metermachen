@@ -39,16 +39,26 @@ def pool(session: Session, ch: Challenge) -> list[int]:
     return svc.eligible_ids(session, ch)
 
 
-def seeding_value(session: Session, user_id: int, ch: Challenge, heute: date_type) -> float:
+def seeding_value(
+    session: Session,
+    user_id: int,
+    ch: Challenge,
+    heute: date_type,
+    *,
+    resolver: FactorResolver | None = None,
+    cats: dict | None = None,
+) -> float:
     """The challenge's own metric over the last seeding_days days up to and
-    including yesterday. Never uses User.km_factor."""
+    including yesterday. Never uses User.km_factor. resolver and cats let a
+    loop over many users load the factors and categories only once."""
     bis = heute - timedelta(days=1)
     von = heute - timedelta(days=ch.seeding_days)
-    rows = svc.rows_between(session, user_id, ch, von, bis)
+    rows = svc.rows_between(session, user_id, ch, von, bis, cats=cats)
     if ch.metric == "anzahl":
         return float(len(rows))
     if ch.metric == "mm":
-        resolver = FactorResolver.load(session)
+        if resolver is None:
+            resolver = FactorResolver.load(session)
         return round(sum(resolver.mm(a) for a, _ in rows), 2)
     raise ValueError(f"Unbekannte Metrik: {ch.metric}")
 
@@ -58,7 +68,12 @@ def seeding(
 ) -> list[tuple[int, float]]:
     """(user_id, value) sorted by value desc, ties by user_id. Defaults to the pool."""
     ids = pool(session, ch) if user_ids is None else user_ids
-    values = [(uid, seeding_value(session, uid, ch, heute)) for uid in ids]
+    cats = svc.category_map(session)
+    resolver = FactorResolver.load(session) if ch.metric == "mm" else None
+    values = [
+        (uid, seeding_value(session, uid, ch, heute, resolver=resolver, cats=cats))
+        for uid in ids
+    ]
     values.sort(key=lambda t: (-t[1], t[0]))
     return values
 
