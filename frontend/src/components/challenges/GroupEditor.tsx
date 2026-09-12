@@ -225,7 +225,7 @@ export default function GroupEditor() {
           </span>
         )}
         <Button variant="ghost" onClick={redraw} disabled={auslosen.isPending}>
-          {fragen ? 'Wirklich neu auslosen?' : 'Neu auslosen'}
+          {fragen ? 'Wirklich neu auslosen?' : ch.groups_drawn ? 'Neu auslosen' : 'Auslosen'}
         </Button>
         <Button
           onClick={() => speichern.mutate()}

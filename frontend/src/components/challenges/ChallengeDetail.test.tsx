@@ -233,6 +233,16 @@ describe('ChallengeDetail', () => {
     expect(within(meine).getByText('du')).toBeInTheDocument()
   })
 
+  it('names people who are not placed yet while the challenge is planned', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'geplant',
+      unassigned: [{ user_id: 9, display_name: 'Tom', avatar: '🐸', value: 0, rank: 0, geschafft: false, nicht_mehr_schaffbar: false }],
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/Noch nicht zugeordnet: Tom/)).toBeInTheDocument())
+  })
+
   it('says when the groups are drawn but still empty', async () => {
     const { api } = await import('../../api/client')
     vi.mocked(api.challenge).mockResolvedValue({

@@ -152,6 +152,16 @@ describe('GroupEditor', () => {
     expect(screen.getByText('ungespeichert')).toBeInTheDocument()
   })
 
+  it('offers a first draw before any groups exist', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({ ...detail, groups_drawn: false, groups: [] } as never)
+    renderEditor()
+    await waitFor(() => expect(screen.getByText('Auslosen')).toBeInTheDocument())
+    expect(screen.queryByText('Neu auslosen')).toBeNull()
+    fireEvent.click(screen.getByText('Auslosen'))
+    await waitFor(() => expect(api.drawChallengeGroups).toHaveBeenCalledWith(1))
+  })
+
   it('drops the redraw confirmation once the edits are undone', async () => {
     const { api } = await import('../../api/client')
     renderEditor()

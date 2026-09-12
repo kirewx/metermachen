@@ -86,6 +86,24 @@ describe('Challenges', () => {
     await waitFor(() => expect(joinChallenge).toHaveBeenCalledWith(2))
   })
 
+  it('invites to a planned group challenge instead of listing it as planned', async () => {
+    const { api } = await import('../api/client')
+    vi.mocked(api.challenges).mockResolvedValueOnce([
+      {
+        ...challenges[1], id: 4, title: 'Team-Oktober', status: 'geplant',
+        period_start: '2026-10-01', period_end: '2026-10-31',
+        team_mode: true, group_count: 3, groups: [], groups_drawn: false,
+      },
+    ] as never)
+    renderSeite()
+    await waitFor(() => expect(screen.getByText('Team-Oktober')).toBeInTheDocument())
+    expect(screen.getByText('Mitmachen?')).toBeInTheDocument()
+    expect(screen.queryByText('Geplant')).toBeNull()
+    expect(screen.getByText(/ab 1\.10\.2026 · in Gruppen/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Beitreten' }))
+    await waitFor(() => expect(joinChallenge).toHaveBeenCalledWith(4))
+  })
+
   it('zeigt einen Hinweis, wenn es nichts gibt', async () => {
     const { api } = await import('../api/client')
     vi.mocked(api.challenges).mockResolvedValueOnce([])

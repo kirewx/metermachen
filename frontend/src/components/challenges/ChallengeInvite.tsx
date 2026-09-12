@@ -15,7 +15,10 @@ export default function ChallengeInvite({
         <p className="truncate text-sm font-bold text-ink">{ch.title}</p>
         <p className="mt-0.5 text-[11px] text-ink-mute">
           {ch.prize ? `🎁 ${ch.prize} · ` : ''}
-          bis {new Date(ch.period_end).toLocaleDateString('de-DE')}
+          {ch.status === 'geplant'
+            ? `ab ${new Date(ch.period_start).toLocaleDateString('de-DE')}`
+            : `bis ${new Date(ch.period_end).toLocaleDateString('de-DE')}`}
+          {ch.team_mode && ' · in Gruppen'}
         </p>
       </div>
       <button

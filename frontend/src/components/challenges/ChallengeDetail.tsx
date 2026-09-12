@@ -41,6 +41,12 @@ function GroupSection({ ch }: { ch: Challenge }) {
       {ch.groups.length === 0 && (
         <p className="p-6 text-center text-sm text-ink-mute">Noch keine Gruppen.</p>
       )}
+      {ch.status === 'geplant' && ch.unassigned.length > 0 && (
+        <p className="px-1 text-[11px] text-ink-mute">
+          Noch nicht zugeordnet: {ch.unassigned.map((u) => u.display_name).join(', ')} — wer
+          beim Start in keiner Gruppe ist, nimmt nicht teil.
+        </p>
+      )}
     </section>
   )
 }
