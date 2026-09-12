@@ -83,7 +83,7 @@ New module `backend/app/services/challenge_groups.py` so that `services/challeng
 - `pool(session, ch) -> list[int]` — `auto`: all active users; `opt_in`: joined and active.
 - `draw(session, ch, heute, rng=random) -> list[dict]` — builds pots of `group_count` from the seeding order; shuffles each pot and assigns member `i` of the pot to group `i`; the partial last pot is assigned to a random sample of distinct groups. Group sizes therefore differ by at most one. Names: existing names by `id` are kept, new groups get "Gruppe A", "Gruppe B", … Writes `groups_json`, `groups_drawn_at`. Raises `ValueError` when the pool has fewer people than `group_count` (→ 422).
 - `validate_groups(session, ch, groups) -> list[dict]` — normalises and checks an edited group list: exactly `group_count` groups, non-empty trimmed names, ids unique, every `member_id` at most once, only known **active** users, no empty group. Returns the cleaned list or raises `ValueError` with a German message (→ 422). In `opt_in` mode, people who are placed in a group but never joined get a `ChallengeParticipant` row so that `bin_dabei` is true for them.
-- `group_standings(session, ch, heute) -> list[dict]` — per-person values via the existing `metric_value`, aggregated per group: `sum`, `value` (per head), `size`, `rank`, `geschafft`, `members` (per-person entries). Used by `_challenge_out` and `_einfrieren`.
+- `group_standings(ch, eintraege) -> list[dict]` — lives in `services/challenges.py` (not here) and is **pure**: it takes the per-person entries from `standings()` and aggregates them per group: `sum`, `value` (per head), `size`, `rank`, `geschafft`, `members`. Used by `_challenge_out`, `_einfrieren` and the feed. Placed in `challenges.py` together with the small JSON helpers (`groups`, `set_groups`, `group_member_ids`, `remove_group_member`, `group_of`) so that this module can import from `challenges.py` without a circular import.
 
 `rng` is injectable so tests can make the draw deterministic.
 
@@ -200,7 +200,7 @@ No new event types. Payloads are extended:
 | --- | --- |
 | `backend/app/models.py` | five new `Challenge` columns |
 | `backend/app/db.py` | `migrate()` adds the columns to existing DBs |
-| `backend/app/services/challenge_groups.py` | new: seeding, pool, draw, validate_groups, group_standings |
+| `backend/app/services/challenge_groups.py` | new: seeding, pool, draw, validate_groups, save_groups |
 | `backend/app/services/challenges.py` | `teilnehmer_ids`, `_einfrieren`, `resolve_due`, `setze_sieger` learn about groups |
 | `backend/app/services/feed.py` | payload additions, per-group qualified event |
 | `backend/app/routers/challenges.py` | new endpoints, `_challenge_out` additions, rule checks |
