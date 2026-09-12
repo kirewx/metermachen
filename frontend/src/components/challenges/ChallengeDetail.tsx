@@ -5,6 +5,7 @@ import { api } from '../../api/client'
 import type { Challenge, ChallengeStanding, SiegerWahl } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import Select from '../ui/Select'
+import GroupCard from './GroupCard'
 import { einheit, fortschritt, wertungText } from './wertung'
 
 function Chip({ ch, s }: { ch: Challenge; s: ChallengeStanding }) {
@@ -39,6 +40,39 @@ function Chip({ ch, s }: { ch: Challenge; s: ChallengeStanding }) {
     <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[10px] font-bold text-ink-mute">
       noch {Math.round(rest * 100) / 100}
     </span>
+  )
+}
+
+function GroupSection({ ch }: { ch: Challenge }) {
+  const editorLink = ch.kann_gruppen_bearbeiten && (
+    <Link
+      to={`/arena/challenges/${ch.id}/gruppen`}
+      className="inline-block rounded-full border border-accent px-3 py-1 text-[11px] font-bold text-accent"
+    >
+      Gruppen bearbeiten
+    </Link>
+  )
+  if (!ch.groups_drawn)
+    return (
+      <section className="space-y-2 rounded-2xl border border-dashed border-line p-4 text-center">
+        <p className="text-sm text-ink-mute">Gruppen werden noch ausgelost</p>
+        {editorLink}
+      </section>
+    )
+  const meine = ch.meine_gruppe_id
+  const sortiert = [...ch.groups].sort((a, b) => {
+    if (a.id === meine) return -1
+    if (b.id === meine) return 1
+    return a.rank - b.rank || a.id - b.id
+  })
+  const hoechster = Math.max(...ch.groups.map((g) => g.value), 1)
+  return (
+    <section className="space-y-2">
+      {editorLink && <div className="text-right">{editorLink}</div>}
+      {sortiert.map((g) => (
+        <GroupCard key={g.id} ch={ch} g={g} mine={g.id === meine} hoechster={hoechster} />
+      ))}
+    </section>
   )
 }
 
@@ -101,15 +135,18 @@ export default function ChallengeDetail() {
             morgen früh.
           </p>
         )}
-        {ch.bin_dabei && ch.join_mode === 'opt_in' && ch.status !== 'beendet' && (
-          <button
-            onClick={() => austreten.mutate()}
-            disabled={austreten.isPending}
-            className="mt-3 rounded-full border border-line px-3 py-1 text-[11px] font-bold text-ink-mute disabled:opacity-50"
-          >
-            Austreten
-          </button>
-        )}
+        {ch.bin_dabei &&
+          ch.join_mode === 'opt_in' &&
+          ch.status !== 'beendet' &&
+          (!ch.team_mode || ch.status === 'geplant') && (
+            <button
+              onClick={() => austreten.mutate()}
+              disabled={austreten.isPending}
+              className="mt-3 rounded-full border border-line px-3 py-1 text-[11px] font-bold text-ink-mute disabled:opacity-50"
+            >
+              Austreten
+            </button>
+          )}
       </header>
 
       {ch.status === 'beendet' && ch.mode === 'ziel' && (
@@ -158,47 +195,51 @@ export default function ChallengeDetail() {
         </section>
       )}
 
-      <section className="space-y-1.5">
-        {ch.standings.map((s) => (
-          <div
-            key={s.user_id}
-            className={`rounded-xl border border-line bg-card p-2.5 ${
-              s.nicht_mehr_schaffbar ? 'opacity-60' : ''
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Avatar value={s.avatar} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                {s.display_name}
-                {s.user_id === ch.sieger_id && ' 🏆'}
-              </span>
-              <Chip ch={ch} s={s} />
-              <span className="shrink-0 text-xs font-extrabold text-ink">
-                {s.value} {einheit(ch.metric)}
-              </span>
+      {ch.team_mode ? (
+        <GroupSection ch={ch} />
+      ) : (
+        <section className="space-y-1.5">
+          {ch.standings.map((s) => (
+            <div
+              key={s.user_id}
+              className={`rounded-xl border border-line bg-card p-2.5 ${
+                s.nicht_mehr_schaffbar ? 'opacity-60' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Avatar value={s.avatar} size="sm" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                  {s.display_name}
+                  {s.user_id === ch.sieger_id && ' 🏆'}
+                </span>
+                <Chip ch={ch} s={s} />
+                <span className="shrink-0 text-xs font-extrabold text-ink">
+                  {s.value} {einheit(ch.metric)}
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
+                <div
+                  className={`h-full ${
+                    s.nicht_mehr_schaffbar ? 'bg-ink-mute' : 'bg-accent'
+                  }`}
+                  style={{
+                    width: `${
+                      ch.mode === 'ziel'
+                        ? fortschritt(ch, s.value) * 100
+                        : (s.value / hoechster) * 100
+                    }%`,
+                  }}
+                />
+              </div>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
-              <div
-                className={`h-full ${
-                  s.nicht_mehr_schaffbar ? 'bg-ink-mute' : 'bg-accent'
-                }`}
-                style={{
-                  width: `${
-                    ch.mode === 'ziel'
-                      ? fortschritt(ch, s.value) * 100
-                      : (s.value / hoechster) * 100
-                  }%`,
-                }}
-              />
-            </div>
-          </div>
-        ))}
-        {ch.standings.length === 0 && (
-          <p className="p-6 text-center text-sm text-ink-mute">
-            Noch niemand dabei.
-          </p>
-        )}
-      </section>
+          ))}
+          {ch.standings.length === 0 && (
+            <p className="p-6 text-center text-sm text-ink-mute">
+              Noch niemand dabei.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   )
 }
