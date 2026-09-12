@@ -104,6 +104,25 @@ def migrate(target=engine) -> None:
             if "start_time" not in act_cols:
                 conn.execute(text("ALTER TABLE activity ADD COLUMN start_time TIME"))
 
+        if _table_exists(conn, "challenge"):
+            ch_cols = _columns(conn, "challenge")
+            if "team_mode" not in ch_cols:
+                conn.execute(text(
+                    "ALTER TABLE challenge ADD COLUMN team_mode BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            if "group_count" not in ch_cols:
+                conn.execute(text("ALTER TABLE challenge ADD COLUMN group_count INTEGER"))
+            if "seeding_days" not in ch_cols:
+                conn.execute(text(
+                    "ALTER TABLE challenge ADD COLUMN seeding_days INTEGER NOT NULL DEFAULT 30"
+                ))
+            if "groups_json" not in ch_cols:
+                conn.execute(text(
+                    "ALTER TABLE challenge ADD COLUMN groups_json TEXT NOT NULL DEFAULT '[]'"
+                ))
+            if "groups_drawn_at" not in ch_cols:
+                conn.execute(text("ALTER TABLE challenge ADD COLUMN groups_drawn_at DATETIME"))
+
         if _table_exists(conn, "stravaconnection"):
             sc_cols = _columns(conn, "stravaconnection")
             if "backfill_state" not in sc_cols:

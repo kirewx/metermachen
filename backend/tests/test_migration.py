@@ -238,3 +238,31 @@ def test_backfill_saisonende_ueberschreibt_nicht(session):
     session.expire_all()
     s = session.exec(select(Season).where(Season.year == 2026)).one()
     assert s.end_date == date(2027, 6, 1)
+
+
+def test_migrate_adds_group_columns_to_challenge():
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE challenge (id INTEGER PRIMARY KEY, title VARCHAR, "
+            "description VARCHAR, creator_id INTEGER, prize VARCHAR, mode VARCHAR, "
+            "target FLOAT, top_n INTEGER, metric VARCHAR, category_ids_json VARCHAR, "
+            "streak_min_mm FLOAT, join_mode VARCHAR, period_start DATE, period_end DATE, "
+            "status VARCHAR, result_json VARCHAR, created_at DATETIME, resolved_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO challenge (title, description, creator_id, mode, top_n, metric, "
+            "category_ids_json, streak_min_mm, join_mode, period_start, period_end, status, "
+            "result_json, created_at) VALUES ('Alt', '', 1, 'ziel', 1, 'mm', '[]', 5.0, "
+            "'auto', '2026-08-01', '2026-08-31', 'beendet', '{}', '2026-08-01 00:00:00')"
+        ))
+    migrate(engine)
+    with engine.begin() as conn:
+        cols = [r[1] for r in conn.execute(text('PRAGMA table_info("challenge")'))]
+        assert {"team_mode", "group_count", "seeding_days", "groups_json", "groups_drawn_at"} <= set(cols)
+        row = conn.execute(text(
+            "SELECT team_mode, group_count, seeding_days, groups_json FROM challenge"
+        )).fetchone()
+        assert row[0] == 0 and row[1] is None and row[2] == 30 and row[3] == "[]"
