@@ -1,0 +1,103 @@
+"""Group challenges (spec 2026-09-12): helpers, seeding, draw, editing."""
+
+import json
+import random
+from datetime import date, timedelta
+
+from app.models import Activity, Challenge, ChallengeParticipant
+from app.services import challenges as svc
+from tests.conftest import make_category, make_user
+
+
+def make_team_challenge(session, **kw) -> Challenge:
+    heute = date.today()
+    daten = dict(
+        title="Teams", creator_id=1, mode="ziel", target=100.0, metric="mm",
+        join_mode="auto", period_start=heute + timedelta(days=1),
+        period_end=heute + timedelta(days=30), status="geplant",
+        team_mode=True, group_count=2, seeding_days=30,
+    )
+    daten.update(kw)
+    ch = Challenge(**daten)
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    return ch
+
+
+def add_activity(session, user_id, cat_id, tag, km):
+    session.add(Activity(user_id=user_id, category_id=cat_id, date=tag, distance_km=km))
+    session.commit()
+
+
+def groups_of(*member_lists):
+    return [
+        {"id": i + 1, "name": f"Gruppe {chr(65 + i)}", "member_ids": list(m)}
+        for i, m in enumerate(member_lists)
+    ]
+
+
+# --- JSON helpers -----------------------------------------------------------
+
+def test_group_helpers_read_and_remove(session):
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([1, 2], [3])))
+    assert svc.group_member_ids(ch) == [1, 2, 3]
+    svc.remove_group_member(ch, 2)
+    assert svc.groups(ch) == groups_of([1], [3])
+    svc.remove_group_member(ch, 99)  # unknown id is a no-op
+    assert svc.group_member_ids(ch) == [1, 3]
+
+
+# --- group_standings (pure) -------------------------------------------------
+
+def entry(uid, value):
+    """One per-person entry as standings() returns it."""
+    return {"user_id": uid, "value": value, "rank": 0, "geschafft": False, "nicht_mehr_schaffbar": False}
+
+
+def test_group_standings_per_head_target(session):
+    ch = make_team_challenge(session, target=100.0, groups_json=json.dumps(groups_of([1, 2, 3], [4, 5])))
+    e = [entry(1, 150.0), entry(2, 90.0), entry(3, 60.0), entry(4, 100.0), entry(5, 120.0)]
+    out = svc.group_standings(ch, e)
+    # group B: (100+120)/2 = 110 >= 100, group A: 300/3 = 100 >= 100
+    b, a = out
+    assert (b["id"], b["sum"], b["value"], b["rank"], b["geschafft"]) == (2, 220.0, 110.0, 1, True)
+    assert (a["id"], a["sum"], a["value"], a["rank"], a["geschafft"]) == (1, 300.0, 100.0, 2, True)
+    assert [m["user_id"] for m in a["members"]] == [1, 2, 3]  # sorted by value desc
+    assert a["size"] == 3 and a["member_ids"] == [1, 2, 3]
+
+
+def test_group_standings_ranking_mode_ties_and_top_n(session):
+    ch = make_team_challenge(
+        session, mode="rangliste", top_n=1,
+        groups_json=json.dumps(groups_of([1], [2], [3])), group_count=3,
+    )
+    e = [entry(1, 50.0), entry(2, 50.0), entry(3, 10.0)]
+    out = svc.group_standings(ch, e)
+    assert [(g["id"], g["rank"], g["geschafft"]) for g in out] == [(1, 1, True), (2, 1, True), (3, 3, False)]
+
+
+def test_group_standings_ignores_members_missing_from_entries(session):
+    # An inactive member is not in the entries (teilnehmer_ids filters them):
+    # it drops out of sum and divisor. A group with no scored member is 0.
+    ch = make_team_challenge(session, groups_json=json.dumps(groups_of([1, 2], [3])))
+    out = svc.group_standings(ch, [entry(1, 80.0)])
+    a = next(g for g in out if g["id"] == 1)
+    b = next(g for g in out if g["id"] == 2)
+    assert (a["sum"], a["value"], a["size"], a["member_ids"]) == (80.0, 80.0, 1, [1])
+    assert (b["sum"], b["value"], b["size"], b["member_ids"]) == (0.0, 0.0, 0, [])
+
+
+# --- rows_between -----------------------------------------------------------
+
+def test_rows_between_uses_window_and_category_filter(session):
+    u = make_user(session, username="anna")
+    lauf = make_category(session, name="Joggen", factor=1.0)
+    rad = make_category(session, name="Rad", factor=0.5)
+    ch = make_team_challenge(session, category_ids_json=json.dumps([lauf.id]))
+    add_activity(session, u.id, lauf.id, date(2026, 8, 1), 10.0)
+    add_activity(session, u.id, lauf.id, date(2026, 8, 5), 10.0)
+    add_activity(session, u.id, rad.id, date(2026, 8, 5), 10.0)
+    add_activity(session, u.id, lauf.id, date(2026, 8, 9), 10.0)
+    rows = svc.rows_between(session, u.id, ch, date(2026, 8, 2), date(2026, 8, 8))
+    assert [a.date for a, _ in rows] == [date(2026, 8, 5)]

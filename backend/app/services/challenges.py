@@ -34,18 +34,43 @@ def category_ids(ch: Challenge) -> list[int]:
     return json.loads(ch.category_ids_json or "[]")
 
 
-def _rows(
-    session: Session, user_id: int, ch: Challenge, bis: date_type | None = None
+def groups(ch: Challenge) -> list[dict]:
+    """[{"id": 1, "name": "Gruppe A", "member_ids": [3, 7]}] — empty until drawn."""
+    return json.loads(ch.groups_json or "[]")
+
+
+def set_groups(ch: Challenge, gruppen: list[dict]) -> None:
+    ch.groups_json = json.dumps(gruppen)
+
+
+def group_member_ids(ch: Challenge) -> list[int]:
+    return [uid for g in groups(ch) for uid in g["member_ids"]]
+
+
+def remove_group_member(ch: Challenge, user_id: int) -> None:
+    """Used when a person leaves a planned group challenge. No-op if absent."""
+    gruppen = groups(ch)
+    for g in gruppen:
+        g["member_ids"] = [uid for uid in g["member_ids"] if uid != user_id]
+    set_groups(ch, gruppen)
+
+
+def group_of(ch: Challenge, user_id: int) -> dict | None:
+    return next((g for g in groups(ch) if user_id in g["member_ids"]), None)
+
+
+def rows_between(
+    session: Session, user_id: int, ch: Challenge, von: date_type, bis: date_type
 ) -> list[tuple[Activity, Category]]:
-    """Aktivitaeten des Users im Challenge-Zeitraum, Kategorie-gefiltert."""
+    """Activities of the user between von and bis (inclusive), category-filtered
+    with the challenge's category list."""
     erlaubt = set(category_ids(ch))
-    ende = ch.period_end if bis is None else min(ch.period_end, bis)
     cats = {c.id: c for c in session.exec(select(Category)).all()}
     acts = session.exec(
         select(Activity).where(
             Activity.user_id == user_id,
-            Activity.date >= ch.period_start,
-            Activity.date <= ende,
+            Activity.date >= von,
+            Activity.date <= bis,
         )
     ).all()
     return [
@@ -53,6 +78,14 @@ def _rows(
         for a in acts
         if a.category_id in cats and (not erlaubt or a.category_id in erlaubt)
     ]
+
+
+def _rows(
+    session: Session, user_id: int, ch: Challenge, bis: date_type | None = None
+) -> list[tuple[Activity, Category]]:
+    """Aktivitaeten des Users im Challenge-Zeitraum, Kategorie-gefiltert."""
+    ende = ch.period_end if bis is None else min(ch.period_end, bis)
+    return rows_between(session, user_id, ch, ch.period_start, ende)
 
 
 def metric_mm(session: Session, user_id: int, ch: Challenge) -> float:
@@ -166,6 +199,20 @@ def teilnehmer_ids(session: Session, ch: Challenge) -> list[int]:
     return sorted(r.user_id for r in rows if r.user_id in aktive)
 
 
+def _rank(items: list[dict]) -> None:
+    """Shared rank on equal value, following rank skipped (1, 2, 2, 4). In place,
+    items must already be sorted by value descending."""
+    letzter_wert = None
+    letzter_rang = 0
+    for i, e in enumerate(items, start=1):
+        if letzter_wert is not None and e["value"] == letzter_wert:
+            e["rank"] = letzter_rang
+        else:
+            e["rank"] = i
+            letzter_rang = i
+            letzter_wert = e["value"]
+
+
 def standings(
     session: Session, ch: Challenge, heute: date_type | None = None
 ) -> list[dict]:
@@ -183,16 +230,7 @@ def standings(
         for uid in teilnehmer_ids(session, ch)
     ]
     eintraege.sort(key=lambda e: (-e["value"], e["user_id"]))
-
-    letzter_wert = None
-    letzter_rang = 0
-    for i, e in enumerate(eintraege, start=1):
-        if letzter_wert is not None and e["value"] == letzter_wert:
-            e["rank"] = letzter_rang
-        else:
-            e["rank"] = i
-            letzter_rang = i
-            letzter_wert = e["value"]
+    _rank(eintraege)
 
     for e in eintraege:
         if ch.mode == "ziel":
@@ -204,6 +242,41 @@ def standings(
         else:
             e["geschafft"] = e["rank"] <= ch.top_n
     return eintraege
+
+
+def group_standings(ch: Challenge, eintraege: list[dict]) -> list[dict]:
+    """Aggregate per-person entries (output of standings()) into groups.
+    Pure: members missing from eintraege (inactive) drop out of sum and
+    divisor. Value is per head; target is per head."""
+    werte = {e["user_id"]: e["value"] for e in eintraege}
+    result = []
+    for g in groups(ch):
+        members = [
+            {"user_id": uid, "value": werte[uid]} for uid in g["member_ids"] if uid in werte
+        ]
+        members.sort(key=lambda m: (-m["value"], m["user_id"]))
+        total = round(sum(m["value"] for m in members), 2)
+        result.append(
+            {
+                "id": g["id"],
+                "name": g["name"],
+                "member_ids": [m["user_id"] for m in members],
+                "size": len(members),
+                "sum": total,
+                "value": round(total / len(members), 2) if members else 0.0,
+                "rank": 0,
+                "geschafft": False,
+                "members": members,
+            }
+        )
+    result.sort(key=lambda g: (-g["value"], g["id"]))
+    _rank(result)
+    for g in result:
+        if ch.mode == "ziel":
+            g["geschafft"] = ch.target is not None and g["value"] >= ch.target
+        else:
+            g["geschafft"] = g["rank"] <= ch.top_n
+    return result
 
 
 def freeze_at(ch: Challenge) -> datetime:
