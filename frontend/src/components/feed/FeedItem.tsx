@@ -137,7 +137,7 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
         <div className="flex items-baseline gap-2 text-sm">
           <span>✅</span>
           <span className="text-ink">
-            <b>{ev.display_name}</b> hat das Ziel geknackt —{' '}
+            <b>{ev.payload.group_name ?? ev.display_name}</b> hat das Ziel geknackt —{' '}
             <b className="text-accent">{ev.payload.title}</b>
           </span>
         </div>
@@ -146,7 +146,14 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
         <div className="flex items-baseline gap-2 text-sm">
           <span>🏆</span>
           <span className="text-ink">
-            <b>{ev.display_name}</b> gewinnt <b>{ev.payload.title}</b>
+            <b>
+              {ev.display_name
+                ? ev.payload.gruppe
+                  ? `${ev.display_name} (${ev.payload.gruppe})`
+                  : ev.display_name
+                : ev.payload.gruppe}
+            </b>{' '}
+            gewinnt <b>{ev.payload.title}</b>
             {ev.payload.prize && (
               <span className="text-ink-mute"> · 🎁 {ev.payload.prize}</span>
             )}
@@ -158,7 +165,12 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
           <span>🏆</span>
           <span className="text-ink">
             <b>{ev.payload.title}</b> ist vorbei —{' '}
-            {ev.payload.gewinner_namen && ev.payload.gewinner_namen.length > 0 ? (
+            {(ev.payload.gewinner_gruppen?.length ?? 0) > 0 ? (
+              <>
+                <b>{undListe(ev.payload.gewinner_gruppen ?? [])}</b>
+                {ev.payload.prize ? ` gewinnt: ${ev.payload.prize}` : ' vorn'}
+              </>
+            ) : ev.payload.gewinner_namen && ev.payload.gewinner_namen.length > 0 ? (
               <>
                 <b>{undListe(ev.payload.gewinner_namen)}</b>
                 {ev.payload.prize ? ` gewinnt: ${ev.payload.prize}` : ' vorn'}
