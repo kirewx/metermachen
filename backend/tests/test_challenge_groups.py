@@ -378,12 +378,14 @@ def test_save_groups_rejects_bad_lists(session):
     ok = {"id": 2, "name": "B", "member_ids": [b.id]}
     cases = [
         ([{"id": 1, "name": "A", "member_ids": [a.id]}], "genau 2 Gruppen"),
-        ([{"id": 1, "name": "A", "member_ids": [a.id, b.id]}, ok], "zwei Gruppen"),
+        ([{"id": 1, "name": "A", "member_ids": [a.id, b.id]}, ok], "mehrfach in den Gruppen"),
+        ([{"id": 1, "name": "A", "member_ids": [a.id, a.id]}, ok], "mehrfach in den Gruppen"),
         ([{"id": 1, "name": "A", "member_ids": [c.id]}, ok], "inaktive"),
         ([{"id": 1, "name": "A", "member_ids": [999]}, ok], "inaktive"),
         ([{"id": 1, "name": "  ", "member_ids": [a.id]}, ok], "Namen"),
         ([{"id": 1, "name": "A", "member_ids": []}, ok], "leer"),
         ([{"id": 2, "name": "A", "member_ids": [a.id]}, ok], "Gruppen-ID"),
+        ([{"id": 1, "name": "A", "member_ids": [a.id]}, {"id": 3, "name": "B", "member_ids": [b.id]}], "1 bis 2"),
     ]
     for gruppen, text in cases:
         with pytest.raises(cg.InvalidGroups, match=text):
@@ -406,6 +408,28 @@ def test_save_groups_opt_in_adds_participant_rows(session):
         select(ChallengeParticipant).where(ChallengeParticipant.challenge_id == ch.id)
     ).all()
     assert sorted(r.user_id for r in rows) == sorted([a.id, b.id])
+
+
+def test_save_groups_auto_mode_creates_no_participant_rows(session):
+    from sqlmodel import select
+
+    a = make_user(session, username="anna")
+    b = make_user(session, username="ben")
+    ch = make_team_challenge(session, group_count=2, join_mode="auto")
+    cg.save_groups(session, ch, [
+        {"id": 1, "name": "A", "member_ids": [a.id]},
+        {"id": 2, "name": "B", "member_ids": [b.id]},
+    ])
+    rows = session.exec(
+        select(ChallengeParticipant).where(ChallengeParticipant.challenge_id == ch.id)
+    ).all()
+    assert rows == []
+
+
+def test_validate_groups_rejects_non_team_challenge(session):
+    ch = make_team_challenge(session, team_mode=False, group_count=None)
+    with pytest.raises(cg.InvalidGroups, match="Keine Gruppen-Challenge"):
+        cg.validate_groups(session, ch, [])
 
 
 # --- lifecycle, freeze, sieger ---------------------------------------------

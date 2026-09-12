@@ -24,7 +24,7 @@ class TooFewPeople(ValueError):
 
 
 class InvalidGroups(ValueError):
-    """An edited group list breaks a rule — 422 with the message."""
+    """A group setup breaks a rule (edited list or group_count) — 422 with the message."""
 
 
 def default_name(index: int) -> str:
@@ -113,6 +113,8 @@ def _joined_ids(session: Session, ch: Challenge) -> set[int]:
 def validate_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[dict]:
     """Normalise and check an edited group list. Returns the clean list or
     raises InvalidGroups with a German message for the admin."""
+    if not ch.team_mode or not ch.group_count:
+        raise InvalidGroups("Keine Gruppen-Challenge")
     if len(raw) != ch.group_count:
         raise InvalidGroups(f"Es müssen genau {ch.group_count} Gruppen sein")
     active = _active_ids(session)
@@ -132,11 +134,13 @@ def validate_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[di
             raise InvalidGroups(f"{name} ist leer")
         for uid in members:
             if uid in seen_users:
-                raise InvalidGroups("Eine Person steht in zwei Gruppen")
+                raise InvalidGroups("Eine Person steht mehrfach in den Gruppen")
             if uid not in active:
                 raise InvalidGroups("Unbekannte oder inaktive Person")
             seen_users.add(uid)
         clean.append({"id": gid, "name": name, "member_ids": members})
+    if seen_ids != set(range(1, ch.group_count + 1)):
+        raise InvalidGroups(f"Gruppen-IDs müssen 1 bis {ch.group_count} sein")
     return clean
 
 
