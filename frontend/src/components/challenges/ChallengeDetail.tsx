@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
-import type { Challenge, ChallengeStanding } from '../../api/client'
+import type { Challenge, ChallengeStanding, SiegerWahl } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import Select from '../ui/Select'
 import { einheit, fortschritt, wertungText } from './wertung'
@@ -63,7 +63,7 @@ export default function ChallengeDetail() {
   })
   const [wahl, setWahl] = useState<number | null>(null)
   const siegerSetzen = useMutation({
-    mutationFn: (userId: number) => api.setChallengeSieger(challengeId, userId),
+    mutationFn: (wahl: SiegerWahl) => api.setChallengeSieger(challengeId, wahl),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] })
       queryClient.invalidateQueries({ queryKey: ['challenges'] })
@@ -141,7 +141,7 @@ export default function ChallengeDetail() {
                   ))}
               </Select>
               <button
-                onClick={() => wahl !== null && siegerSetzen.mutate(wahl)}
+                onClick={() => wahl !== null && siegerSetzen.mutate({ user_id: wahl })}
                 disabled={wahl === null || siegerSetzen.isPending}
                 className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
               >

@@ -332,6 +332,11 @@ export type FeedEvent = {
     prize?: string | null
     gewinner_ids?: number[]
     gewinner_namen?: string[]
+    gewinner_gruppen?: string[]
+    group_id?: number | null
+    group_name?: string
+    gruppe?: string | null
+    group_count?: number | null
   }
   reactions: FeedReaction[]
 }
@@ -346,6 +351,19 @@ export type ChallengeStanding = {
   geschafft: boolean
   nicht_mehr_schaffbar: boolean
 }
+export type ChallengeGroup = {
+  id: number
+  name: string
+  size: number
+  sum: number
+  value: number // per head
+  rank: number
+  geschafft: boolean
+  members: ChallengeStanding[]
+}
+export type ChallengeGroupInput = { id: number; name: string; member_ids: number[] }
+export type SeedingEntry = { user_id: number; display_name: string; avatar: string; value: number }
+export type SiegerWahl = { user_id: number } | { group_id: number }
 export type Challenge = {
   id: number
   title: string
@@ -370,6 +388,15 @@ export type Challenge = {
   gewinner_ids: number[]
   sieger_id: number | null
   kann_sieger_setzen: boolean
+  team_mode: boolean
+  group_count: number | null
+  seeding_days: number
+  groups_drawn: boolean
+  groups: ChallengeGroup[]
+  unassigned: ChallengeStanding[]
+  meine_gruppe_id: number | null
+  sieger_group_id: number | null
+  kann_gruppen_bearbeiten: boolean
   created_at: string
   resolved_at: string | null
 }
@@ -386,6 +413,9 @@ export type ChallengeInput = {
   join_mode: Challenge['join_mode']
   period_start: string
   period_end: string
+  team_mode?: boolean
+  group_count?: number | null
+  seeding_days?: number
 }
 
 /** Fehler mit HTTP-Status, damit Aufrufer 401 (Session weg) von Netz-/Serverfehlern trennen können. */
@@ -540,11 +570,20 @@ export const api = {
     request<Challenge>(`/api/challenges/${id}`, patch(b)),
   cancelChallenge: (id: number) =>
     request<void>(`/api/challenges/${id}`, { method: 'DELETE' }),
-  setChallengeSieger: (id: number, userId: number) =>
+  setChallengeSieger: (id: number, wahl: SiegerWahl) =>
     request<Challenge>(`/api/challenges/${id}/sieger`, {
       method: 'PUT',
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify(wahl),
     }),
+  drawChallengeGroups: (id: number) =>
+    request<Challenge>(`/api/challenges/${id}/draw`, { method: 'POST' }),
+  saveChallengeGroups: (id: number, groups: ChallengeGroupInput[]) =>
+    request<Challenge>(`/api/challenges/${id}/groups`, {
+      method: 'PUT',
+      body: JSON.stringify({ groups }),
+    }),
+  challengeSeeding: (id: number) =>
+    request<SeedingEntry[]>(`/api/challenges/${id}/seeding`),
   feed: (year: number, before?: number) =>
     request<FeedPage>(`/api/feed?year=${year}${before ? `&before=${before}` : ''}`),
   toggleFeedReaction: (eventId: number, emoji: string) =>

@@ -82,7 +82,7 @@ describe('ChallengeDetail', () => {
     )
     fireEvent.change(screen.getByLabelText('Sieger'), { target: { value: '2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sieger eintragen' }))
-    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, 2))
+    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { user_id: 2 }))
   })
 
   it('zeigt den eingetragenen Sieger allen', async () => {
