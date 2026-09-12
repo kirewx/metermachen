@@ -80,7 +80,7 @@ describe('ChallengeDetail', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Sieger eintragen' })).toBeInTheDocument(),
     )
-    fireEvent.change(screen.getByLabelText('Sieger'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Sieger'), { target: { value: 'u:2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sieger eintragen' }))
     await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { user_id: 2 }))
   })
@@ -158,5 +158,41 @@ describe('ChallengeDetail', () => {
     expect(screen.getByRole('link', { name: /Gruppen bearbeiten/ })).toHaveAttribute(
       'href', '/arena/challenges/1/gruppen',
     )
+  })
+
+  it('lets the admin pick a winning group or one of its members', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'beendet', vorlaeufig: false, sieger_id: null, kann_sieger_setzen: true,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByLabelText('Sieger')).toBeInTheDocument())
+    const select = screen.getByLabelText('Sieger') as HTMLSelectElement
+    const labels = Array.from(select.options).map((o) => o.textContent)
+    expect(labels).toEqual(['– bitte wählen –', 'Gruppe A', 'Rick (Gruppe A)', 'Mia (Gruppe A)'])
+    fireEvent.change(select, { target: { value: 'g:1' } })
+    fireEvent.click(screen.getByText('Sieger eintragen'))
+    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { group_id: 1 }))
+    fireEvent.change(select, { target: { value: 'u:2' } })
+    fireEvent.click(screen.getByText('Sieger eintragen'))
+    await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { user_id: 2 }))
+  })
+
+  it('shows the group winner band', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'beendet', vorlaeufig: false, sieger_group_id: 1, sieger_id: null,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/Sieger: Gruppe A/)).toBeInTheDocument())
+  })
+
+  it('shows a person winner with their group', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...teamDetail, status: 'beendet', vorlaeufig: false, sieger_group_id: null, sieger_id: 2,
+    } as never)
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/Sieger: Mia \(Gruppe A\)/)).toBeInTheDocument())
   })
 })

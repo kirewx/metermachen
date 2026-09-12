@@ -6,7 +6,7 @@ import type { Challenge, ChallengeStanding, SiegerWahl } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import Select from '../ui/Select'
 import GroupCard from './GroupCard'
-import { einheit, fortschritt, wertungText } from './wertung'
+import { einheit, fortschritt, siegerText, wertungText } from './wertung'
 
 function Chip({ ch, s }: { ch: Challenge; s: ChallengeStanding }) {
   // Das Theme hat keine Erfolgsfarbe (nur accent/danger/line) — "geschafft"
@@ -76,6 +76,27 @@ function GroupSection({ ch }: { ch: Challenge }) {
   )
 }
 
+/** Select options: qualified groups first, then their members; plain people otherwise. */
+function siegerOptionen(ch: Challenge): { value: string; label: string }[] {
+  if (!ch.team_mode) {
+    return ch.standings
+      .filter((s) => ch.gewinner_ids.includes(s.user_id))
+      .map((s) => ({ value: `u:${s.user_id}`, label: s.display_name }))
+  }
+  const gruppen = ch.groups.filter((g) => g.geschafft)
+  return [
+    ...gruppen.map((g) => ({ value: `g:${g.id}`, label: g.name })),
+    ...gruppen.flatMap((g) =>
+      g.members.map((m) => ({ value: `u:${m.user_id}`, label: `${m.display_name} (${g.name})` })),
+    ),
+  ]
+}
+
+function parseWahl(wahl: string): SiegerWahl {
+  const [art, id] = wahl.split(':')
+  return art === 'g' ? { group_id: Number(id) } : { user_id: Number(id) }
+}
+
 export default function ChallengeDetail() {
   const { id } = useParams()
   const challengeId = Number(id)
@@ -95,9 +116,9 @@ export default function ChallengeDetail() {
       queryClient.invalidateQueries({ queryKey: ['challenges'] })
     },
   })
-  const [wahl, setWahl] = useState<number | null>(null)
+  const [wahl, setWahl] = useState<string>('')
   const siegerSetzen = useMutation({
-    mutationFn: (wahl: SiegerWahl) => api.setChallengeSieger(challengeId, wahl),
+    mutationFn: (sieger: SiegerWahl) => api.setChallengeSieger(challengeId, sieger),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] })
       queryClient.invalidateQueries({ queryKey: ['challenges'] })
@@ -151,11 +172,9 @@ export default function ChallengeDetail() {
 
       {ch.status === 'beendet' && ch.mode === 'ziel' && (
         <section className="rounded-2xl border border-accent bg-card p-3">
-          {ch.sieger_id !== null ? (
+          {siegerText(ch) !== null ? (
             <p className="text-sm font-bold text-ink">
-              🏆 Sieger:{' '}
-              {ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ??
-                'unbekannt'}
+              🏆 Sieger: {siegerText(ch)}
               {ch.prize && (
                 <span className="font-normal text-ink-mute"> — {ch.prize}</span>
               )}
@@ -165,21 +184,19 @@ export default function ChallengeDetail() {
               <Select
                 label="Sieger"
                 className="flex-1"
-                value={wahl === null ? '' : String(wahl)}
-                onChange={(e) => setWahl(Number(e.target.value))}
+                value={wahl}
+                onChange={(e) => setWahl(e.target.value)}
               >
                 <option value="">– bitte wählen –</option>
-                {ch.standings
-                  .filter((s) => ch.gewinner_ids.includes(s.user_id))
-                  .map((s) => (
-                    <option key={s.user_id} value={s.user_id}>
-                      {s.display_name}
-                    </option>
-                  ))}
+                {siegerOptionen(ch).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </Select>
               <button
-                onClick={() => wahl !== null && siegerSetzen.mutate({ user_id: wahl })}
-                disabled={wahl === null || siegerSetzen.isPending}
+                onClick={() => wahl && siegerSetzen.mutate(parseWahl(wahl))}
+                disabled={!wahl || siegerSetzen.isPending}
                 className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
               >
                 Sieger eintragen

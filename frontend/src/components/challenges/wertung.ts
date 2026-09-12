@@ -42,6 +42,22 @@ export function meineGruppe(ch: Challenge): ChallengeGroup | null {
   return ch.groups.find((g) => g.id === ch.meine_gruppe_id) ?? null
 }
 
+/** The group a person belongs to, by the members list. */
+export function gruppeVon(ch: Challenge, userId: number): ChallengeGroup | undefined {
+  return ch.groups.find((g) => g.members.some((m) => m.user_id === userId))
+}
+
+/** "Gruppe A", "Mia (Gruppe A)" or "Mia"; null while no winner is entered. */
+export function siegerText(ch: Challenge): string | null {
+  if (ch.sieger_group_id != null) {
+    return ch.groups.find((g) => g.id === ch.sieger_group_id)?.name ?? 'unbekannt'
+  }
+  if (ch.sieger_id == null) return null
+  const name = ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ?? 'unbekannt'
+  const gruppe = ch.team_mode ? gruppeVon(ch, ch.sieger_id) : undefined
+  return gruppe ? `${name} (${gruppe.name})` : name
+}
+
 /** 0..1 für den Fortschrittsbalken. Ranglisten haben keine Schwelle → 0. */
 export function fortschritt(ch: Challenge, wert: number): number {
   if (ch.mode !== 'ziel' || !ch.target) return 0

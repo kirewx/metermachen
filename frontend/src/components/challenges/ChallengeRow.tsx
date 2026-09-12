@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom'
 import type { Challenge } from '../../api/client'
+import { siegerText } from './wertung'
 
-// The one person who won. Target mode: the admin-set prize winner, or the
-// only qualifier when there is exactly one. Ranking mode: rank 1 among the
-// qualifiers. Null while a target challenge with several qualifiers still
-// waits for the draw.
+// The one winner. Entered prize winner first (group or person). Otherwise:
+// group challenge → the winning groups' names; target mode → the only
+// qualifier when there is exactly one; ranking mode → rank 1. Null while a
+// target challenge with several qualifiers still waits for the draw.
 function winnerName(ch: Challenge): string | null {
-  if (ch.sieger_id != null) {
-    return ch.standings.find((s) => s.user_id === ch.sieger_id)?.display_name ?? null
+  const entered = siegerText(ch)
+  if (entered !== null) return entered
+  if (ch.team_mode) {
+    const namen = ch.groups.filter((g) => g.geschafft).map((g) => g.name)
+    return namen.length > 0 ? namen.join(', ') : null
   }
   const qualified = ch.standings
     .filter((s) => ch.gewinner_ids.includes(s.user_id))
