@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom'
 import type { Comparison } from '../../api/client'
 import { profilPfad } from '../profile/pfad'
 import Card from '../ui/Card'
+import { showsSeasonTargets } from './period'
 import { unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
 
@@ -33,6 +34,7 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
     String(a.date).localeCompare(String(b.date)),
   )
   const ids = data.users.map((u) => u.user_id)
+  const targets = showsSeasonTargets(data.month, mode)
   // Letzter Datenpunkt je Person — dort sitzen Endpunkt-Dot und Namens-Label.
   const lastIndex = new Map<string, number>()
   for (const u of data.users) {
@@ -66,7 +68,7 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
             }}
             labelStyle={{ color: 'var(--t-ink-mute)' }}
           />
-          {mode === 'mm' && data.milestones.map((m) => (
+          {targets && data.milestones.map((m) => (
             <ReferenceLine
               key={m.km}
               y={m.km}
@@ -76,7 +78,7 @@ export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison;
               label={{ value: m.label, fontSize: 11, position: 'right', fill: 'var(--t-ink-mute)' }}
             />
           ))}
-          {mode === 'mm' && (
+          {targets && (
             <ReferenceLine
               y={data.goal_km}
               stroke="var(--t-accent)"

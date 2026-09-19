@@ -1,3 +1,5 @@
+import type { UnitMode } from './unit'
+
 export type PeriodMode = 'month' | 'year'
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
@@ -17,6 +19,11 @@ export function defaultMonth(months: string[], today: Date): string | null {
 export function monthLabel(key: string): string {
   const [year, month] = key.split('-')
   return `${MONTHS_SHORT[Number(month) - 1]} ${year}`
+}
+
+/** Season goal and milestones are MM values for the whole season; a month or the km view has none. */
+export function showsSeasonTargets(month: string | null | undefined, mode: UnitMode): boolean {
+  return month == null && mode === 'mm'
 }
 
 /** Keys sort lexicographically, so a plain string compare is enough. */

@@ -2,7 +2,7 @@ import { isFinishedMonth, monthLabel, type PeriodMode } from './period'
 
 type Props = {
   mode: PeriodMode
-  /** Only Rennen and Sport-Mix can be viewed per month. */
+  /** False on views that always cover the whole season (Höhenmeter). */
   showModeToggle: boolean
   /** Seasons in ascending order. */
   years: { year: number; label: string }[]

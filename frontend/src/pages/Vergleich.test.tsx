@@ -77,13 +77,24 @@ describe('Vergleich', () => {
     await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, months[0]))
   })
 
-  it('hides the Monat pill on Verlauf and restores month mode on return', async () => {
+  it('keeps month mode on Verlauf', async () => {
     renderPage()
     const pill = await screen.findByRole('button', { name: 'Monat' })
     await waitFor(() => expect(pill).toBeEnabled())
     fireEvent.click(pill)
     fireEvent.click(screen.getByRole('button', { name: /Verlauf/ }))
+    expect(screen.getByRole('button', { name: 'Monat' })).toBeInTheDocument()
+    expect(screen.getByText(monthLabel(current))).toBeInTheDocument()
+  })
+
+  it('hides the Monat pill on Höhenmeter and restores month mode on return', async () => {
+    renderPage()
+    const pill = await screen.findByRole('button', { name: 'Monat' })
+    await waitFor(() => expect(pill).toBeEnabled())
+    fireEvent.click(pill)
+    fireEvent.click(screen.getByRole('button', { name: /Höhenmeter/ }))
     expect(screen.queryByRole('button', { name: 'Monat' })).toBeNull()
+    expect(screen.queryByText(monthLabel(current))).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Rennen/ }))
     expect(screen.getByText(monthLabel(current))).toBeInTheDocument()
   })

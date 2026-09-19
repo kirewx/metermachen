@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultMonth, isFinishedMonth, monthKey, monthLabel } from './period'
+import { defaultMonth, isFinishedMonth, monthKey, monthLabel, showsSeasonTargets } from './period'
 
 const today = new Date(2026, 8, 19) // 19 Sep 2026
 
@@ -30,5 +30,12 @@ describe('period helpers', () => {
     expect(isFinishedMonth('2026-08', today)).toBe(true)
     expect(isFinishedMonth('2026-09', today)).toBe(false)
     expect(isFinishedMonth('2026-10', today)).toBe(false)
+  })
+
+  it('showsSeasonTargets only for the whole season in MM', () => {
+    expect(showsSeasonTargets(null, 'mm')).toBe(true)
+    expect(showsSeasonTargets(undefined, 'mm')).toBe(true)
+    expect(showsSeasonTargets('2026-09', 'mm')).toBe(false)
+    expect(showsSeasonTargets(null, 'km')).toBe(false)
   })
 })

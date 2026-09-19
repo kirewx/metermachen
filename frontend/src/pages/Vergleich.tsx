@@ -23,7 +23,7 @@ const ANSICHTEN = [
 type Ansicht = (typeof ANSICHTEN)[number]['key']
 
 /** Views that can be shown per month; the others always cover the whole season. */
-const MONTH_VIEWS: readonly Ansicht[] = ['rennen', 'sportmix']
+const MONTH_VIEWS: readonly Ansicht[] = ['rennen', 'verlauf', 'sportmix']
 
 /** Wertet den `?strava=`-Param nach dem OAuth-Rücksprung aus: Toast + Param entfernen. */
 function useStravaRedirectHinweis() {

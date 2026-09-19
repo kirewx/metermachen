@@ -14,7 +14,7 @@ This is chunk 2 of the frontend redesign. Chunk 3 (monthly achievements, "Bester
 
 - No visual rework of the four views (Rennen, Verlauf, Sport-Mix, Höhenmeter).
 - No monthly goal and no monthly milestones.
-- No month mode for Verlauf, Höhenmeter or the warm-up archive.
+- No month mode for Höhenmeter or the warm-up archive.
 - No monthly achievements (chunk 3).
 - No URL state for view, mode or month.
 - No mass renames of existing German identifiers.
@@ -26,7 +26,7 @@ This is chunk 2 of the frontend redesign. Chunk 3 (monthly achievements, "Bester
 | Scope | Month toggle plus control-row tidy-up; existing views keep their look |
 | Month target | No goal; the month leader sets the lane scale |
 | Month range | Every month of the selected season, default is the current month |
-| Toggle reach | Rennen and Sport-Mix; Verlauf and Höhenmeter stay year-only |
+| Toggle reach | Rennen, Verlauf and Sport-Mix; Höhenmeter stays year-only (Verlauf added after Erik's review of the running page, for consistency) |
 | Quick-entry bar | Removed from Vergleich; entry lives on MyMeters |
 | Control layout | Row 1 view tabs; row 2 Monat/Jahr pill, stepper, MM/km. The stepper replaces the Saison select |
 | Computation | Backend `month` query param on the existing comparison endpoint |
@@ -64,7 +64,7 @@ Row 2: `PeriodControl` on the left, the MM/km pill on the right (hidden on Höhe
 New component `components/comparison/PeriodControl.tsx` (presentational, state lives in `Vergleich`):
 
 - Props: `mode: 'month' | 'year'`, `showModeToggle: boolean`, `years: number[]` (ascending), `year`, `months: string[]`, `month: string | null`, `onModeChange`, `onYearChange`, `onMonthChange`.
-- Pill "Monat | Jahr", rendered only when `showModeToggle` is true (Rennen and Sport-Mix).
+- Pill "Monat | Jahr", rendered only when `showModeToggle` is true (Rennen, Verlauf and Sport-Mix).
 - Stepper `‹ label ›`. In the effective year mode the label is the season year and the arrows step through `years`. In month mode the label is the German short month plus year ("Sep 2026") and the arrows step through `months`. Arrows are disabled at both ends. aria-labels: "Vorheriger Monat", "Nächster Monat", "Vorherige Saison", "Nächste Saison".
 - A finished month (earlier than the current calendar month) shows a small "Endstand" tag next to the stepper.
 
@@ -77,7 +77,7 @@ Pure helpers in `components/comparison/period.ts`:
 State in `Vergleich`:
 
 - `mode` (`'year'` by default), `month` (`string | null`), the existing `gewaehlt` season and `ansicht`.
-- The effective mode is `'month'` only when `mode === 'month'` and the view is Rennen or Sport-Mix. Switching to Verlauf or Höhenmeter keeps `mode`, so returning restores the month view.
+- The effective mode is `'month'` only when `mode === 'month'` and the view is Rennen, Verlauf or Sport-Mix. Switching to Höhenmeter keeps `mode`, so returning restores the month view.
 - The month axis comes from the year query (`['comparison', year, null]`), which is always loaded. Switching to month mode, or changing the season while in month mode, sets `month` to `defaultMonth(months, today)`.
 - Data query: `['comparison', year, effectiveMonth]` with `api.comparison(year, effectiveMonth ?? undefined)`.
 
@@ -94,6 +94,8 @@ Warm-up archive: the "Archiv (Warm-up)" select option is replaced by a text link
 Year mode behaves exactly as before.
 
 `SportMix` needs no change; it renders the filtered `by_category`.
+
+`JahresVerlauf` renders the filtered `cumulative` series, which the backend restarts at zero for the month. The goal and milestone reference lines are season values and are hidden in month mode (`showsSeasonTargets(month, mode)` in `period.ts`).
 
 Both modes: a user whose total is 0 shows rank "–" and never gets the leader glow. This prevents an arbitrary "leader" on the first day of a month.
 
