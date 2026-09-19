@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { api } from '../../api/client'
 import type { Comparison } from '../../api/client'
 import RaceBahnen from './RaceBahnen'
 
@@ -30,12 +31,12 @@ const data: Comparison = {
   phase: 'challenge',
 }
 
-function renderRace(mode?: 'mm' | 'km') {
+function renderRace(mode?: 'mm' | 'km', d: Comparison = data) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <RaceBahnen data={data} mode={mode} />
+        <RaceBahnen data={d} mode={mode} />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -78,5 +79,43 @@ describe('RaceBahnen Detailansicht', () => {
     fireEvent.click(screen.getByText('🎩'))
     expect(screen.getByText('Hattrick')).toBeInTheDocument()
     expect(screen.getByText('Drei Aktivitäten an einem Tag.')).toBeInTheDocument()
+  })
+})
+
+describe('RaceBahnen Monatsmodus', () => {
+  const monthData = {
+    ...data,
+    month: '2026-09',
+    milestones: [{ km: 500, icon: 'berg', label: 'Halbzeit' }],
+  } as Comparison
+
+  it('zeigt weder Ziel noch Meilensteine', () => {
+    renderRace('mm', monthData)
+    expect(screen.queryByText('1000')).toBeNull()
+    expect(screen.queryByText('500')).toBeNull()
+  })
+
+  it('zeigt im Jahresmodus Ziel und Meilensteine', () => {
+    renderRace('mm', { ...monthData, month: null } as Comparison)
+    expect(screen.getByText('1000')).toBeInTheDocument()
+    expect(screen.getByText('500')).toBeInTheDocument()
+  })
+
+  it('zeigt kein Seit-Besuch-Banner und markiert nichts als gesehen', async () => {
+    vi.mocked(api.lastSeenComparison).mockClear()
+    renderRace('mm', monthData)
+    await waitFor(() => expect(screen.getByText('300')).toBeInTheDocument())
+    expect(screen.queryByText(/Seit deinem letzten Besuch/)).toBeNull()
+    expect(api.lastSeenComparison).not.toHaveBeenCalled()
+  })
+
+  it('zeigt Rang – für Personen ohne Meter', () => {
+    const zero = {
+      ...monthData,
+      users: monthData.users.map((u) => ({ ...u, total_scaled_km: 0, total_real_km: 0 })),
+    } as Comparison
+    renderRace('mm', zero)
+    expect(screen.getAllByText('–')).toHaveLength(2)
+    expect(screen.queryByText('1')).toBeNull()
   })
 })
