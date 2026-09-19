@@ -1,0 +1,99 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { api } from '../api/client'
+import { monthKey, monthLabel } from '../components/comparison/period'
+import { ToastProvider } from '../components/ui/Toast'
+import Vergleich from './Vergleich'
+
+const thisYear = new Date().getFullYear()
+const current = monthKey(new Date())
+const months = [`${thisYear - 1}-12`, current]
+
+const comparison = (month: string | null) => ({
+  year: thisYear,
+  goal_km: 1000,
+  milestones: [],
+  users: [],
+  start_date: null,
+  phase: 'challenge',
+  elevation_months: months,
+  month,
+  months,
+})
+
+vi.mock('../api/client', () => ({
+  api: {
+    seasons: vi.fn(),
+    comparison: vi.fn(),
+    lastSeenComparison: vi.fn().mockResolvedValue(null),
+    markComparisonSeen: vi.fn(),
+  },
+}))
+vi.mock('../components/comparison/WarmupArchiv', () => ({
+  default: () => <p>Warmup-Inhalt</p>,
+}))
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <ToastProvider>
+        <MemoryRouter>
+          <Vergleich />
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>,
+  )
+}
+
+describe('Vergleich', () => {
+  beforeEach(() => {
+    vi.mocked(api.seasons).mockResolvedValue([
+      { id: 1, year: thisYear, goal_km: 1000, milestones: [], start_date: null, end_date: null },
+    ])
+    vi.mocked(api.comparison).mockReset()
+    vi.mocked(api.comparison).mockImplementation((_y: number, m?: string) =>
+      Promise.resolve(comparison(m ?? null) as never),
+    )
+  })
+
+  it('has no quick-entry bar and no Saison select', async () => {
+    renderPage()
+    await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear))
+    expect(screen.queryByLabelText('Saison')).toBeNull()
+    expect(screen.queryByText(/Schnell/i)).toBeNull()
+  })
+
+  it('requests the current month after switching to Monat', async () => {
+    renderPage()
+    const pill = await screen.findByRole('button', { name: 'Monat' })
+    await waitFor(() => expect(pill).toBeEnabled())
+    fireEvent.click(pill)
+    await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, current))
+    expect(screen.getByText(monthLabel(current))).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Vorheriger Monat' }))
+    await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, months[0]))
+  })
+
+  it('hides the Monat pill on Verlauf and restores month mode on return', async () => {
+    renderPage()
+    const pill = await screen.findByRole('button', { name: 'Monat' })
+    await waitFor(() => expect(pill).toBeEnabled())
+    fireEvent.click(pill)
+    fireEvent.click(screen.getByRole('button', { name: /Verlauf/ }))
+    expect(screen.queryByRole('button', { name: 'Monat' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Rennen/ }))
+    expect(screen.getByText(monthLabel(current))).toBeInTheDocument()
+  })
+
+  it('opens and closes the warm-up archive through links', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Warm-up-Archiv' }))
+    expect(screen.getByText('Warmup-Inhalt')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Monat' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück zum Vergleich' }))
+    expect(screen.queryByText('Warmup-Inhalt')).toBeNull()
+  })
+})

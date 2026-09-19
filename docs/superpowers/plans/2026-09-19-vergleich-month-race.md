@@ -736,7 +736,7 @@ describe('Vergleich', () => {
 
   it('has no quick-entry bar and no Saison select', async () => {
     renderPage()
-    await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, undefined))
+    await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear))
     expect(screen.queryByLabelText('Saison')).toBeNull()
     expect(screen.queryByText(/Schnell/i)).toBeNull()
   })
