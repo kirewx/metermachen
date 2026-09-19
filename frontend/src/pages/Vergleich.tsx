@@ -4,11 +4,12 @@ import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import Hoehenmeter from '../components/comparison/Hoehenmeter'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
-import { defaultMonth, type PeriodMode } from '../components/comparison/period'
+import { defaultMonth } from '../components/comparison/period'
 import PeriodControl from '../components/comparison/PeriodControl'
 import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
 import { useUnitMode } from '../components/comparison/unit'
+import { usePeriodMode } from '../components/comparison/usePeriodMode'
 import WarmupArchiv from '../components/comparison/WarmupArchiv'
 import Icon from '../components/ui/Icon'
 import { aktiveSeason, saisonLabel } from '../components/ui/season'
@@ -57,7 +58,7 @@ export default function Vergleich() {
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const [gewaehlt, setGewaehlt] = useState<number | null>(null)
   const [archiv, setArchiv] = useState(false)
-  const [period, setPeriod] = useState<PeriodMode>('year')
+  const [period, setPeriod] = usePeriodMode()
   // The month the user stepped to; null means "the season's default month".
   const [month, setMonth] = useState<string | null>(null)
   const [today] = useState(() => new Date())
@@ -121,7 +122,8 @@ export default function Vergleich() {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <PeriodControl
-          mode={period}
+          // A season without months can only be shown as a whole.
+          mode={months.length === 0 ? 'year' : period}
           showModeToggle={monthViews}
           years={years}
           year={year}

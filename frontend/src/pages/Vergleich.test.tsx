@@ -50,6 +50,7 @@ function renderPage() {
 
 describe('Vergleich', () => {
   beforeEach(() => {
+    localStorage.clear()
     vi.mocked(api.seasons).mockResolvedValue([
       { id: 1, year: thisYear, goal_km: 1000, milestones: [], start_date: null, end_date: null },
     ])
@@ -66,15 +67,34 @@ describe('Vergleich', () => {
     expect(screen.queryByText(/Schnell/i)).toBeNull()
   })
 
-  it('requests the current month after switching to Monat', async () => {
+  it('opens in month mode on the first visit and steps through months', async () => {
     renderPage()
-    const pill = await screen.findByRole('button', { name: 'Monat' })
-    await waitFor(() => expect(pill).toBeEnabled())
-    fireEvent.click(pill)
     await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, current))
     expect(screen.getByText(monthLabel(current))).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Vorheriger Monat' }))
     await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, months[0]))
+  })
+
+  it('remembers the chosen mode in the browser', async () => {
+    const first = renderPage()
+    await screen.findByText(monthLabel(current))
+    fireEvent.click(screen.getByRole('button', { name: 'Jahr' }))
+    expect(localStorage.getItem('mm_period_mode')).toBe('year')
+    first.unmount()
+    vi.mocked(api.comparison).mockClear()
+    renderPage()
+    await screen.findByRole('button', { name: 'Vorherige Saison' })
+    expect(screen.queryByText(monthLabel(current))).toBeNull()
+    expect(api.comparison).not.toHaveBeenCalledWith(thisYear, current)
+  })
+
+  it('falls back to the season while it has no months', async () => {
+    vi.mocked(api.comparison).mockImplementation(() =>
+      Promise.resolve({ ...comparison(null), months: [], elevation_months: [] } as never),
+    )
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Monat' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Vorherige Saison' })).toBeInTheDocument()
   })
 
   it('keeps month mode on Verlauf', async () => {
