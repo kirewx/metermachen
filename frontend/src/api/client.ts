@@ -85,11 +85,9 @@ export type Comparison = {
   users: ComparisonUser[]
   start_date: string | null
   phase: string
-  /** Gemeinsame Monatsachse ab Challenge-Start, je Eintrag 'YYYY-MM'. */
-  elevation_months: string[]
-  /** Requested month ('YYYY-MM') or null for the whole season. */
+  /** Shown month ('YYYY-MM') or null for the whole season. */
   month: string | null
-  /** Month axis of the season, 'YYYY-MM' each; drives the month stepper. */
+  /** Month axis of the season from the challenge start, 'YYYY-MM' each; drives the month stepper and the Höhenmeter colours. */
   months: string[]
 }
 export type SeenEntry = { user_id: number; scaled_km: number; rank: number }

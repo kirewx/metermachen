@@ -18,21 +18,11 @@ import Card from '../ui/Card'
 import { showsSeasonTargets } from './period'
 import { unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
+import { verlaufRows } from './verlaufRows'
 
 export default function JahresVerlauf({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
   const [visible, setVisible] = useState<Set<number>>(() => new Set(data.users.map((u) => u.user_id)))
-  // Kurven zu einem gemeinsamen Datensatz mergen: eine Zeile pro Datum.
-  const byDate = new Map<string, Record<string, number | string>>()
-  for (const u of data.users) {
-    for (const p of u.cumulative) {
-      const row = byDate.get(p.date) ?? { date: p.date }
-      row[u.display_name] = mode === 'km' ? p.real_km : p.scaled_km
-      byDate.set(p.date, row)
-    }
-  }
-  const rows = [...byDate.values()].sort((a, b) =>
-    String(a.date).localeCompare(String(b.date)),
-  )
+  const rows = verlaufRows(data, mode)
   const ids = data.users.map((u) => u.user_id)
   const targets = showsSeasonTargets(data.month, mode)
   // Letzter Datenpunkt je Person — dort sitzen Endpunkt-Dot und Namens-Label.

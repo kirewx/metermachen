@@ -77,4 +77,14 @@ describe('PeriodControl', () => {
     setup({ months: [] })
     expect(screen.getByRole('button', { name: 'Monat' })).toBeDisabled()
   })
+
+  it('waits in month mode while the axis loads instead of stepping seasons', () => {
+    const h = setup({ mode: 'month', months: [], loading: true })
+    expect(screen.getByRole('button', { name: 'Monat' })).toBeEnabled()
+    expect(screen.queryByText('2026/27')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Vorherige Saison' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Vorheriger Monat' }))
+    expect(screen.getByRole('button', { name: 'Vorheriger Monat' })).toBeDisabled()
+    expect(h.onYearChange).not.toHaveBeenCalled()
+  })
 })

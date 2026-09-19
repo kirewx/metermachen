@@ -9,6 +9,9 @@ export function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** `?month=` value that lets the server pick the season's default month (same rule as `defaultMonth`). */
+export const CURRENT_MONTH = 'current'
+
 /** Month to show when entering month mode: the current one if the season has it, else the last. */
 export function defaultMonth(months: string[], today: Date): string | null {
   if (months.length === 0) return null
@@ -19,6 +22,14 @@ export function defaultMonth(months: string[], today: Date): string | null {
 export function monthLabel(key: string): string {
   const [year, month] = key.split('-')
   return `${MONTHS_SHORT[Number(month) - 1]} ${year}`
+}
+
+/** First day a month race counts: the 1st, or the season start inside a partial first month. */
+export function monthStartDate(month: string, seasonStart: string | null): string {
+  const first = `${month}-01`
+  return seasonStart !== null && seasonStart.startsWith(month) && seasonStart > first
+    ? seasonStart
+    : first
 }
 
 /** Season goal and milestones are MM values for the whole season; a month or the km view has none. */

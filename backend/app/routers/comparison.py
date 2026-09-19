@@ -33,7 +33,10 @@ from ..schemas import (
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
 
-MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+# Sentinel for "the season's default month", resolved on the server so the client
+# does not need the month axis before its first month request.
+CURRENT_MONTH = "current"
+MONTH_PATTERN = r"^(\d{4}-(0[1-9]|1[0-2])|current)$"
 
 
 def _monatsschluessel(tag: date_type) -> str:
@@ -101,9 +104,10 @@ def compute_comparison(
             Auszeichnung(emoji=emoji, title=titel, description=desc)
         )
 
-    # Gemeinsame Monatsachse für die Höhenmeter-Ansicht: ab Challenge-Start (bzw. ab
-    # der ersten Aktivität) bis zum laufenden Monat. Alle Personen teilen sie sich,
-    # damit ein Monat überall dieselbe Farbe bekommt.
+    # Gemeinsame Monatsachse (Höhenmeter-Farben, Monats-Stepper): ab Challenge-Start
+    # (bzw. ab der ersten Aktivität) bis zum laufenden Monat, bei einer beendeten
+    # Saison bis zu ihrem letzten Monat. Alle Personen teilen sie sich, damit ein
+    # Monat überall dieselbe Farbe bekommt.
     alle_daten = [a.date for a, _ in rows]
     if phase == "challenge" and start is not None and date_type.today() >= start:
         erster_tag = start
@@ -111,19 +115,28 @@ def compute_comparison(
         erster_tag = min(alle_daten)
     else:
         erster_tag = None
+    heute = date_type.today()
     if erster_tag is None:
-        elevation_months: list[str] = []
+        months: list[str] = []
     else:
         letzter_tag = max(alle_daten) if alle_daten else erster_tag
-        heute = date_type.today()
-        if phase == "challenge" and in_window(heute, window) and heute > letzter_tag:
-            letzter_tag = heute
-        elevation_months = _monatsachse(erster_tag, max(letzter_tag, erster_tag))
+        fenster_start, fenster_ende = window
+        if phase == "challenge" and heute >= fenster_start:
+            # The axis follows the calendar, not the last activity: a finished
+            # season keeps its empty closing months.
+            bis = heute if fenster_ende is None else min(heute, fenster_ende)
+            letzter_tag = max(letzter_tag, bis)
+        months = _monatsachse(erster_tag, max(letzter_tag, erster_tag))
 
     # The month axis above is built from the whole season; the month filter only
     # narrows what is aggregated per user.
+    if month == CURRENT_MONTH:
+        # The running month if the season has it, else its last one; a season
+        # without months is answered as a whole.
+        laufend = _monatsschluessel(heute)
+        month = None if not months else laufend if laufend in months else months[-1]
     if month is not None:
-        if month not in elevation_months:
+        if month not in months:
             raise HTTPException(
                 status_code=404, detail="Monat liegt nicht in der Saison"
             )
@@ -211,9 +224,8 @@ def compute_comparison(
         users=result_users,
         start_date=season.start_date,
         phase=phase,
-        elevation_months=elevation_months,
         month=month,
-        months=elevation_months,
+        months=months,
     )
 
 

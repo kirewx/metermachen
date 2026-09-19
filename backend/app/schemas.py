@@ -273,7 +273,6 @@ class ComparisonOut(BaseModel):
     users: list[ComparisonUser]
     start_date: date_type | None = None
     phase: str = "challenge"
-    elevation_months: list[str] = []
     month: str | None = None
     months: list[str] = []
 

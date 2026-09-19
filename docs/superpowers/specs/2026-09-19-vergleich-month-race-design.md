@@ -39,16 +39,17 @@ This is chunk 2 of the frontend redesign. Chunk 3 (monthly achievements, "Bester
 
 - The month filter is applied after the existing season-window and start-date filters, so a partial first month only counts activities from the season start on.
 - Totals, ranks, `by_category`, `segments`, `cumulative` and `elevation_by_month` are all computed from the filtered rows. `km_factor` and the factor-by-date resolver apply as in the year view.
-- The month axis is computed from the unfiltered season rows (before the month filter), exactly as `elevation_months` is today.
+- The month axis is computed from the unfiltered season rows (before the month filter). It runs from the challenge start to the running month; a finished season runs to its last month, even when nothing was logged at the end (changed after the code review of PR #41).
+- `month=current` lets the server pick the default month: the running month if the axis has it, else the last one. A season without months is answered as a whole (`month: null`). This saves the page a second full request just to learn the axis (added after the code review).
 
 `ComparisonOut` gains:
 
-- `month: str | None = None`, echoing the request.
-- `months: list[str] = []`, the season's month axis. Same value as `elevation_months`, which stays for the Höhenmeter view.
+- `month: str | None = None`, the shown month (`current` is echoed resolved).
+- `months: list[str] = []`, the season's month axis. It replaces `elevation_months`; the Höhenmeter view reads `months` too (renamed after the code review).
 
 Errors:
 
-- `month` not matching `^\d{4}-(0[1-9]|1[0-2])$`: 422 (FastAPI query validation).
+- `month` matching neither `^\d{4}-(0[1-9]|1[0-2])$` nor `current`: 422 (FastAPI query validation).
 - `month` not contained in the season's month axis: 404 "Monat liegt nicht in der Saison".
 - `month` combined with `phase=warmup`: 422 "Monatsansicht gibt es nur für die Saison".
 
@@ -80,8 +81,9 @@ State in `Vergleich`:
 - `ansicht` (the view tab) is remembered the same way under `mm_vergleich_view`; an unknown stored value falls back to Rennen.
 - `month` (`string | null`) and the existing `gewaehlt` season stay plain component state, so the page always opens on the active season and its current month.
 - The effective mode is `'month'` only when `mode === 'month'` and the view is Rennen, Verlauf or Sport-Mix. Switching to Höhenmeter keeps `mode`, so returning restores the month view.
-- The month axis comes from the year query (`['comparison', year, null]`), which is always loaded. Switching to month mode, or changing the season while in month mode, sets `month` to `defaultMonth(months, today)`.
-- Data query: `['comparison', year, effectiveMonth]` with `api.comparison(year, effectiveMonth ?? undefined)`.
+- One data query per mode (changed after the code review): year mode loads `['comparison', year]`, month mode loads `['comparison', year, month ?? 'current']`. Every response carries `months`, so the axis never needs a request of its own. Switching to month mode, or changing the season, resets `month` to `null`, i.e. the server's default month.
+- While a month loads, the previous month stays on screen, but never across seasons. Until the first month response, `PeriodControl` gets `loading` and shows a waiting month stepper ("…", arrows disabled) instead of the season one.
+- The three remembered choices (unit, period mode, view tab) share `useStoredChoice`, which also survives blocked localStorage.
 
 Warm-up archive: the "Archiv (Warm-up)" select option is replaced by a text link "Warm-up-Archiv" below the page content. While the archive is open, the control rows are hidden and a link "Zurück zum Vergleich" is shown above `WarmupArchiv`.
 
@@ -97,9 +99,9 @@ Year mode behaves exactly as before.
 
 `SportMix` needs no change; it renders the filtered `by_category`.
 
-`JahresVerlauf` renders the filtered `cumulative` series, which the backend restarts at zero for the month. The goal and milestone reference lines are season values and are hidden in month mode (`showsSeasonTargets(month, mode)` in `period.ts`).
+`JahresVerlauf` renders the filtered `cumulative` series, which the backend restarts at zero for the month. In month mode `verlaufRows` anchors every curve with a 0 on the month's first day (the season start in a partial first month), unless the person logged something that day; people without meters get no anchor (added after the code review). The goal and milestone reference lines are season values and are hidden in month mode (`showsSeasonTargets(month, mode)` in `period.ts`).
 
-Both modes: a user whose total is 0 shows rank "–" and never gets the leader glow. This prevents an arbitrary "leader" on the first day of a month.
+Both modes, Rennen and Sport-Mix: a user whose total is 0 shows rank "–" and never gets the leader glow. This prevents an arbitrary "leader" on the first day of a month.
 
 ## 4 · API client
 

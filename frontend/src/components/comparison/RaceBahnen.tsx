@@ -33,8 +33,9 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
   }, [since.active])
   useEffect(() => {
     if (!since.active || marked.current) return
-    marked.current = true
     const t = setTimeout(() => {
+      // Only once the timer really fired: a cancelled one (Monat/Jahr toggle) re-arms.
+      marked.current = true
       api.markComparisonSeen(data.year).catch(() => {})
     }, 1600)
     return () => clearTimeout(t)

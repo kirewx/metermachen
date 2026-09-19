@@ -9,6 +9,8 @@ type Props = {
   year: number
   months: string[]
   month: string | null
+  /** True until the first response: the month axis is not known yet. */
+  loading?: boolean
   today?: Date
   onModeChange: (mode: PeriodMode) => void
   onYearChange: (year: number) => void
@@ -27,15 +29,23 @@ export default function PeriodControl({
   year,
   months,
   month,
+  loading = false,
   today = new Date(),
   onModeChange,
   onYearChange,
   onMonthChange,
 }: Props) {
   const monthly = showModeToggle && mode === 'month' && month !== null
-  const index = monthly ? months.indexOf(month) : years.findIndex((y) => y.year === year)
+  // Month mode before its first response: there is nothing to step through yet, and
+  // the arrows must not fall back to stepping seasons.
+  const waiting = showModeToggle && mode === 'month' && month === null && loading
+  const index = waiting
+    ? -1
+    : monthly
+      ? months.indexOf(month)
+      : years.findIndex((y) => y.year === year)
   const count = monthly ? months.length : years.length
-  const label = monthly ? monthLabel(month) : (years[index]?.label ?? String(year))
+  const label = waiting ? '…' : monthly ? monthLabel(month) : (years[index]?.label ?? String(year))
   const step = (delta: number) => {
     const next = index + delta
     if (index < 0 || next < 0 || next >= count) return
@@ -53,7 +63,7 @@ export default function PeriodControl({
             <button
               key={p.key}
               type="button"
-              disabled={p.key === 'month' && months.length === 0}
+              disabled={p.key === 'month' && months.length === 0 && !loading}
               onClick={() => {
                 if (mode !== p.key) onModeChange(p.key)
               }}
@@ -69,7 +79,7 @@ export default function PeriodControl({
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          aria-label={monthly ? 'Vorheriger Monat' : 'Vorherige Saison'}
+          aria-label={monthly || waiting ? 'Vorheriger Monat' : 'Vorherige Saison'}
           disabled={index <= 0}
           onClick={() => step(-1)}
           className={arrow}
@@ -81,7 +91,7 @@ export default function PeriodControl({
         </span>
         <button
           type="button"
-          aria-label={monthly ? 'Nächster Monat' : 'Nächste Saison'}
+          aria-label={monthly || waiting ? 'Nächster Monat' : 'Nächste Saison'}
           disabled={index < 0 || index >= count - 1}
           onClick={() => step(1)}
           className={arrow}

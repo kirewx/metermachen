@@ -109,6 +109,25 @@ describe('RaceBahnen Monatsmodus', () => {
     expect(api.lastSeenComparison).not.toHaveBeenCalled()
   })
 
+  it('markiert den Besuch auch dann, wenn ein Monat-Umschalten den Timer abgebrochen hat', async () => {
+    vi.mocked(api.markComparisonSeen).mockClear()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const tree = (d: Comparison) => (
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <RaceBahnen data={d} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const view = render(tree(data))
+    await screen.findByText(/Seit deinem letzten Besuch/)
+    // Jahr → Monat → Jahr before the 1.6 s timer fires; the component stays mounted.
+    view.rerender(tree(monthData))
+    expect(screen.queryByText(/Seit deinem letzten Besuch/)).toBeNull()
+    view.rerender(tree(data))
+    await waitFor(() => expect(api.markComparisonSeen).toHaveBeenCalledTimes(1), { timeout: 3000 })
+  })
+
   it('zeigt Rang – für Personen ohne Meter', () => {
     const zero = {
       ...monthData,

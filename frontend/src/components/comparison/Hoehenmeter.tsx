@@ -93,7 +93,7 @@ export default function Hoehenmeter({ data }: { data: Comparison }) {
       {unteransicht === 'saeulen' ? (
         <HoehenSaeulen
           users={data.users.filter((u) => auswahl.has(u.user_id))}
-          months={data.elevation_months}
+          months={data.months}
           meId={meId}
           onSelect={(u) => navigate(profilPfad(u.user_id, data.year))}
         />

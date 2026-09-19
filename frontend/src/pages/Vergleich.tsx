@@ -1,15 +1,16 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import Hoehenmeter from '../components/comparison/Hoehenmeter'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
-import { defaultMonth } from '../components/comparison/period'
+import { CURRENT_MONTH, defaultMonth } from '../components/comparison/period'
 import PeriodControl from '../components/comparison/PeriodControl'
 import RaceBahnen from '../components/comparison/RaceBahnen'
 import SportMix from '../components/comparison/SportMix'
 import { useUnitMode } from '../components/comparison/unit'
 import { usePeriodMode } from '../components/comparison/usePeriodMode'
+import { useStoredChoice } from '../components/comparison/useStoredChoice'
 import WarmupArchiv from '../components/comparison/WarmupArchiv'
 import Icon from '../components/ui/Icon'
 import { aktiveSeason, saisonLabel } from '../components/ui/season'
@@ -24,17 +25,11 @@ const ANSICHTEN = [
 type Ansicht = (typeof ANSICHTEN)[number]['key']
 
 const VIEW_KEY = 'mm_vergleich_view'
+const VIEW_KEYS: readonly Ansicht[] = ANSICHTEN.map((a) => a.key)
 
 /** Last opened view tab, remembered in the browser; unknown stored values fall back to Rennen. */
 function useStoredView() {
-  const [ansicht, setAnsicht] = useState<Ansicht>(() => {
-    const stored = localStorage.getItem(VIEW_KEY)
-    return ANSICHTEN.find((a) => a.key === stored)?.key ?? 'rennen'
-  })
-  useEffect(() => {
-    localStorage.setItem(VIEW_KEY, ansicht)
-  }, [ansicht])
-  return [ansicht, setAnsicht] as const
+  return useStoredChoice(VIEW_KEY, VIEW_KEYS, 'rennen')
 }
 
 /** Views that can be shown per month; the others always cover the whole season. */
@@ -79,24 +74,32 @@ export default function Vergleich() {
   const aktive = aktiveSeason(seasons)?.year ?? new Date().getFullYear()
   const year = gewaehlt ?? aktive
 
-  // The season query is always loaded: it carries the month axis for the stepper.
+  const monthViews = MONTH_VIEWS.includes(ansicht)
+  const wantsMonth = period === 'month' && monthViews
+  // One request per mode. Every response carries the month axis, and without a
+  // stepped month the server picks the season's default one.
   const seasonQuery = useQuery({
     queryKey: ['comparison', year],
     queryFn: () => api.comparison(year),
-    enabled: !archiv,
+    enabled: !archiv && !wantsMonth,
   })
-  const months = seasonQuery.data?.months ?? []
-  const shownMonth = month !== null && months.includes(month) ? month : defaultMonth(months, today)
-  const monthViews = MONTH_VIEWS.includes(ansicht)
-  const monthly = period === 'month' && monthViews && shownMonth !== null
+  const requestedMonth = month ?? CURRENT_MONTH
   const monthQuery = useQuery({
-    queryKey: ['comparison', year, shownMonth],
-    queryFn: () => api.comparison(year, shownMonth ?? undefined),
-    enabled: !archiv && monthly,
+    queryKey: ['comparison', year, requestedMonth],
+    queryFn: () => api.comparison(year, requestedMonth),
+    enabled: !archiv && wantsMonth,
     // Keep the previous month on screen while stepping, instead of a blank flash.
-    placeholderData: keepPreviousData,
+    // Never across seasons: their numbers would sit under the wrong label.
+    placeholderData: (prev) => (prev?.year === year ? prev : undefined),
   })
-  const { data, error } = monthly ? monthQuery : seasonQuery
+  const { data, error } = wantsMonth ? monthQuery : seasonQuery
+  const months = (data ?? seasonQuery.data ?? monthQuery.data)?.months ?? []
+  // Until the axis has arrived, month mode shows a waiting stepper, not the season one.
+  const loading = wantsMonth && monthQuery.isPending
+  const resolvedMonth = monthQuery.isPlaceholderData
+    ? defaultMonth(months, today)
+    : (monthQuery.data?.month ?? null)
+  const shownMonth = wantsMonth ? (month ?? resolvedMonth) : null
   const years = [...seasons]
     .sort((a, b) => a.year - b.year)
     .map((s) => ({ year: s.year, label: saisonLabel(s) }))
@@ -137,12 +140,13 @@ export default function Vergleich() {
       <div className="flex flex-wrap items-center gap-2">
         <PeriodControl
           // A season without months can only be shown as a whole.
-          mode={months.length === 0 ? 'year' : period}
+          mode={!loading && months.length === 0 ? 'year' : period}
           showModeToggle={monthViews}
           years={years}
           year={year}
           months={months}
           month={shownMonth}
+          loading={loading}
           today={today}
           onModeChange={(next) => {
             setPeriod(next)
