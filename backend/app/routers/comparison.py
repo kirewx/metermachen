@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import date as date_type
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
@@ -33,6 +33,8 @@ from ..schemas import (
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
 
+MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+
 
 def _monatsschluessel(tag: date_type) -> str:
     return f"{tag.year:04d}-{tag.month:02d}"
@@ -54,11 +56,18 @@ def _monatsachse(erster: date_type, letzter: date_type) -> list[str]:
 # Challenges-Feature aus Spec 2026-08-04. Bezeichner bleiben aus
 # Kompatibilitaetsgruenden unveraendert, nur die Anzeigetexte heissen "Saison".
 def compute_comparison(
-    session: Session, year: int, phase: Literal["challenge", "warmup"] = "challenge"
+    session: Session,
+    year: int,
+    phase: Literal["challenge", "warmup"] = "challenge",
+    month: str | None = None,
 ) -> ComparisonOut:
     season = session.exec(select(Season).where(Season.year == year)).first()
     if season is None:
         raise HTTPException(status_code=404, detail="Kein Jahr konfiguriert")
+    if month is not None and phase == "warmup":
+        raise HTTPException(
+            status_code=422, detail="Monatsansicht gibt es nur für die Saison"
+        )
 
     users = session.exec(select(User).where(User.is_active).order_by(User.id)).all()
     rows = session.exec(
@@ -76,10 +85,6 @@ def compute_comparison(
         rows = [(a, c) for a, c in rows if a.date < start]
     elif start is not None and date_type.today() >= start:
         rows = [(a, c) for a, c in rows if a.date >= start]
-
-    by_user: dict[int, list[tuple[Activity, Category]]] = defaultdict(list)
-    for a, c in rows:
-        by_user[a.user_id].append((a, c))
 
     emoji_rows = session.exec(
         select(AchievementUnlock).where(AchievementUnlock.showcased == True)  # noqa: E712
@@ -114,6 +119,19 @@ def compute_comparison(
         if phase == "challenge" and in_window(heute, window) and heute > letzter_tag:
             letzter_tag = heute
         elevation_months = _monatsachse(erster_tag, max(letzter_tag, erster_tag))
+
+    # The month axis above is built from the whole season; the month filter only
+    # narrows what is aggregated per user.
+    if month is not None:
+        if month not in elevation_months:
+            raise HTTPException(
+                status_code=404, detail="Monat liegt nicht in der Saison"
+            )
+        rows = [(a, c) for a, c in rows if _monatsschluessel(a.date) == month]
+
+    by_user: dict[int, list[tuple[Activity, Category]]] = defaultdict(list)
+    for a, c in rows:
+        by_user[a.user_id].append((a, c))
 
     resolver = FactorResolver.load(session)
     result_users = []
@@ -194,6 +212,8 @@ def compute_comparison(
         start_date=season.start_date,
         phase=phase,
         elevation_months=elevation_months,
+        month=month,
+        months=elevation_months,
     )
 
 
@@ -203,9 +223,10 @@ def compute_comparison(
 def comparison(
     year: int,
     phase: Literal["challenge", "warmup"] = "challenge",
+    month: str | None = Query(default=None, pattern=MONTH_PATTERN),
     session: Session = Depends(get_session),
 ):
-    return compute_comparison(session, year, phase)
+    return compute_comparison(session, year, phase, month)
 
 
 @router.get("/{year}/last-seen", response_model=LastSeenOut | None)

@@ -83,6 +83,8 @@ def test_month_partial_first_month_respects_start(client, session):
                          date=date(2026, 7, 5), distance_km=10))  # before the start
     session.add(Activity(user_id=user.id, category_id=cat.id,
                          date=date(2026, 7, 12), distance_km=7))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 8, 3), distance_km=3))  # other month
     session.commit()
     login(client)
     body = client.get("/api/comparison/2026?month=2026-07").json()
