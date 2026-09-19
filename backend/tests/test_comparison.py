@@ -256,8 +256,8 @@ def test_elevation_monatsachse_ab_challenge_start(client, session):
     login(client)
     body = client.get("/api/comparison/2026").json()
     # lückenlos ab Startmonat, auch über den leeren August hinweg
-    assert body["elevation_months"][:3] == ["2026-07", "2026-08", "2026-09"]
-    assert body["elevation_months"][0] == "2026-07"
+    assert body["months"][:3] == ["2026-07", "2026-08", "2026-09"]
+    assert body["months"][0] == "2026-07"
 
 
 def test_elevation_kumulativ_in_der_zeitreihe(client, session):
@@ -291,7 +291,7 @@ def test_elevation_leer_ohne_daten(client, session):
     session.commit()
     login(client)
     body = client.get("/api/comparison/2026").json()
-    assert body["elevation_months"] == []
+    assert body["months"] == []
     assert body["users"][0]["total_elevation_m"] == 0.0
     assert body["users"][0]["elevation_by_month"] == []
 
@@ -317,3 +317,162 @@ def test_comparison_fenster_ueber_jahresgrenze_mit_freeze(client, session):
     assert r.status_code == 200
     me = next(u for u in r.json()["users"] if u["user_id"] == user.id)
     assert me["total_scaled_km"] == 10.0
+
+
+def _sept_lisa(session, lisa):
+    """Lisa overtakes Erik in September only (year: Erik 30, Lisa 35)."""
+    from sqlmodel import select
+
+    from app.models import Category
+
+    cat = session.exec(select(Category)).first()
+    session.add(Activity(user_id=lisa.id, category_id=cat.id,
+                         date=date(2026, 9, 10), distance_km=25))
+    session.commit()
+
+
+def test_month_filter_totals_and_ranks(client, session):
+    _, lisa = _hm_setup(session)
+    _sept_lisa(session, lisa)
+    login(client)
+    body = client.get("/api/comparison/2026?month=2026-09").json()
+    assert body["month"] == "2026-09"
+    assert [(u["display_name"], u["total_scaled_km"], u["rank"]) for u in body["users"]] == [
+        ("Lisa", 25.0, 1),
+        ("Erik", 10.0, 2),
+    ]
+    erik = body["users"][1]
+    assert erik["total_elevation_m"] == 450.0
+    assert [s["date"] for s in erik["segments"]] == ["2026-09-02"]
+    assert [p["scaled_km"] for p in erik["cumulative"]] == [10.0]
+    assert [b["scaled_km"] for b in erik["by_category"]] == [10.0]
+    july = client.get("/api/comparison/2026?month=2026-07").json()
+    assert [(u["display_name"], u["total_scaled_km"]) for u in july["users"]] == [
+        ("Erik", 20.0),
+        ("Lisa", 10.0),
+    ]
+
+
+def test_month_partial_first_month_respects_start(client, session):
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    session.add(Season(year=2026, goal_km=1000, milestones_json="[]",
+                       start_date=date(2026, 7, 10), end_date=date(2026, 12, 31)))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 7, 5), distance_km=10))  # before the start
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 7, 12), distance_km=7))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 8, 3), distance_km=3))  # other month
+    session.commit()
+    login(client)
+    body = client.get("/api/comparison/2026?month=2026-07").json()
+    assert body["users"][0]["total_scaled_km"] == 7.0
+
+
+def test_months_axis_with_and_without_month(client, session):
+    _hm_setup(session)
+    login(client)
+    year = client.get("/api/comparison/2026").json()
+    assert year["month"] is None
+    assert "elevation_months" not in year  # one axis field, shared with Höhenmeter
+    assert year["months"][:3] == ["2026-07", "2026-08", "2026-09"]
+    month = client.get("/api/comparison/2026?month=2026-08").json()
+    assert month["months"] == year["months"]  # axis ignores the month filter
+    assert all(u["total_scaled_km"] == 0 for u in month["users"])  # empty month lists everyone
+
+
+def test_month_malformed_is_422(client, session):
+    _hm_setup(session)
+    login(client)
+    assert client.get("/api/comparison/2026?month=2026-13").status_code == 422
+    assert client.get("/api/comparison/2026?month=september").status_code == 422
+
+
+def test_month_outside_season_is_404(client, session):
+    _hm_setup(session)
+    login(client)
+    r = client.get("/api/comparison/2026?month=2026-05")
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Monat liegt nicht in der Saison"
+
+
+def _finished_season(session):
+    """Season 2025 ended on 31.12.; the only activity is from November."""
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    session.add(Season(year=2025, goal_km=1000, milestones_json="[]",
+                       start_date=date(2025, 7, 1), end_date=date(2025, 12, 31)))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2025, 11, 3), distance_km=10))
+    session.commit()
+
+
+def test_months_axis_of_finished_season_runs_to_its_end(client, session):
+    _finished_season(session)
+    login(client)
+    body = client.get("/api/comparison/2025").json()
+    assert body["months"] == [f"2025-{m:02d}" for m in range(7, 13)]
+    december = client.get("/api/comparison/2025?month=2025-12")
+    assert december.status_code == 200
+    assert december.json()["users"][0]["total_scaled_km"] == 0
+
+
+def test_month_current_resolves_to_last_month_of_finished_season(client, session):
+    _finished_season(session)
+    login(client)
+    body = client.get("/api/comparison/2025?month=current").json()
+    assert body["month"] == "2025-12"
+
+
+def test_month_current_resolves_to_running_month(client, session):
+    user = make_user(session)
+    cat = make_category(session, factor=1.0)
+    today = date.today()
+    session.add(Season(year=today.year, goal_km=1000, milestones_json="[]"))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=today.replace(day=1), distance_km=4))
+    session.commit()
+    login(client)
+    body = client.get(f"/api/comparison/{today.year}?month=current").json()
+    assert body["month"] == f"{today.year:04d}-{today.month:02d}"
+    assert body["users"][0]["total_scaled_km"] == 4.0
+
+
+def test_month_current_without_months_answers_the_season(client, session):
+    make_user(session)
+    make_category(session)
+    session.add(Season(year=2026, goal_km=1000.0))
+    session.commit()
+    login(client)
+    body = client.get("/api/comparison/2026?month=current").json()
+    assert body["month"] is None
+    assert body["months"] == []
+
+
+def test_month_with_warmup_is_422(client, session):
+    _hm_setup(session)
+    login(client)
+    r = client.get("/api/comparison/2026?phase=warmup&month=2026-07")
+    assert r.status_code == 422
+
+
+def test_month_uses_factor_by_date(client, session):
+    from app.models import CategoryFactorChange
+
+    user = make_user(session)
+    cat = make_category(session, name="Schwimmen", factor=30.0)
+    session.add(Season(year=2026, goal_km=1000, milestones_json="[]",
+                       start_date=date(2026, 7, 1), end_date=date(2026, 12, 31)))
+    session.add(CategoryFactorChange(category_id=cat.id, factor=25.0,
+                                     valid_from=date(2026, 9, 1)))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 8, 31), distance_km=2))
+    session.add(Activity(user_id=user.id, category_id=cat.id,
+                         date=date(2026, 9, 1), distance_km=2))
+    session.commit()
+    login(client)
+    aug = client.get("/api/comparison/2026?month=2026-08").json()["users"][0]
+    sep = client.get("/api/comparison/2026?month=2026-09").json()["users"][0]
+    assert aug["total_scaled_km"] == 60.0
+    assert sep["total_scaled_km"] == 50.0

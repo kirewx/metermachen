@@ -61,6 +61,23 @@ describe('SportMix', () => {
     expect(screen.getByText('Radfahren')).toBeInTheDocument()
   })
 
+  it('zeigt Rang – für Personen ohne Meter, wie das Rennen', () => {
+    const zero: Comparison = {
+      ...data,
+      users: [{ ...data.users[0], total_scaled_km: 0, total_real_km: 0, by_category: [] }],
+    }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <SportMix data={zero} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText('–')).toBeInTheDocument()
+    expect(screen.queryByText('1')).toBeNull()
+  })
+
   it('zeigt im km-Modus die echten km statt der skalierten MM', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(

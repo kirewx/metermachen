@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useStoredChoice } from './useStoredChoice'
 
 export type UnitMode = 'mm' | 'km'
 
 const KEY = 'mm_unit_mode'
+const MODES: readonly UnitMode[] = ['mm', 'km']
 
 /** MM (skaliert, Standard) vs. echte km. Auswahl wird im Browser gemerkt. */
 export function useUnitMode() {
-  const [mode, setMode] = useState<UnitMode>(() =>
-    localStorage.getItem(KEY) === 'km' ? 'km' : 'mm',
-  )
-  useEffect(() => {
-    localStorage.setItem(KEY, mode)
-  }, [mode])
+  const [mode, setMode] = useStoredChoice(KEY, MODES, 'mm')
   return { mode, toggle: () => setMode((m) => (m === 'mm' ? 'km' : 'mm')) }
 }
 

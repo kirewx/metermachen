@@ -50,7 +50,7 @@ const daten: Comparison = {
   users: [kira, erik],
   start_date: null,
   phase: 'challenge',
-  elevation_months: [],
+  months: [],
 }
 
 vi.mock('../api/client', () => ({

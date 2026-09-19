@@ -85,8 +85,10 @@ export type Comparison = {
   users: ComparisonUser[]
   start_date: string | null
   phase: string
-  /** Gemeinsame Monatsachse ab Challenge-Start, je Eintrag 'YYYY-MM'. */
-  elevation_months: string[]
+  /** Shown month ('YYYY-MM') or null for the whole season. */
+  month: string | null
+  /** Month axis of the season from the challenge start, 'YYYY-MM' each; drives the month stepper and the Höhenmeter colours. */
+  months: string[]
 }
 export type SeenEntry = { user_id: number; scaled_km: number; rank: number }
 export type LastSeen = { seen_at: string; entries: SeenEntry[] }
@@ -529,7 +531,8 @@ export const api = {
     request<Achievement[]>(`/api/achievements/user/${userId}`),
   hiddenAchievementsAdmin: () =>
     request<HiddenAchievementAdmin[]>('/api/achievements/hidden'),
-  comparison: (year: number) => request<Comparison>(`/api/comparison/${year}`),
+  comparison: (year: number, month?: string) =>
+    request<Comparison>(`/api/comparison/${year}${month ? `?month=${month}` : ''}`),
   lastSeenComparison: (year: number) =>
     request<LastSeen | null>(`/api/comparison/${year}/last-seen`),
   markComparisonSeen: (year: number) =>

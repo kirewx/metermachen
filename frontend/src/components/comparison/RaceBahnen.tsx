@@ -13,14 +13,17 @@ import { toDisplay, unitLabel, type UnitMode } from './unit'
 import { userColor } from './userColor'
 
 export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mode?: UnitMode }) {
+  const monthly = data.month != null
   const { data: lastSeen } = useQuery({
     queryKey: ['comparison-last-seen', data.year],
     queryFn: () => api.lastSeenComparison(data.year),
+    // Since-last-seen is a season feature; a month race has no snapshot.
+    enabled: !monthly,
   })
   // "Jetzt" einmal beim Öffnen der Ansicht einfrieren — stabil über Re-Renders
   // und erfüllt die Purity-Regel (kein Date.now() im Render).
   const [nowMs] = useState(() => Date.now())
-  const since = computeSinceLastSeen(data.users, lastSeen ?? null, nowMs)
+  const since = computeSinceLastSeen(data.users, monthly ? null : (lastSeen ?? null), nowMs)
   const [grown, setGrown] = useState(false)
   const marked = useRef(false)
   useEffect(() => {
@@ -30,13 +33,16 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
   }, [since.active])
   useEffect(() => {
     if (!since.active || marked.current) return
-    marked.current = true
     const t = setTimeout(() => {
+      // Only once the timer really fired: a cancelled one (Monat/Jahr toggle) re-arms.
+      marked.current = true
       api.markComparisonSeen(data.year).catch(() => {})
     }, 1600)
     return () => clearTimeout(t)
   }, [since.active, data.year])
-  const maxKm = Math.max(data.goal_km, ...data.users.map((u) => u.total_scaled_km))
+  const milestones = monthly ? [] : data.milestones
+  // Month race has no goal: the leader sets the scale.
+  const maxKm = Math.max(monthly ? 1 : data.goal_km, ...data.users.map((u) => u.total_scaled_km))
   const pct = (km: number) => `${(km / maxKm) * 100}%`
   const ids = data.users.map((u) => u.user_id)
 
@@ -52,7 +58,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
         <div className="flex items-end gap-3">
           <div className="w-44 shrink-0" />
           <div className="relative h-9 flex-1">
-            {data.milestones.map((m) => (
+            {milestones.map((m) => (
               <span
                 key={m.km}
                 className="absolute flex -translate-x-1/2 flex-col items-center text-ink-mute"
@@ -62,19 +68,23 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                 <span className="text-[9px] tabular-nums">{m.km}</span>
               </span>
             ))}
-            <span
-              className="absolute flex -translate-x-1/2 flex-col items-center text-accent"
-              style={{ left: pct(data.goal_km) }}
-            >
-              <Icon name="fahne" size={13} />
-              <span className="text-[9px] font-bold tabular-nums">{data.goal_km}</span>
-            </span>
+            {!monthly && (
+              <span
+                className="absolute flex -translate-x-1/2 flex-col items-center text-accent"
+                style={{ left: pct(data.goal_km) }}
+              >
+                <Icon name="fahne" size={13} />
+                <span className="text-[9px] font-bold tabular-nums">{data.goal_km}</span>
+              </span>
+            )}
           </div>
           <div className="w-24 shrink-0" />
         </div>
         {data.users.map((u) => {
           const farbe = userColor(u.user_id, ids)
-          const fuehrt = u.rank === 1
+          // Nobody leads with zero meters (first day of a month, empty season).
+          const hasMeters = u.total_scaled_km > 0
+          const fuehrt = u.rank === 1 && hasMeters
           return (
             <div key={u.user_id} className="flex items-center gap-3">
               <Link
@@ -87,7 +97,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                     fuehrt ? 'text-accent [text-shadow:var(--t-glow)]' : 'text-ink-mute'
                   }`}
                 >
-                  {u.rank}
+                  {hasMeters ? u.rank : '–'}
                 </span>
                 <Avatar value={u.avatar} size="sm" />
                 <div className="min-w-0">
@@ -106,7 +116,7 @@ export default function RaceBahnen({ data, mode = 'mm' }: { data: Comparison; mo
                 </div>
               </Link>
               <div className="relative h-5 flex-1 overflow-hidden rounded-full border border-line bg-surface">
-                {data.milestones.map((m) => (
+                {milestones.map((m) => (
                   <span
                     key={m.km}
                     className="absolute top-0 bottom-0 w-px bg-line"

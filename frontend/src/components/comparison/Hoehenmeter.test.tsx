@@ -40,7 +40,7 @@ function daten(users: ComparisonUser[]): Comparison {
     users,
     start_date: '2026-07-01',
     phase: 'challenge',
-    elevation_months: ['2026-07'],
+    months: ['2026-07'],
   }
 }
 
