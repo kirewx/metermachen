@@ -77,7 +77,8 @@ Pure helpers in `components/comparison/period.ts`:
 State in `Vergleich`:
 
 - `mode` comes from `usePeriodMode()` (`components/comparison/usePeriodMode.ts`): stored in localStorage under `mm_period_mode`, like the MM/km choice, and `'month'` on the first visit (added after Erik's review). A season without months is shown as a whole regardless of the stored mode.
-- `month` (`string | null`), the existing `gewaehlt` season and `ansicht` stay plain component state.
+- `ansicht` (the view tab) is remembered the same way under `mm_vergleich_view`; an unknown stored value falls back to Rennen.
+- `month` (`string | null`) and the existing `gewaehlt` season stay plain component state, so the page always opens on the active season and its current month.
 - The effective mode is `'month'` only when `mode === 'month'` and the view is Rennen, Verlauf or Sport-Mix. Switching to Höhenmeter keeps `mode`, so returning restores the month view.
 - The month axis comes from the year query (`['comparison', year, null]`), which is always loaded. Switching to month mode, or changing the season while in month mode, sets `month` to `defaultMonth(months, today)`.
 - Data query: `['comparison', year, effectiveMonth]` with `api.comparison(year, effectiveMonth ?? undefined)`.

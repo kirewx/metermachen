@@ -23,6 +23,20 @@ const ANSICHTEN = [
 ] as const
 type Ansicht = (typeof ANSICHTEN)[number]['key']
 
+const VIEW_KEY = 'mm_vergleich_view'
+
+/** Last opened view tab, remembered in the browser; unknown stored values fall back to Rennen. */
+function useStoredView() {
+  const [ansicht, setAnsicht] = useState<Ansicht>(() => {
+    const stored = localStorage.getItem(VIEW_KEY)
+    return ANSICHTEN.find((a) => a.key === stored)?.key ?? 'rennen'
+  })
+  useEffect(() => {
+    localStorage.setItem(VIEW_KEY, ansicht)
+  }, [ansicht])
+  return [ansicht, setAnsicht] as const
+}
+
 /** Views that can be shown per month; the others always cover the whole season. */
 const MONTH_VIEWS: readonly Ansicht[] = ['rennen', 'verlauf', 'sportmix']
 
@@ -52,7 +66,7 @@ function useStravaRedirectHinweis() {
 }
 
 export default function Vergleich() {
-  const [ansicht, setAnsicht] = useState<Ansicht>('rennen')
+  const [ansicht, setAnsicht] = useStoredView()
   const { mode, toggle: toggleUnit } = useUnitMode()
   useStravaRedirectHinweis()
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })

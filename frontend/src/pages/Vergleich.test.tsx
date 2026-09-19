@@ -88,6 +88,23 @@ describe('Vergleich', () => {
     expect(api.comparison).not.toHaveBeenCalledWith(thisYear, current)
   })
 
+  it('remembers the last view tab in the browser', async () => {
+    const first = renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /Höhenmeter/ }))
+    expect(localStorage.getItem('mm_vergleich_view')).toBe('hoehenmeter')
+    first.unmount()
+    renderPage()
+    // Höhenmeter is year-only: no Monat pill means the stored tab was restored.
+    await screen.findByRole('button', { name: 'Vorherige Saison' })
+    expect(screen.queryByRole('button', { name: 'Monat' })).toBeNull()
+  })
+
+  it('ignores an unknown stored view', async () => {
+    localStorage.setItem('mm_vergleich_view', 'quatsch')
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Monat' })).toBeInTheDocument()
+  })
+
   it('falls back to the season while it has no months', async () => {
     vi.mocked(api.comparison).mockImplementation(() =>
       Promise.resolve({ ...comparison(null), months: [], elevation_months: [] } as never),
