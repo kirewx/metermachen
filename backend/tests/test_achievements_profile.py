@@ -50,6 +50,9 @@ def test_user_achievements_404_for_unknown_or_inactive(client, session):
 HIDDEN_KEYS = {
     "kletterkoenig", "hattrick", "wochenkoenig", "psychopath", "langstreckenguru",
     "kurzstreckenprofi", "dauerbrenner_bronze", "dauerbrenner_silber", "dauerbrenner_gold",
+    "fruehaufsteher", "nachteule", "allrounder", "doppelschicht", "everest",
+    "gipfelsturm", "ueberholmanoever", "comeback", "wochenendkrieger",
+    "schnapszahl", "marathon_am_stueck", "neujahr", "der_nimmt_alles_mit",
 }
 
 

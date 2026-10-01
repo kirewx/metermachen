@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from ..deps import get_current_user, get_session
 from ..models import FeedEvent, FeedReaction, FeedSeen, User, utcnow
 from ..schemas import FeedEventOut, FeedPage, FeedReactionIn, FeedReactionOut
+from ..services.achievements import ensure_monatssieger
 from ..services.feed import REACTION_EMOJIS, ensure_recaps
 
 router = APIRouter(prefix="/api/feed", tags=["feed"])
@@ -65,6 +66,7 @@ def feed_page(
     session: Session = Depends(get_session),
     me: User = Depends(get_current_user),
 ):
+    ensure_monatssieger(session)
     ensure_recaps(session)
     stmt = select(FeedEvent).where(FeedEvent.season_year == year)
     if before is not None:

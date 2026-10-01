@@ -16,7 +16,7 @@ from ..models import (
     User,
     utcnow,
 )
-from ..services.achievements import SHOWCASE_INFO
+from ..services.achievements import ensure_monatssieger, showcase_info
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, season_window
 from ..schemas import (
@@ -95,7 +95,7 @@ def compute_comparison(
     emojis_by_user: dict[int, list[str]] = defaultdict(list)
     auszeichnungen_by_user: dict[int, list[Auszeichnung]] = defaultdict(list)
     for ul in emoji_rows:
-        info = SHOWCASE_INFO.get(ul.key)
+        info = showcase_info(ul.key, json.loads(ul.context_json or "{}"))
         if info is None:
             continue
         emoji, titel, desc = info
@@ -238,6 +238,7 @@ def comparison(
     month: str | None = Query(default=None, pattern=MONTH_PATTERN),
     session: Session = Depends(get_session),
 ):
+    ensure_monatssieger(session)  # Monatsmedaillen neben dem Namen
     return compute_comparison(session, year, phase, month)
 
 

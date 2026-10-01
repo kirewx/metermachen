@@ -373,7 +373,9 @@ def backfill_feed_events(session: Session) -> None:
     for unlock in session.exec(select(AchievementUnlock)).all():
         if unlock.user_id not in users:
             continue
-        titel, emoji, beschreibung = achievement_info(unlock.key)
+        titel, emoji, beschreibung = achievement_info(
+            unlock.key, json.loads(unlock.context_json or "{}")
+        )
         session.add(FeedEvent(
             season_year=season.year, type="achievement", user_id=unlock.user_id,
             created_at=unlock.unlocked_at,

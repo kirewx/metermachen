@@ -159,6 +159,13 @@ export type Achievement = {
   claimed_by: string | null
   timer_hours?: number | null
   timer_running?: boolean | null
+  /** Ladder group (MM-Club, time per category); stages of one ladder share it. */
+  ladder?: string | null
+  ladder_title?: string | null
+  /** Stage pill, e.g. "5k" or "100 h". */
+  stage?: string | null
+  /** Unit of parts: "MM" | "h". */
+  unit?: string | null
 }
 export type HiddenUnlock = {
   user_id: number

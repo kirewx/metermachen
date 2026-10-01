@@ -2,6 +2,7 @@ import type { Achievement } from '../../api/client'
 import AchievementBadge from './AchievementBadge'
 import { TIER_ORDER } from './constants'
 import HiddenCard from './HiddenCard'
+import LadderCard from './LadderCard'
 import OneTimeCard from './OneTimeCard'
 import TierCard from './TierCard'
 import TimeAtTopCard from './TimeAtTopCard'
@@ -20,10 +21,13 @@ export default function AchievementsSection({ achievements, onToggle }: Props) {
 
   const tiers = achievements.filter((a) => a.tier !== null)
   const disciplines = [...new Set(tiers.map((a) => a.discipline))] as string[]
-  const oneTime = achievements.filter((a) => a.emoji !== null && !a.hidden && a.tier === null)
-  const hidden = achievements.filter((a) => a.hidden && a.achieved)
-  const timeAtTop = achievements.find((a) => a.key === 'zeit_an_der_spitze')
-  const classic = achievements.filter(
+  const ladderStages = achievements.filter((a) => a.ladder)
+  const ladders = [...new Set(ladderStages.map((a) => a.ladder))] as string[]
+  const rest = achievements.filter((a) => !a.ladder)
+  const oneTime = rest.filter((a) => a.emoji !== null && !a.hidden && a.tier === null)
+  const hidden = rest.filter((a) => a.hidden && a.achieved)
+  const timeAtTop = rest.find((a) => a.key === 'zeit_an_der_spitze')
+  const classic = rest.filter(
     (a) => a.tier === null && !a.hidden && a.emoji === null && a.key !== 'zeit_an_der_spitze',
   )
 
@@ -39,6 +43,13 @@ export default function AchievementsSection({ achievements, onToggle }: Props) {
           tiers={TIER_ORDER.map((t) => tiers.find((s) => s.discipline === d && s.tier === t)).filter(
             (s): s is Achievement => Boolean(s),
           )}
+        />
+      ))}
+      {ladders.map((l) => (
+        <LadderCard
+          key={l}
+          stages={ladderStages.filter((a) => a.ladder === l)}
+          onToggle={onToggle}
         />
       ))}
       {oneTime.map((a) => (
