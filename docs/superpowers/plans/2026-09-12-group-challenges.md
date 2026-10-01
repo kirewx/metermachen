@@ -3450,4 +3450,4 @@ https://claude.ai/code/session_012KrtS1A3RAQan4QLRcM2we
 
 - [ ] **Step 5: Update memory notes**
 
-In `C:\Users\Erik\.claude\projects\C--Users-Erik-Documents-MeterMachen\memory\metermachen-backlog.md`, mark the group challenge item as implemented in PR #40 (pending merge) and note that redesign chunk 2 is next.
+In the local backlog notes, mark the group challenge item as implemented in PR #40 (pending merge) and note that redesign chunk 2 is next.

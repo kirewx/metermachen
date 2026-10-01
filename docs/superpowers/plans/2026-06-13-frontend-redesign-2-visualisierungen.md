@@ -28,7 +28,7 @@
 
 ### Task 0: Worktree + Branch anlegen
 
-- [ ] **Step 1: Worktree von Plan-1-Branch erstellen** (im Haupt-Repo `C:\Users\Erik\Documents\MeterMachen`)
+- [ ] **Step 1: Worktree von Plan-1-Branch erstellen** (im Haupt-Repo)
 
 ```bash
 git worktree add .worktrees/neon-redesign-2 -b feature/neon-redesign-2 feature/neon-redesign-1
