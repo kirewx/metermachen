@@ -31,6 +31,13 @@ def test_bucket_via_strava_types_and_name():
     )) is None
 
 
+NEUE_HIDDEN_KEYS = {
+    "fruehaufsteher", "nachteule", "allrounder", "doppelschicht", "everest",
+    "gipfelsturm", "ueberholmanoever", "comeback", "wochenendkrieger",
+    "schnapszahl", "marathon_am_stueck", "neujahr", "der_nimmt_alles_mit",
+}
+
+
 def test_achievements_require_login(client):
     assert client.get("/api/achievements").status_code == 401
 
@@ -51,6 +58,8 @@ def test_achievements_empty_user_nothing_achieved(client, session):
         "psychopath", "langstreckenguru", "kurzstreckenprofi", "fruehstarter",
         "early_bird", "zeit_an_der_spitze",
         "dauerbrenner_bronze", "dauerbrenner_silber", "dauerbrenner_gold",
+        "mm_club_1k", "mm_club_5k", "mm_club_10k",
+        *NEUE_HIDDEN_KEYS,
     }
     assert all(a["achieved"] is False for a in body)
 

@@ -32,10 +32,12 @@ def test_stufen_grenzen(session):
     lauf = make_category(session, name="Laufen", icon="laufen", factor=0.5)
     add_act(session, user, lauf, 99.9)
     check_unlocks(session, user.id)
-    assert keys_of(session, user) == set()
+    # Ein 99,9-km-Lauf ist nebenbei ein "Marathon am Stück" — hier zählen nur Stufen
+    stufen = lambda: {k for k in keys_of(session, user) if k.startswith("stufe_")}  # noqa: E731
+    assert stufen() == set()
     add_act(session, user, lauf, 0.1)  # exakt 100 → Bronze
     check_unlocks(session, user.id)
-    assert keys_of(session, user) == {"stufe_lauf_bronze"}
+    assert stufen() == {"stufe_lauf_bronze"}
     add_act(session, user, lauf, 300.0)  # 400 → Silber UND Gold in einem Lauf
     check_unlocks(session, user.id)
     assert {"stufe_lauf_silber", "stufe_lauf_gold"} <= keys_of(session, user)
@@ -46,11 +48,13 @@ def test_check_unlocks_ist_idempotent(session):
     lauf = make_category(session, name="Laufen", icon="laufen", factor=0.5)
     add_act(session, user, lauf, 100.0)  # nur Bronze (100 ≤ 100 < 200)
     check_unlocks(session, user.id)
+    erste_runde = keys_of(session, user)
     check_unlocks(session, user.id)
     unlocks = session.exec(
         select(AchievementUnlock).where(AchievementUnlock.user_id == user.id)
     ).all()
-    assert len(unlocks) == 1
+    assert "stufe_lauf_bronze" in erste_runde
+    assert sorted(u.key for u in unlocks) == sorted(erste_runde)
 
 
 def test_unlock_bleibt_nach_loeschung(session):
@@ -195,9 +199,11 @@ def test_activity_create_loest_unlock_aus(client, session):
     assert r.status_code == 201
     unlocks = session.exec(select(AchievementUnlock)).all()
     # 250 km → Bronze + Silber (Gold erst bei 400); ×Faktor 4.0 sind es
-    # 1000 MM in einer Aktivität → auch Langstreckenguru
+    # 1000 MM in einer Aktivität → auch Langstreckenguru und 1k-MM-Club;
+    # ein 250-km-Lauf ist außerdem ein Marathon am Stück
     assert {u.key for u in unlocks} == {
         "stufe_lauf_bronze", "stufe_lauf_silber", "langstreckenguru",
+        "mm_club_1k", "marathon_am_stueck",
     }
 
 

@@ -137,7 +137,9 @@ def import_activity(
     since = config.strava_import_since()
     if since is not None and act_date < since:
         return False
-    duration_min = round((data.get("moving_time") or 0) / 60) or None
+    # Mindestens 1 min, sobald etwas aufgezeichnet wurde ("Der nimmt alles mit")
+    moving_time = data.get("moving_time") or 0
+    duration_min = max(1, round(moving_time / 60)) if moving_time > 0 else None
 
     from . import feed
 

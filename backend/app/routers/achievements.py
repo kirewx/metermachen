@@ -26,15 +26,23 @@ from ..services.achievements import (
     FRUEHSTARTER_ZIEL_MM,
     HIDDEN_DEFS,
     LAUF,
+    MM_CLUB_DEFS,
+    MONATSSIEGER_PREFIX,
     RAD,
     SCHWIMM,
     STUFEN_ZIELE,
     TIERS,
+    ZEIT_EMOJI,
+    ZEIT_STUFEN,
+    achievement_info,
     bucket_for_category,
     check_unlocks,
+    ensure_monatssieger,
     fuehrungs_zeit,
     stufen_key,
     warmup_mm,
+    zeit_key,
+    zeit_pro_kategorie,
 )
 from ..services.factors import FactorResolver
 from ..services.season_window import current_season
@@ -65,6 +73,11 @@ class AchievementOut(BaseModel):
     claimed_by: str | None = None  # Einmal-Achievements: wer es schon hat
     timer_hours: float | None = None  # fortlaufend (Zeit an der Spitze)
     timer_running: bool | None = None  # Timer tickt gerade (aktuell Platz 1)
+    # Leitern (MM-Club, Zeit je Kategorie): Frontend gruppiert über ladder
+    ladder: str | None = None  # "mm_club" | "zeit_<category_id>"
+    ladder_title: str | None = None  # Kartentitel, z. B. "MM-Club", "Radfahren"
+    stage: str | None = None  # Stufen-Pille, z. B. "5k", "100 h"
+    unit: str | None = None  # Einheit von parts: "MM" | "h"
 
 
 # (key, title, description, icon, {bucket: ziel_km})
@@ -345,6 +358,57 @@ def achievements_for(session: Session, user: User) -> list[AchievementOut]:
         )
     )
 
+    # MM-Club: sichtbare Leiter über gewertete MM (Kategorie-Faktor, ohne Handicap)
+    resolver = FactorResolver.load(session)
+    mm_gesamt = sum(resolver.mm(a) for a in user_acts)
+    for key, stufe, title, description, ziel in MM_CLUB_DEFS:
+        ul = own.get(key)
+        out.append(AchievementOut(
+            key=key, title=title, description=description, icon="blitz",
+            achieved=ul is not None or mm_gesamt >= ziel,
+            progress=round(min(mm_gesamt / ziel, 1.0), 4),
+            parts=[Part(label="MM", current_km=round(min(mm_gesamt, ziel), 2),
+                        target_km=ziel)],
+            unlocked_at=ul.unlocked_at if ul else None,
+            emoji=EMOJIS.get(key), showcased=ul.showcased if ul else None,
+            ladder="mm_club", ladder_title="MM-Club", stage=stufe, unit="MM",
+        ))
+
+    # Zeit-Leitern je Kategorie: erst sichtbar ab der ersten Stunde.
+    # Fortschritt = Stunden / nächste Stufe (5 h → Balken halb bis 10 h).
+    stunden_je_kat = zeit_pro_kategorie(user_acts)
+    for cat_id in sorted(cats):
+        cat = cats[cat_id]
+        stunden = stunden_je_kat.get(cat_id, 0.0)
+        hat_stufe = any(zeit_key(cat_id, h) in own for h in ZEIT_STUFEN)
+        if stunden < ZEIT_STUFEN[0] and not hat_stufe:
+            continue
+        for h in ZEIT_STUFEN:
+            key = zeit_key(cat_id, h)
+            ul = own.get(key)
+            emoji = ZEIT_EMOJI if h == ZEIT_STUFEN[-1] else None
+            out.append(AchievementOut(
+                key=key, title=f"{cat.name}: {h} h",
+                description=f"{h} Stunden {cat.name} aufgezeichnet.", icon=cat.icon,
+                achieved=ul is not None or stunden >= h,
+                progress=round(min(stunden / h, 1.0), 4),
+                parts=[Part(label=cat.name, current_km=round(min(stunden, h), 1),
+                            target_km=float(h))],
+                unlocked_at=ul.unlocked_at if ul else None,
+                emoji=emoji, showcased=(ul.showcased if ul and emoji else None),
+                ladder=f"zeit_{cat_id}", ladder_title=cat.name, stage=f"{h} h", unit="h",
+            ))
+
+    # Monatssieger: nur gewonnene Monate, chronologisch
+    for key in sorted(k for k in own if k.startswith(MONATSSIEGER_PREFIX)):
+        ul = own[key]
+        title, emoji, description = achievement_info(key)
+        out.append(AchievementOut(
+            key=key, title=title, description=description, icon="pokal",
+            achieved=True, progress=1.0, parts=[], unlocked_at=ul.unlocked_at,
+            emoji=emoji, showcased=ul.showcased,
+        ))
+
     # Hidden: maskiert, solange nicht freigeschaltet (Spec §2.4)
     for key, title, description, icon in HIDDEN_DEFS:
         ul = own.get(key)
@@ -370,6 +434,7 @@ def achievements(
     # "Platz 1 gehalten"/Testphasen-Sieg can trigger without an own activity,
     # so unlocks are checked for the requesting person on every read (spec §2.2).
     check_unlocks(session, user.id)
+    ensure_monatssieger(session)
     return achievements_for(session, user)
 
 
@@ -384,6 +449,7 @@ def user_achievements(user_id: int, session: Session = Depends(get_session)):
     target = session.get(User, user_id)
     if target is None or not target.is_active:
         raise HTTPException(status_code=404, detail="Mitglied nicht gefunden")
+    ensure_monatssieger(session)
     return [a for a in achievements_for(session, target) if a.achieved]
 
 

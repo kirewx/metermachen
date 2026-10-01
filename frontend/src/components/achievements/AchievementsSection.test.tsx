@@ -51,6 +51,20 @@ const FIXTURES: Achievement[] = [
     achieved: false, progress: 0, parts: [], hidden: true },
   { ...base, key: 'hattrick', title: 'Hattrick', description: 'Drei Aktivitäten an einem Tag.', icon: 'blitz',
     achieved: true, progress: 1, parts: [], hidden: true, unlocked_at: '2026-08-02T10:00:00Z', emoji: '🎩', showcased: true },
+  { ...base, key: 'mm_club_1k', title: '1k MM', description: '1.000 MM gesammelt.', icon: 'blitz',
+    achieved: true, progress: 1, parts: [{ label: 'MM', current_km: 1000, target_km: 1000 }],
+    emoji: '⚡', showcased: false, ladder: 'mm_club', ladder_title: 'MM-Club', stage: '1k', unit: 'MM' },
+  { ...base, key: 'mm_club_5k', title: '5k MM', description: '5.000 MM gesammelt.', icon: 'blitz',
+    achieved: false, progress: 0.3, parts: [{ label: 'MM', current_km: 1500, target_km: 5000 }],
+    emoji: '🚀', ladder: 'mm_club', ladder_title: 'MM-Club', stage: '5k', unit: 'MM' },
+  { ...base, key: 'zeit_6_1h', title: 'Radfahren: 1 h', description: '1 Stunden Radfahren aufgezeichnet.', icon: 'rad',
+    achieved: true, progress: 1, parts: [{ label: 'Radfahren', current_km: 1, target_km: 1 }],
+    ladder: 'zeit_6', ladder_title: 'Radfahren', stage: '1 h', unit: 'h' },
+  { ...base, key: 'zeit_6_10h', title: 'Radfahren: 10 h', description: '10 Stunden Radfahren aufgezeichnet.', icon: 'rad',
+    achieved: false, progress: 0.5, parts: [{ label: 'Radfahren', current_km: 5, target_km: 10 }],
+    ladder: 'zeit_6', ladder_title: 'Radfahren', stage: '10 h', unit: 'h' },
+  { ...base, key: 'monatssieger_2026-08', title: 'Monatssieger 08/2026', description: 'Die meisten MM im August 2026.', icon: 'pokal',
+    achieved: true, progress: 1, parts: [], emoji: '🥇', showcased: true },
 ]
 
 describe('AchievementsSection', () => {
@@ -99,11 +113,28 @@ describe('AchievementsSection', () => {
   it('offers the showcase toggle only when onToggle is given', () => {
     const onToggle = vi.fn()
     const { unmount } = render(<AchievementsSection achievements={FIXTURES} onToggle={onToggle} />)
-    fireEvent.click(screen.getByRole('button', { name: /wird getragen/ }))
+    fireEvent.click(screen.getByRole('button', { name: /🎩\s*wird getragen/ }))
     expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ key: 'hattrick' }))
     unmount()
     render(<AchievementsSection achievements={FIXTURES} />)
     expect(screen.queryByRole('button', { name: /wird getragen/ })).not.toBeInTheDocument()
+  })
+
+  it('groups ladders into one card with progress to the next stage', () => {
+    render(<AchievementsSection achievements={FIXTURES} onToggle={vi.fn()} />)
+    expect(screen.getByText('MM-Club')).toBeInTheDocument()
+    expect(screen.getByText(/1\.500\/5\.000 MM bis 5k/)).toBeInTheDocument()
+    expect(screen.getByText(/5\/10 h bis 10 h/)).toBeInTheDocument()
+    expect(screen.queryByText('Radfahren: 10 h')).not.toBeInTheDocument()
+    // emoji stage reached → wearable; the 5k one is not reached yet
+    expect(screen.getByRole('button', { name: /⚡\s*abgelegt/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /🚀/ })).not.toBeInTheDocument()
+  })
+
+  it('shows monthly winner medals', () => {
+    render(<AchievementsSection achievements={FIXTURES} onToggle={vi.fn()} />)
+    expect(screen.getByText('Monatssieger 08/2026')).toBeInTheDocument()
+    expect(screen.queryByText(/bekommt nur die erste Person/)).not.toBeInTheDocument()
   })
 
   it('says so when the list is empty', () => {
