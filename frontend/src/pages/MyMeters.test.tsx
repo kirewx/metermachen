@@ -32,7 +32,7 @@ describe('MyMeters', () => {
     renderPage()
     expect(await screen.findByText('Laufen')).toBeInTheDocument()
     expect(screen.getByText(/2 Einträge/)).toBeInTheDocument()
-    expect(screen.getByText('32 km')).toBeInTheDocument()
+    expect(screen.getByText('32 MM')).toBeInTheDocument()
     expect(screen.queryByText(/Strava/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('Laufen'))
     expect(await screen.findByText('View on Strava')).toBeInTheDocument()

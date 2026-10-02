@@ -80,7 +80,7 @@ export default function MyMeters() {
           Meine Einträge {saisonLabel(season)}
         </h2>
         <span className="text-sm font-black tabular-nums text-accent [text-shadow:var(--t-glow)]">
-          {Math.round(gesamt)} km gewertet
+          {Math.round(gesamt)} MM gewertet
         </span>
       </div>
       <div className="space-y-1">
@@ -102,7 +102,7 @@ export default function MyMeters() {
                 <span className="flex-1 text-sm font-bold text-ink">{cat.name}</span>
                 <span className="text-xs text-ink-mute">{eintraege.length} Einträge</span>
                 <span className="w-20 text-right font-mono text-sm font-bold tabular-nums text-accent">
-                  {Math.round(summe)} km
+                  {Math.round(summe)} MM
                 </span>
               </button>
               {auf && (
@@ -115,7 +115,7 @@ export default function MyMeters() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-ink">
                           <span className="font-mono tabular-nums">{a.distance_km}</span> km
-                          <span className="text-accent"> → {a.scaled_km} km</span>
+                          <span className="text-accent"> → {a.scaled_km} MM</span>
                           {a.edited && (
                             <span className="ml-2 text-xs text-ink-mute">(bearbeitet)</span>
                           )}
