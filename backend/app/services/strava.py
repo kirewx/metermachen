@@ -165,6 +165,30 @@ def _after_change(session: Session, act: Activity, emit_feed: bool = True) -> No
     pass
 
 
+def _derive_fields(session: Session, data: dict) -> dict:
+    """Berechnet die aus Strava-Rohdaten abgeleiteten Aktivitätsfelder —
+    gemeinsame Logik für Import und Update. Die Skip-Regeln (Import) bzw.
+    Pro-Feld-Bedingungen (Update) entscheiden jeweils der Aufrufer anhand
+    dieser Werte."""
+    cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
+    distance_km = round((data.get("distance") or 0) / 1000, 2)
+    elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
+    act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
+    act_time = _parse_time(data.get("start_date_local") or data.get("start_date"))
+    # Mindestens 1 min, sobald etwas aufgezeichnet wurde ("Der nimmt alles mit")
+    moving_time = data.get("moving_time") or 0
+    duration_min = max(1, round(moving_time / 60)) if moving_time > 0 else None
+    return {
+        "category": cat,
+        "distance_km": distance_km,
+        "elevation_m": elevation_m,
+        "date": act_date,
+        "start_time": act_time,
+        "duration_min": duration_min,
+        "note": data.get("name"),
+    }
+
+
 def import_activity(
     session: Session, conn: StravaConnection, data: dict, emit_feed: bool = True
 ) -> bool:
@@ -185,23 +209,22 @@ def import_activity(
         return False
     if is_ignored(session, conn.user_id, str(activity_id)):
         return False
-    cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
+    fields = _derive_fields(session, data)
+    cat = fields["category"]
     if cat is None:
         return False
-    distance_km = round((data.get("distance") or 0) / 1000, 2)
+    distance_km = fields["distance_km"]
     if distance_km <= 0:
         return False
-    elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
-    act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
-    act_time = _parse_time(data.get("start_date_local") or data.get("start_date"))
+    elevation_m = fields["elevation_m"]
+    act_date = fields["date"]
+    act_time = fields["start_time"]
     # Stichtag gilt überall — auch für nachträglich bei Strava erfasste alte
     # Aktivitäten, die per Webhook als "create" hereinkommen.
     since = config.strava_import_since()
     if since is not None and act_date < since:
         return False
-    # Mindestens 1 min, sobald etwas aufgezeichnet wurde ("Der nimmt alles mit")
-    moving_time = data.get("moving_time") or 0
-    duration_min = max(1, round(moving_time / 60)) if moving_time > 0 else None
+    duration_min = fields["duration_min"]
 
     from . import feed
 
@@ -215,7 +238,7 @@ def import_activity(
         distance_km=distance_km,
         duration_min=duration_min,
         elevation_m=elevation_m,
-        note=data.get("name"),
+        note=fields["note"],
         source="strava",
         external_id=str(activity_id),
     )
@@ -274,19 +297,21 @@ def update_activity(session: Session, conn: StravaConnection, data: dict) -> Non
 
     from . import feed
 
-    order_before = feed.challenge_order(session)
-    total_before = feed.challenge_total(session, conn.user_id)
     changed = False
+    order_before: list[int] = []
+    total_before = 0.0
 
     if act.updated_at is None:
-        cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
-        distance_km = round((data.get("distance") or 0) / 1000, 2)
-        elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
-        act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
-        act_time = _parse_time(data.get("start_date_local") or data.get("start_date"))
-        moving_time = data.get("moving_time") or 0
-        duration_min = max(1, round(moving_time / 60)) if moving_time > 0 else None
-        note = data.get("name")
+        order_before = feed.challenge_order(session)
+        total_before = feed.challenge_total(session, conn.user_id)
+        fields = _derive_fields(session, data)
+        cat = fields["category"]
+        distance_km = fields["distance_km"]
+        elevation_m = fields["elevation_m"]
+        act_date = fields["date"]
+        act_time = fields["start_time"]
+        duration_min = fields["duration_min"]
+        note = fields["note"]
 
         if note != act.note:
             changed = True
@@ -429,6 +454,15 @@ def backfill_current_year(user_id: int) -> None:
                 )
 
 
+def _fetch_activity_data(session: Session, conn: StravaConnection, activity_id: int) -> dict:
+    """Token + Detail-Abruf + id-Fallback — gemeinsame Beschaffung für die
+    'create'- und 'update'-Zweige von handle_webhook_event."""
+    token = valid_access_token(session, conn)
+    data = fetch_activity(token, activity_id)
+    data.setdefault("id", activity_id)
+    return data
+
+
 def handle_webhook_event(session: Session, payload: dict) -> None:
     """Verzweigt nach aspect_type: 'create' importiert neu (idempotent über
     external_id), 'update' pflegt Titel/Werte nach, solange die Aktivität
@@ -457,14 +491,8 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
         ).first()
         if already is not None:
             return
-        token = valid_access_token(session, conn)
-        data = fetch_activity(token, activity_id)
-        data.setdefault("id", activity_id)
-        import_activity(session, conn, data)
+        import_activity(session, conn, _fetch_activity_data(session, conn, activity_id))
         return
 
     # aspect == "update"
-    token = valid_access_token(session, conn)
-    data = fetch_activity(token, activity_id)
-    data.setdefault("id", activity_id)
-    update_activity(session, conn, data)
+    update_activity(session, conn, _fetch_activity_data(session, conn, activity_id))
