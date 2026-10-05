@@ -12,7 +12,7 @@ from .. import config
 from ..db import engine
 from ..deps import get_current_user, get_session
 from ..models import Activity, StravaConnection, User, utcnow
-from ..services import strava
+from ..services import activity_delete, strava
 
 router = APIRouter(prefix="/api/strava", tags=["strava"])
 _state_serializer = URLSafeTimedSerializer(config.SECRET_KEY, salt="strava-oauth")
@@ -131,7 +131,7 @@ def disconnect(
         select(Activity).where(Activity.user_id == user.id, Activity.source == "strava")
     ).all()
     for act in strava_acts:
-        session.delete(act)
+        activity_delete.delete_activity(session, act, ignore_strava=False)
     session.commit()
 
 

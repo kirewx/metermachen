@@ -80,6 +80,34 @@ class Activity(SQLModel, table=True):
     external_id: str | None = None
 
 
+class ActivityTrack(SQLModel, table=True):
+    """GPS-Spur zu einer Aktivität (Strava-Sync-Fundament). Pro Aktivität
+    höchstens eine Spur."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    activity_id: int = Field(foreign_key="activity.id", unique=True, index=True)
+    start_utc: datetime
+    elapsed_s: int
+    start_lat: float | None = None
+    start_lng: float | None = None
+    end_lat: float | None = None
+    end_lng: float | None = None
+    polyline: str | None = None
+    private: bool = False
+
+
+class StravaIgnored(SQLModel, table=True):
+    """Von Strava importierte Aktivität, die der Nutzer gelöscht hat — blockt
+    den Re-Import über Webhooks (Strava-Sync-Fundament)."""
+
+    __table_args__ = (UniqueConstraint("user_id", "external_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    external_id: str
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class Season(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     year: int = Field(unique=True)
