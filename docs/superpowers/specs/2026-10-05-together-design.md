@@ -135,7 +135,7 @@ Schwellen als Konstanten im Service.
 ### 2.1 Datenmodell
 
 - `TrainingSession(id, source "auto"|"manual", km_together, share
-  nullable, created_at)`
+  nullable, feed_event_id nullable, created_at)`
 - `SessionParticipant(id, session_id, user_id, activity_id nullable,
   status "confirmed"|"suggested"|"declined", km_together, created_at,
   responded_at nullable)`
@@ -197,7 +197,8 @@ Teilprojekt.
 ### 3.1 Feed-Event `together`
 
 - Entsteht, wenn eine Session echt wird. `user_id = None`,
-  `season_year` aus dem Aktivitätsdatum, Payload: Teilnehmer (IDs, Namen),
+  `season_year` wie bei Aktivitäts-Events (aktuelle Season über `_emit`),
+  `TrainingSession.feed_event_id` verweist auf das Event, Payload: Teilnehmer (IDs, Namen),
   `km_together`, `share`, Kategorie der ersten Aktivität.
 - Kommt jemand dazu → Payload des bestehenden Events wird aktualisiert, kein
   neues Event („Erik, Anna & Tom – 8,2 km zusammen“).
