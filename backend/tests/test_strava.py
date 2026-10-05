@@ -801,3 +801,42 @@ def test_import_without_gps_track_has_no_geo(session):
     assert track.end_lat is None
     assert track.end_lng is None
     assert track.polyline is None
+
+
+def test_import_with_malformed_latlng_stores_track_without_coords(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {
+        "id": 2005, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_latlng": [48.1], "end_latlng": [11.5],  # verstümmelt: nur 1 Element
+        "name": "Lauf",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2005")).one()
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.start_lat is None
+    assert track.start_lng is None
+    assert track.end_lat is None
+    assert track.end_lng is None
+
+
+def test_import_survives_track_failure(session, monkeypatch):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+
+    def boom(session, act, data):
+        raise RuntimeError("Track-Erfassung kaputt")
+
+    monkeypatch.setattr(strava, "upsert_track", boom)
+    data = {
+        "id": 2006, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z", "name": "Lauf",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2006")).one()
+    assert session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).first() is None

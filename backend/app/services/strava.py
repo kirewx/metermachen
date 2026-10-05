@@ -116,6 +116,15 @@ def is_ignored(session: Session, user_id: int, external_id: str) -> bool:
     ).first() is not None
 
 
+def _latlng(value: list | None) -> list | None:
+    """Strava liefert bei fehlender GPS-Spur `[]`; vereinzelt kommen auch
+    verstümmelte Listen mit nur einem Element vor. Beides → None statt
+    IndexError bei track.start_lat/end_lat."""
+    if not value or len(value) < 2:
+        return None
+    return value
+
+
 def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack | None:
     """Legt die GPS-Spur zu `act` an oder aktualisiert die bestehende.
     Gibt None zurück, wenn `start_date` fehlt (kein Commit)."""
@@ -128,8 +137,8 @@ def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack |
         .replace(tzinfo=None)
     )
     elapsed_s = data.get("elapsed_time") or data.get("moving_time") or 0
-    start_latlng = data.get("start_latlng") or None
-    end_latlng = data.get("end_latlng") or None
+    start_latlng = _latlng(data.get("start_latlng"))
+    end_latlng = _latlng(data.get("end_latlng"))
     polyline = (data.get("map") or {}).get("summary_polyline") or None
     private = bool(data.get("private")) or data.get("visibility") == "only_me"
 
@@ -137,7 +146,7 @@ def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack |
         select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
     ).first()
     if track is None:
-        track = ActivityTrack(activity_id=act.id, start_utc=start_utc, elapsed_s=elapsed_s)
+        track = ActivityTrack(activity_id=act.id)
     track.start_utc = start_utc
     track.elapsed_s = elapsed_s
     track.start_lat = start_latlng[0] if start_latlng else None
@@ -205,9 +214,20 @@ def import_activity(
         external_id=str(activity_id),
     )
     session.add(act)
-    session.flush()
-    upsert_track(session, act, data)
     session.commit()
+
+    # Track-Erfassung darf den Import nie zum Scheitern bringen (z.B.
+    # unparsbares start_date oder sonstige Strava-Dateneigenheiten). Die
+    # Aktivität ist bereits committed; ein Fehler hier wird nur geloggt und
+    # verworfen, die Aktivität bleibt ohne Track importiert.
+    try:
+        upsert_track(session, act, data)
+        session.commit()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Track-Erfassung fehlgeschlagen fuer activity_id=%s", act.id
+        )
+        session.rollback()
 
     from .achievements import check_unlocks
 
