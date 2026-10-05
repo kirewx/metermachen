@@ -466,13 +466,13 @@ def _fetch_activity_data(session: Session, conn: StravaConnection, activity_id: 
 def handle_webhook_event(session: Session, payload: dict) -> None:
     """Verzweigt nach aspect_type: 'create' importiert neu (idempotent über
     external_id), 'update' pflegt Titel/Werte nach, solange die Aktivität
-    nicht in MeterMachen bearbeitet wurde. 'delete' folgt in einem späteren
-    Task."""
+    nicht in MeterMachen bearbeitet wurde, 'delete' entfernt die lokale
+    Aktivität (ohne Strava zu kontaktieren, da sie dort bereits weg ist)."""
     if payload.get("object_type") != "activity":
         return
     aspect = payload.get("aspect_type")
-    if aspect not in ("create", "update"):
-        return  # 'delete' -> Task 4
+    if aspect not in ("create", "update", "delete"):
+        return
     owner_id = payload.get("owner_id")
     activity_id = payload.get("object_id")
     conn = session.exec(
@@ -492,6 +492,24 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
         if already is not None:
             return
         import_activity(session, conn, _fetch_activity_data(session, conn, activity_id))
+        return
+
+    if aspect == "delete":
+        act = session.exec(
+            select(Activity).where(
+                Activity.user_id == conn.user_id,
+                Activity.external_id == str(activity_id),
+                Activity.source == "strava",
+            )
+        ).first()
+        if act is None:
+            return
+        from . import feed
+        from .activity_delete import delete_activity as _delete_activity
+
+        order_before = feed.challenge_order(session)
+        _delete_activity(session, act, ignore_strava=False)
+        feed.rank_events(session, order_before, feed.challenge_order(session))
         return
 
     # aspect == "update"

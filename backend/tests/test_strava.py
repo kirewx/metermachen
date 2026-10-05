@@ -1025,3 +1025,47 @@ def test_webhook_update_refreshes_private_flag_on_edited_activity(client, sessio
         select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
     ).one()
     assert track.private is True
+
+
+def test_webhook_delete_removes_activity_track_and_feed(session, monkeypatch):
+    _setup_season(session)
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+        "elapsed_time": 1800,
+    })
+    strava.handle_webhook_event(session, _payload())
+    act = session.exec(select(Activity)).one()
+    assert session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).first() is not None
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.activity_id == act.id)
+    ).first() is not None
+
+    called = {"fetch": False}
+    monkeypatch.setattr(strava, "fetch_activity",
+                        lambda tok, aid: called.__setitem__("fetch", True) or {})
+    strava.handle_webhook_event(session, _payload(aspect="delete"))
+
+    assert called["fetch"] is False
+    assert session.exec(select(Activity)).all() == []
+    assert session.exec(select(ActivityTrack)).all() == []
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.activity_id == act.id)
+    ).all() == []
+    assert session.exec(select(StravaIgnored)).all() == []
+
+
+def test_webhook_delete_unknown_activity_is_noop(session, monkeypatch):
+    _user, conn = _setup_conn(session)
+    called = {"fetch": False}
+    monkeypatch.setattr(strava, "fetch_activity",
+                        lambda tok, aid: called.__setitem__("fetch", True) or {})
+    strava.handle_webhook_event(session, _payload(aspect="delete"))
+    assert called["fetch"] is False
+    assert session.exec(select(Activity)).all() == []
