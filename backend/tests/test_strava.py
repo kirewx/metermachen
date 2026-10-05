@@ -443,6 +443,23 @@ def test_disconnect_deletes_strava_activities_keeps_manual(client, session, monk
     assert session.exec(select(StravaConnection)).all() == []
 
 
+def test_disconnect_keeps_preexisting_ignore_entries(client, session, monkeypatch):
+    """Eine vor dem Disconnect bereits bestehende StravaIgnored-Zeile (z.B.
+    aus einem manuellen Löschen vor dem Trennen) darf nicht mitgelöscht
+    werden — sie blockt weiterhin den Re-Import bei einem erneuten Connect."""
+    _enable_strava(monkeypatch)
+    user = make_user(session)
+    session.add(StravaConnection(user_id=user.id, athlete_id=42,
+                                 access_token="a", refresh_token="r", expires_at=999))
+    session.add(StravaIgnored(user_id=user.id, external_id="777"))
+    session.commit()
+    login(client)
+    assert client.delete("/api/strava/disconnect").status_code == 204
+    entries = session.exec(select(StravaIgnored)).all()
+    assert len(entries) == 1
+    assert entries[0].external_id == "777"
+
+
 def test_handle_webhook_event_dedup_skips_fetch(session, monkeypatch):
     user, conn = _setup_conn(session)
     make_category(session, name="Laufen", strava_sport_types='["Run"]')
@@ -754,6 +771,24 @@ def test_import_writes_track(session):
     assert track.private is False
 
 
+def test_import_track_with_naive_start_date_treated_as_utc(session):
+    """start_date ohne 'Z'/Offset ist dennoch UTC (Strava-Konvention) — darf
+    nicht als Server-Lokalzeit interpretiert und dadurch verschoben werden."""
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {
+        "id": 2005, "sport_type": "Run", "distance": 5000.0,
+        "start_date": "2026-10-04T05:00:00", "elapsed_time": 3000,
+        "name": "Lauf ohne Z",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2005")).one()
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.start_utc.replace(tzinfo=None) == datetime(2026, 10, 4, 5, 0, 0)
+
+
 def test_import_old_activity_keeps_geo(session):
     user, conn = _setup_conn(session)
     make_category(session, name="Laufen", strava_sport_types='["Run"]')
@@ -939,15 +974,19 @@ def test_webhook_update_unmappable_sport_keeps_activity(session, monkeypatch):
     strava.handle_webhook_event(session, _payload())
     act = session.exec(select(Activity)).one()
     cat_id_before = act.category_id
+    note_before = act.note
+    distance_before = act.distance_km
 
     monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
-        "sport_type": "Yoga", "distance": 5000.0, "moving_time": 1800,
-        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+        "sport_type": "Yoga", "distance": 9000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Yoga-Flow",
     })
     strava.handle_webhook_event(session, _payload(aspect="update"))
 
     session.refresh(act)
     assert act.category_id == cat_id_before
+    assert act.note == note_before
+    assert act.distance_km == distance_before
     assert session.exec(select(Activity)).one().id == act.id
 
 
@@ -985,7 +1024,7 @@ def test_webhook_update_ignored_activity_does_nothing(session, monkeypatch):
 
     monkeypatch.setattr(strava, "fetch_activity", fake_fetch)
     strava.handle_webhook_event(session, _payload(aspect="update"))
-    assert called["fetch"] is True
+    assert called["fetch"] is False
     assert session.exec(select(Activity)).all() == []
 
 

@@ -131,11 +131,13 @@ def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack |
     start_date = data.get("start_date")
     if not start_date:
         return None
-    start_utc = (
-        datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-        .astimezone(timezone.utc)
-        .replace(tzinfo=None)
-    )
+    parsed_start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+    if parsed_start.tzinfo is None:
+        # Strava liefert start_date als UTC — auch ohne 'Z'/Offset (z.B. bei
+        # manuell nachbearbeiteten Aktivitäten). Nie als Server-Lokalzeit
+        # interpretieren (astimezone würde sonst verschieben).
+        parsed_start = parsed_start.replace(tzinfo=timezone.utc)
+    start_utc = parsed_start.astimezone(timezone.utc).replace(tzinfo=None)
     elapsed_s = data.get("elapsed_time") or data.get("moving_time") or 0
     start_latlng = _latlng(data.get("start_latlng"))
     end_latlng = _latlng(data.get("end_latlng"))
@@ -302,40 +304,43 @@ def update_activity(session: Session, conn: StravaConnection, data: dict) -> Non
     total_before = 0.0
 
     if act.updated_at is None:
-        order_before = feed.challenge_order(session)
-        total_before = feed.challenge_total(session, conn.user_id)
         fields = _derive_fields(session, data)
         cat = fields["category"]
-        distance_km = fields["distance_km"]
-        elevation_m = fields["elevation_m"]
-        act_date = fields["date"]
-        act_time = fields["start_time"]
-        duration_min = fields["duration_min"]
-        note = fields["note"]
+        # Nicht mappbare Sportart (category_for_sport -> None): Feld-Werte
+        # unangetastet lassen, nur der Track wird unten trotzdem aktualisiert.
+        if cat is not None:
+            order_before = feed.challenge_order(session)
+            total_before = feed.challenge_total(session, conn.user_id)
+            distance_km = fields["distance_km"]
+            elevation_m = fields["elevation_m"]
+            act_date = fields["date"]
+            act_time = fields["start_time"]
+            duration_min = fields["duration_min"]
+            note = fields["note"]
 
-        if note != act.note:
-            changed = True
-        act.note = note
-        if cat is not None and cat.id != act.category_id:
-            changed = True
-            act.category_id = cat.id
-        if distance_km > 0 and distance_km != act.distance_km:
-            changed = True
-            act.distance_km = distance_km
-        if duration_min != act.duration_min:
-            changed = True
-        act.duration_min = duration_min
-        if elevation_m != act.elevation_m:
-            changed = True
-        act.elevation_m = elevation_m
-        if act_date != act.date:
-            changed = True
-        act.date = act_date
-        if act_time != act.start_time:
-            changed = True
-        act.start_time = act_time
-        session.add(act)
-        session.commit()
+            if note != act.note:
+                changed = True
+            act.note = note
+            if cat.id != act.category_id:
+                changed = True
+                act.category_id = cat.id
+            if distance_km > 0 and distance_km != act.distance_km:
+                changed = True
+                act.distance_km = distance_km
+            if duration_min != act.duration_min:
+                changed = True
+            act.duration_min = duration_min
+            if elevation_m != act.elevation_m:
+                changed = True
+            act.elevation_m = elevation_m
+            if act_date != act.date:
+                changed = True
+            act.date = act_date
+            if act_time != act.start_time:
+                changed = True
+            act.start_time = act_time
+            session.add(act)
+            session.commit()
 
     # Track-Erfassung darf das Update nie zum Scheitern bringen (siehe
     # import_activity) — ein Fehler hier wird nur geloggt und verworfen.
@@ -513,4 +518,6 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
         return
 
     # aspect == "update"
+    if is_ignored(session, conn.user_id, str(activity_id)):
+        return
     update_activity(session, conn, _fetch_activity_data(session, conn, activity_id))
