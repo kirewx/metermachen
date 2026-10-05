@@ -2,7 +2,7 @@ import json
 import logging
 import time
 from datetime import date as date_type
-from datetime import datetime
+from datetime import datetime, timezone
 from datetime import time as time_type
 from urllib.parse import urlencode
 
@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from .. import config
 from ..db import engine
-from ..models import Activity, Category, StravaConnection
+from ..models import Activity, ActivityTrack, Category, StravaConnection, StravaIgnored
 from .season_window import current_season
 
 AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
@@ -105,6 +105,51 @@ def _parse_time(value: str | None) -> time_type | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).time()
 
 
+def is_ignored(session: Session, user_id: int, external_id: str) -> bool:
+    """True, wenn der Nutzer diese Strava-Aktivität zuvor gelöscht hat
+    (StravaIgnored) — blockt den Re-Import über Webhook/Backfill."""
+    return session.exec(
+        select(StravaIgnored).where(
+            StravaIgnored.user_id == user_id,
+            StravaIgnored.external_id == external_id,
+        )
+    ).first() is not None
+
+
+def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack | None:
+    """Legt die GPS-Spur zu `act` an oder aktualisiert die bestehende.
+    Gibt None zurück, wenn `start_date` fehlt (kein Commit)."""
+    start_date = data.get("start_date")
+    if not start_date:
+        return None
+    start_utc = (
+        datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
+    elapsed_s = data.get("elapsed_time") or data.get("moving_time") or 0
+    start_latlng = data.get("start_latlng") or None
+    end_latlng = data.get("end_latlng") or None
+    polyline = (data.get("map") or {}).get("summary_polyline") or None
+    private = bool(data.get("private")) or data.get("visibility") == "only_me"
+
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).first()
+    if track is None:
+        track = ActivityTrack(activity_id=act.id, start_utc=start_utc, elapsed_s=elapsed_s)
+    track.start_utc = start_utc
+    track.elapsed_s = elapsed_s
+    track.start_lat = start_latlng[0] if start_latlng else None
+    track.start_lng = start_latlng[1] if start_latlng else None
+    track.end_lat = end_latlng[0] if end_latlng else None
+    track.end_lng = end_latlng[1] if end_latlng else None
+    track.polyline = polyline
+    track.private = private
+    session.add(track)
+    return track
+
+
 def import_activity(
     session: Session, conn: StravaConnection, data: dict, emit_feed: bool = True
 ) -> bool:
@@ -122,6 +167,8 @@ def import_activity(
         )
     ).first()
     if existing is not None:
+        return False
+    if is_ignored(session, conn.user_id, str(activity_id)):
         return False
     cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
     if cat is None:
@@ -158,6 +205,8 @@ def import_activity(
         external_id=str(activity_id),
     )
     session.add(act)
+    session.flush()
+    upsert_track(session, act, data)
     session.commit()
 
     from .achievements import check_unlocks

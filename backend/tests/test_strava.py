@@ -1,9 +1,11 @@
+from datetime import datetime
+
 import httpx
 import pytest
 from sqlmodel import select
 
 from app import config
-from app.models import Activity, Category, StravaConnection
+from app.models import Activity, ActivityTrack, Category, StravaConnection, StravaIgnored
 from app.services import strava
 
 
@@ -674,3 +676,128 @@ def test_import_ueberschreibt_korrigierte_hoehenmeter_nicht(session):
     session.commit()
     assert strava.import_activity(session, conn, data) is False  # Dublette, kein Update
     assert session.exec(select(Activity)).one().elevation_m == 800.0
+
+
+def test_import_skips_ignored_activity(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    session.add(StravaIgnored(user_id=user.id, external_id="555"))
+    session.commit()
+    data = {"id": 555, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+            "start_date": "2026-03-01T07:00:00Z", "name": "Lauf"}
+    assert strava.import_activity(session, conn, data) is False
+    assert session.exec(select(Activity)).all() == []
+
+
+def test_backfill_does_not_restore_deleted_duplicate(client, session, monkeypatch, bind_engine):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Joggen", strava_sport_types='["Run"]')
+    activities = [
+        {"id": 1, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+         "start_date_local": "2026-02-01T07:00:00Z", "name": "Lauf A"},
+        {"id": 2, "sport_type": "Run", "distance": 6000.0, "moving_time": 1800,
+         "start_date_local": "2026-02-02T07:00:00Z", "name": "Lauf B"},
+    ]
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_athlete_activities", lambda tok, after: activities)
+
+    strava.backfill_current_year(user.id)
+    acts = session.exec(select(Activity).where(Activity.source == "strava")).all()
+    assert len(acts) == 2
+    to_delete = next(a for a in acts if a.external_id == "1")
+
+    login(client, username=user.username)
+    r = client.delete(f"/api/activities/{to_delete.id}")
+    assert r.status_code == 204
+
+    strava.backfill_current_year(user.id)
+
+    remaining = session.exec(select(Activity).where(Activity.source == "strava")).all()
+    assert len(remaining) == 1
+    assert remaining[0].external_id == "2"
+
+
+def test_import_writes_track(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {
+        "id": 2001, "sport_type": "Run", "distance": 5000.0,
+        "start_date": "2026-10-04T05:00:00Z", "elapsed_time": 3000,
+        "start_latlng": [48.1, 11.5], "end_latlng": [48.2, 11.6],
+        "map": {"summary_polyline": "_p~iF~ps|U_ulLnnqC_mqNvxq`@"},
+        "name": "Lauf",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2001")).one()
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.start_utc.replace(tzinfo=None) == datetime(2026, 10, 4, 5, 0, 0)
+    assert track.elapsed_s == 3000
+    assert track.start_lat == 48.1
+    assert track.start_lng == 11.5
+    assert track.end_lat == 48.2
+    assert track.end_lng == 11.6
+    assert track.polyline == "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+    assert track.private is False
+
+
+def test_import_old_activity_keeps_geo(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {
+        "id": 2002, "sport_type": "Run", "distance": 5000.0,
+        "start_date": "2025-10-05T05:00:00Z",
+        "start_date_local": "2025-10-05T07:00:00Z", "moving_time": 1800,
+        "start_latlng": [48.1, 11.5], "end_latlng": [48.2, 11.6],
+        "map": {"summary_polyline": "abc123"},
+        "name": "Alter Lauf",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2002")).one()
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.start_lat == 48.1
+    assert track.start_lng == 11.5
+    assert track.end_lat == 48.2
+    assert track.end_lng == 11.6
+    assert track.polyline == "abc123"
+
+
+def test_import_only_me_activity_sets_private(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {
+        "id": 2003, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z", "visibility": "only_me",
+        "start_latlng": [48.1, 11.5], "end_latlng": [48.2, 11.6],
+        "map": {"summary_polyline": "privpoly"},
+        "name": "Privater Lauf",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2003")).one()
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.private is True
+    assert track.polyline == "privpoly"
+
+
+def test_import_without_gps_track_has_no_geo(session):
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    data = {
+        "id": 2004, "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z", "start_latlng": [], "name": "Laufband",
+    }
+    assert strava.import_activity(session, conn, data) is True
+    act = session.exec(select(Activity).where(Activity.external_id == "2004")).one()
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.start_lat is None
+    assert track.start_lng is None
+    assert track.end_lat is None
+    assert track.end_lng is None
+    assert track.polyline is None
