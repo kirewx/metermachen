@@ -58,16 +58,19 @@ Unabhängig vom Add-on, immer aktiv.
 ### 0.4 `ActivityTrack`
 
 - Tabelle `ActivityTrack(id, activity_id unique, start_utc, elapsed_s,
-  start_lat, start_lng, end_lat, end_lng, polyline, geo_expires_at)`.
+  start_lat, start_lng, end_lat, end_lng, polyline, private)`.
 - Wird bei jedem Strava-Import und -Update geschrieben, aus `start_date`,
-  `elapsed_time`, `start_latlng`, `end_latlng`, `map.summary_polyline`.
-  Aktivitäten ohne GPS: Koordinaten und `polyline` = `NULL`.
-- `geo_expires_at = start_utc + 48 h`.
-- **Datenschutz-Cleanup** `purge_expired_geo(session)`: setzt Koordinaten und
-  `polyline` aller Tracks mit `geo_expires_at < now` auf `NULL`. `start_utc`
-  und `elapsed_s` bleiben. Aufruf bei jedem Webhook-Lauf und beim App-Start
-  (kein neuer Cron).
-- Gelöscht mit der Aktivität.
+  `elapsed_time`, `start_latlng`, `end_latlng`, `map.summary_polyline`,
+  `private` (Strava-Sichtbarkeit „Nur ich“). Aktivitäten ohne GPS:
+  Koordinaten und `polyline` = `NULL`.
+- **Geo-Daten werden dauerhaft gespeichert**, auch für „Nur ich“-Aktivitäten
+  (Freundeskreis-App; Grundlage für eine spätere Team-Karte zum
+  Challenge-Ende). Größe: `summary_polyline` ca. 1–3 KB je Aktivität, also
+  im einstelligen bis niedrigen zweistelligen MB-Bereich pro Jahr.
+  Datenschutz-Maßnahmen für eine Anzeige (Enden kürzen, `private` filtern)
+  entscheidet das Karten-Teilprojekt; gespeichert wird ungekürzt.
+- Gelöscht mit der Aktivität und beim Strava-Disconnect (über den gemeinsamen
+  Lösch-Helfer).
 
 ## Teil 1 — Matching
 
@@ -86,9 +89,8 @@ Unabhängig vom Add-on, immer aktiv.
   und `user.detect_together`.
 - Läuft nach dem Import-Commit in eigenem `try/except`. Ein Fehler wird
   geloggt und bricht den Import nie.
-- Asynchrone Ankunft: jeder neue Import sucht rückwärts. Wer zuerst hochlädt,
-  ist egal, solange die Polyline des Partners noch nicht abgelaufen ist
-  (48 h).
+- Asynchrone Ankunft: jeder neue Import sucht rückwärts. Wer zuerst hochlädt
+  und wie spät der Partner hochlädt, ist egal (Polylines bleiben gespeichert).
 
 ### 1.3 Kandidaten
 
@@ -274,8 +276,10 @@ Fehler: fremde Teilnahme → 404; fremde oder schon verknüpfte `activity_id`
 - `PartnerPicker` (Aktivitätsformular): „Mit wem?“
 - Feed-Renderer für Typ `together`
 - `Regeln.tsx`: Abschnitt zur Erkennung und den Schwellen
-- `Datenschutz.tsx`: Streckendaten werden verglichen und nach 48 h gelöscht;
-  Opt-out; Nur-ich-Aktivitäten werden einbezogen, Routen nie angezeigt.
+- `Datenschutz.tsx`: Start-/Endpunkt und vereinfachte Route jeder
+  Strava-Aktivität (auch „Nur ich“) werden gespeichert, bis die Aktivität
+  gelöscht oder Strava getrennt wird; Together zeigt nur Partner, km und
+  Anteil, nie Routen; Opt-out im Profil.
 
 ### 4.5 Tests (TDD)
 
@@ -289,7 +293,8 @@ Fehler: fremde Teilnahme → 404; fremde oder schon verknüpfte `activity_id`
   Achievements für alle Teilnehmer; Add-on aus.
 - `test_strava.py`: Ignore-Liste (Löschen → Backfill bringt sie nicht
   zurück); `update` mit und ohne MeterMachen-Bearbeitung; `update` für
-  unbekannte Aktivität; `delete`-Webhook; Geo-Cleanup nach 48 h.
+  unbekannte Aktivität; `delete`-Webhook; `private`-Flag aus Strava übernommen
+  und bei Update aktualisiert.
 - Vitest für die neuen Komponenten.
 
 ### 4.6 PR-Aufteilung
@@ -304,6 +309,8 @@ Fehler: fremde Teilnahme → 404; fremde oder schon verknüpfte `activity_id`
   `PushSubscription`, iOS nur als Home-Screen-App). Füllt `notify` aus 2.7.
 - Wetten-Anbindung, Team-km-Rangliste.
 - Strava-Streams (Option D) für Grenzfälle.
+- **Team-Karte** zum Challenge-Ende: eigenes Teilprojekt auf Basis von
+  `ActivityTrack` (inkl. Entscheidung zu Enden-Kürzung und `private`).
 
 ## Risiken
 
@@ -311,5 +318,7 @@ Fehler: fremde Teilnahme → 404; fremde oder schon verknüpfte `activity_id`
   Strava-Daten eines Nutzers für andere. Gezeigt werden nur Partner, km und
   Anteil, nie Routen; dennoch vor dem Freischalten des Add-ons die
   Bedingungen prüfen.
-- Opt-out statt Opt-in und Einbezug von Nur-ich-Aktivitäten sind bewusste
-  Entscheidungen; in der Datenschutzseite transparent machen.
+- Dauerhafte Speicherung von Routen (inkl. Wohn-/Arbeitsort an Start/Ende)
+  und Einbezug von Nur-ich-Aktivitäten sind bewusste Entscheidungen; Strava-
+  Bedingungen zur Speicherdauer prüfen, in der Datenschutzseite transparent
+  machen. Opt-out statt Opt-in ebenso.
