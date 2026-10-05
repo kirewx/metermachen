@@ -159,6 +159,12 @@ def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack |
     return track
 
 
+def _after_change(session: Session, act: Activity, emit_feed: bool = True) -> None:
+    """Hook für Together-Matching (ausgefüllt in einem späteren Task, siehe
+    Spec 2026-10-05 Teil B) — in diesem PR noch ein No-op."""
+    pass
+
+
 def import_activity(
     session: Session, conn: StravaConnection, data: dict, emit_feed: bool = True
 ) -> bool:
@@ -239,7 +245,97 @@ def import_activity(
             feed.challenge_total(session, conn.user_id),
         )
         feed.rank_events(session, order_before, feed.challenge_order(session))
+    _after_change(session, act, emit_feed)
     return True
+
+
+def update_activity(session: Session, conn: StravaConnection, data: dict) -> None:
+    """Verarbeitet ein Strava-Update-Webhook-Event. Ignorierte Aktivitäten
+    werden übersprungen; unbekannte wie ein Neuimport behandelt. Solange die
+    Aktivität nicht in MeterMachen bearbeitet wurde (updated_at is None),
+    übernimmt es Titel und Werte 1:1 von Strava; danach bleiben die Werte
+    unverändert, nur der Track (z.B. nachträglich hochgeladene GPS-Spur,
+    geänderte Sichtbarkeit) wird aktualisiert."""
+    activity_id = data.get("id")
+    if not activity_id:
+        return
+    if is_ignored(session, conn.user_id, str(activity_id)):
+        return
+    act = session.exec(
+        select(Activity).where(
+            Activity.user_id == conn.user_id,
+            Activity.external_id == str(activity_id),
+            Activity.source == "strava",
+        )
+    ).first()
+    if act is None:
+        import_activity(session, conn, data)
+        return
+
+    from . import feed
+
+    order_before = feed.challenge_order(session)
+    total_before = feed.challenge_total(session, conn.user_id)
+    changed = False
+
+    if act.updated_at is None:
+        cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
+        distance_km = round((data.get("distance") or 0) / 1000, 2)
+        elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
+        act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
+        act_time = _parse_time(data.get("start_date_local") or data.get("start_date"))
+        moving_time = data.get("moving_time") or 0
+        duration_min = max(1, round(moving_time / 60)) if moving_time > 0 else None
+        note = data.get("name")
+
+        if note != act.note:
+            changed = True
+        act.note = note
+        if cat is not None and cat.id != act.category_id:
+            changed = True
+            act.category_id = cat.id
+        if distance_km > 0 and distance_km != act.distance_km:
+            changed = True
+            act.distance_km = distance_km
+        if duration_min != act.duration_min:
+            changed = True
+        act.duration_min = duration_min
+        if elevation_m != act.elevation_m:
+            changed = True
+        act.elevation_m = elevation_m
+        if act_date != act.date:
+            changed = True
+        act.date = act_date
+        if act_time != act.start_time:
+            changed = True
+        act.start_time = act_time
+        session.add(act)
+        session.commit()
+
+    # Track-Erfassung darf das Update nie zum Scheitern bringen (siehe
+    # import_activity) — ein Fehler hier wird nur geloggt und verworfen.
+    try:
+        upsert_track(session, act, data)
+        session.commit()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Track-Erfassung fehlgeschlagen fuer activity_id=%s", act.id
+        )
+        session.rollback()
+
+    if changed:
+        feed.refresh_activity_events(session, act)
+
+        from .achievements import check_unlocks
+
+        check_unlocks(session, conn.user_id)
+        feed.milestone_events(
+            session, conn.user_id, total_before,
+            feed.challenge_total(session, conn.user_id),
+        )
+        feed.rank_events(session, order_before, feed.challenge_order(session))
+
+    _after_change(session, act)
 
 
 def fetch_athlete_activities(access_token: str, after: int) -> list[dict]:
@@ -334,9 +430,15 @@ def backfill_current_year(user_id: int) -> None:
 
 
 def handle_webhook_event(session: Session, payload: dict) -> None:
-    """Importiert genau neue Strava-Aktivitäten (aspect 'create'). Idempotent über external_id."""
-    if payload.get("object_type") != "activity" or payload.get("aspect_type") != "create":
+    """Verzweigt nach aspect_type: 'create' importiert neu (idempotent über
+    external_id), 'update' pflegt Titel/Werte nach, solange die Aktivität
+    nicht in MeterMachen bearbeitet wurde. 'delete' folgt in einem späteren
+    Task."""
+    if payload.get("object_type") != "activity":
         return
+    aspect = payload.get("aspect_type")
+    if aspect not in ("create", "update"):
+        return  # 'delete' -> Task 4
     owner_id = payload.get("owner_id")
     activity_id = payload.get("object_id")
     conn = session.exec(
@@ -344,16 +446,25 @@ def handle_webhook_event(session: Session, payload: dict) -> None:
     ).first()
     if conn is None:
         return
-    already = session.exec(
-        select(Activity).where(
-            Activity.user_id == conn.user_id,
-            Activity.external_id == str(activity_id),
-            Activity.source == "strava",
-        )
-    ).first()
-    if already is not None:
+
+    if aspect == "create":
+        already = session.exec(
+            select(Activity).where(
+                Activity.user_id == conn.user_id,
+                Activity.external_id == str(activity_id),
+                Activity.source == "strava",
+            )
+        ).first()
+        if already is not None:
+            return
+        token = valid_access_token(session, conn)
+        data = fetch_activity(token, activity_id)
+        data.setdefault("id", activity_id)
+        import_activity(session, conn, data)
         return
+
+    # aspect == "update"
     token = valid_access_token(session, conn)
     data = fetch_activity(token, activity_id)
     data.setdefault("id", activity_id)
-    import_activity(session, conn, data)
+    update_activity(session, conn, data)

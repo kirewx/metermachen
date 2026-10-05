@@ -71,6 +71,25 @@ def activity_event(session: Session, act: Activity) -> None:
           payload=_activity_payload(act, cat, FactorResolver.load(session)))
 
 
+def refresh_activity_events(session: Session, act: Activity) -> None:
+    """Überschreibt die Payload aller `activity`-Events dieser Aktivität mit
+    dem aktuellen Stand (z.B. nach einem nicht-lokal-bearbeiteten
+    Strava-Update) — erzeugt kein neues Event."""
+    cat = session.get(Category, act.category_id)
+    if cat is None:
+        return
+    resolver = FactorResolver.load(session)
+    payload = _activity_payload(act, cat, resolver)
+    for ev in session.exec(
+        select(FeedEvent).where(
+            FeedEvent.type == "activity", FeedEvent.activity_id == act.id
+        )
+    ).all():
+        ev.payload_json = json.dumps(payload)
+        session.add(ev)
+    session.commit()
+
+
 def _challenge_totals(session: Session) -> dict[int, float]:
     """Challenge-MM je aktivem User (Kategorie-Faktor × km_factor, wie
     Rennen-Tab). Leeres Dict, wenn die Challenge nicht läuft."""

@@ -1,11 +1,20 @@
-from datetime import datetime
+import json
+from datetime import date, datetime
 
 import httpx
 import pytest
 from sqlmodel import select
 
 from app import config
-from app.models import Activity, ActivityTrack, Category, StravaConnection, StravaIgnored
+from app.models import (
+    Activity,
+    ActivityTrack,
+    Category,
+    FeedEvent,
+    Season,
+    StravaConnection,
+    StravaIgnored,
+)
 from app.services import strava
 
 
@@ -159,7 +168,10 @@ def test_handle_webhook_event_ignores_non_create(session, monkeypatch):
     _user, conn = _setup_conn(session)
     make_category(session, name="Laufen", strava_sport_types='["Run"]')
     monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {"sport_type": "Run"})
-    strava.handle_webhook_event(session, _payload(aspect="update"))
+    strava.handle_webhook_event(session, {
+        "object_type": "athlete", "aspect_type": "athlete",
+        "owner_id": 999, "object_id": 555,
+    })
     assert session.exec(select(Activity)).all() == []
 
 
@@ -840,3 +852,176 @@ def test_import_survives_track_failure(session, monkeypatch):
     assert session.exec(
         select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
     ).first() is None
+
+
+def _setup_season(session):
+    session.add(Season(year=2026, goal_km=1000.0, milestones_json="[]",
+                       start_date=date(2026, 1, 1)))
+    session.commit()
+
+
+def test_webhook_update_overwrites_unedited_activity(session, monkeypatch):
+    _setup_season(session)
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload())
+    act = session.exec(select(Activity)).one()
+
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 6000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Intervalle",
+    })
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+
+    session.refresh(act)
+    assert act.note == "Intervalle"
+    assert act.distance_km == 6.0
+    assert act.updated_at is None
+
+    events = session.exec(select(FeedEvent).where(FeedEvent.type == "activity")).all()
+    assert len(events) == 1
+    payload = json.loads(events[0].payload_json)
+    assert payload["titel"] == "Intervalle"
+
+
+def test_webhook_update_keeps_activity_edited_in_metermachen(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    _setup_season(session)
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+        "elapsed_time": 1800,
+    })
+    strava.handle_webhook_event(session, _payload())
+    act = session.exec(select(Activity)).one()
+
+    login(client, username=user.username)
+    r = client.patch(f"/api/activities/{act.id}", json={"note": "Mein Titel"})
+    assert r.status_code == 200
+    session.refresh(act)
+    assert act.updated_at is not None
+
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 6000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Intervalle",
+        "elapsed_time": 2500,
+    })
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+
+    session.refresh(act)
+    assert act.note == "Mein Titel"
+    assert act.distance_km == 5.0
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.elapsed_s == 2500
+
+
+def test_webhook_update_unmappable_sport_keeps_activity(session, monkeypatch):
+    _setup_season(session)
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload())
+    act = session.exec(select(Activity)).one()
+    cat_id_before = act.category_id
+
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Yoga", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+
+    session.refresh(act)
+    assert act.category_id == cat_id_before
+    assert session.exec(select(Activity)).one().id == act.id
+
+
+def test_webhook_update_unknown_activity_imports_it(session, monkeypatch):
+    _setup_season(session)
+    _user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+    acts = session.exec(select(Activity)).all()
+    assert len(acts) == 1
+    assert acts[0].source == "strava"
+    assert acts[0].external_id == "555"
+
+
+def test_webhook_update_ignored_activity_does_nothing(session, monkeypatch):
+    _setup_season(session)
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    session.add(StravaIgnored(user_id=user.id, external_id="555"))
+    session.commit()
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    called = {"fetch": False}
+
+    def fake_fetch(tok, aid):
+        called["fetch"] = True
+        return {
+            "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+            "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+        }
+
+    monkeypatch.setattr(strava, "fetch_activity", fake_fetch)
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+    assert called["fetch"] is True
+    assert session.exec(select(Activity)).all() == []
+
+
+def test_webhook_update_refreshes_private_flag_on_edited_activity(client, session, monkeypatch):
+    _enable_strava(monkeypatch)
+    _setup_season(session)
+    user, conn = _setup_conn(session)
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    monkeypatch.setattr(strava, "valid_access_token", lambda s, c: "tok")
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+    })
+    strava.handle_webhook_event(session, _payload())
+    act = session.exec(select(Activity)).one()
+
+    login(client, username=user.username)
+    r = client.patch(f"/api/activities/{act.id}", json={"note": "Mein Titel"})
+    assert r.status_code == 200
+    session.refresh(act)
+    note_before = act.note
+    distance_before = act.distance_km
+
+    monkeypatch.setattr(strava, "fetch_activity", lambda tok, aid: {
+        "sport_type": "Run", "distance": 5000.0, "moving_time": 1800,
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_date_local": "2026-03-01T07:00:00Z", "name": "Morgenlauf",
+        "visibility": "only_me",
+    })
+    strava.handle_webhook_event(session, _payload(aspect="update"))
+
+    session.refresh(act)
+    assert act.note == note_before
+    assert act.distance_km == distance_before
+    track = session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).one()
+    assert track.private is True
