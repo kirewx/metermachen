@@ -19,6 +19,8 @@ from ..models import (
     Challenge,
     FeedEvent,
     FeedReaction,
+    SessionParticipant,
+    TrainingSession,
     User,
 )
 from .factors import FactorResolver
@@ -33,10 +35,10 @@ _MESZ = timezone(timedelta(hours=2))
 
 def _emit(session: Session, *, type_: str, user_id: int | None = None,
           activity_id: int | None = None, payload: dict | None = None,
-          created_at: datetime | None = None) -> None:
+          created_at: datetime | None = None) -> FeedEvent | None:
     season = current_season(session)
     if season is None:
-        return
+        return None
     ev = FeedEvent(
         season_year=season.year, type=type_, user_id=user_id,
         activity_id=activity_id, payload_json=json.dumps(payload or {}),
@@ -45,6 +47,7 @@ def _emit(session: Session, *, type_: str, user_id: int | None = None,
         ev.created_at = created_at.astimezone(timezone.utc)
     session.add(ev)
     session.commit()
+    return ev
 
 
 def _activity_payload(act: Activity, cat: Category, resolver: FactorResolver) -> dict:
@@ -177,17 +180,108 @@ def milestone_events(
                   payload=_milestone_payload(m))
 
 
+def _delete_event(session: Session, ev: FeedEvent) -> None:
+    """Event samt Reaktionen löschen (ohne Commit)."""
+    for r in session.exec(
+        select(FeedReaction).where(FeedReaction.event_id == ev.id)
+    ).all():
+        session.delete(r)
+    session.delete(ev)
+
+
 def remove_activity_events(session: Session, activity_id: int) -> None:
     """Feed-Einträge (+ Reaktionen) einer gelöschten Aktivität entfernen."""
     for ev in session.exec(
         select(FeedEvent).where(FeedEvent.activity_id == activity_id)
     ).all():
-        for r in session.exec(
-            select(FeedReaction).where(FeedReaction.event_id == ev.id)
-        ).all():
-            session.delete(r)
-        session.delete(ev)
+        _delete_event(session, ev)
     session.commit()
+
+
+def remove_together_event(session: Session, ts: TrainingSession) -> None:
+    """`together`-Event (+ Reaktionen) einer Session entfernen und den
+    Verweis lösen (ohne Commit)."""
+    if ts.feed_event_id is None:
+        return
+    ev = session.get(FeedEvent, ts.feed_event_id)
+    ts.feed_event_id = None
+    session.add(ts)
+    session.flush()
+    if ev is not None:
+        _delete_event(session, ev)
+        session.flush()
+
+
+def _together_payload(
+    session: Session, ts: TrainingSession, confirmed: list[SessionParticipant]
+) -> dict:
+    users = {
+        u.id: u for u in session.exec(
+            select(User).where(User.id.in_([p.user_id for p in confirmed]))  # type: ignore[union-attr]
+        ).all()
+    }
+    first = session.exec(
+        select(Activity)
+        .where(Activity.id.in_(  # type: ignore[union-attr]
+            [p.activity_id for p in confirmed if p.activity_id is not None]
+        ))
+        .order_by(Activity.created_at, Activity.id)
+    ).first()
+    cat = session.get(Category, first.category_id) if first is not None else None
+    return {
+        "session_id": ts.id,
+        "participants": [
+            {
+                "user_id": p.user_id,
+                "display_name": users[p.user_id].display_name
+                if p.user_id in users else f"#{p.user_id}",
+            }
+            for p in confirmed
+        ],
+        "km_together": ts.km_together,
+        "share": ts.share,
+        "category": (
+            {"name": cat.name, "icon": cat.icon, "color": cat.color}
+            if cat is not None else None
+        ),
+    }
+
+
+def sync_together_event(
+    session: Session, ts: TrainingSession, *, emit: bool = True
+) -> None:
+    """Feed-Event `together` an den Session-Stand angleichen (Spec 3.1):
+    echt (≥ 2 bestätigt) → anlegen (nur mit `emit`) bzw. Payload
+    aktualisieren; nicht echt → Event + Reaktionen entfernen."""
+    confirmed = session.exec(
+        select(SessionParticipant)
+        .where(
+            SessionParticipant.session_id == ts.id,
+            SessionParticipant.status == "confirmed",
+        )
+        .order_by(SessionParticipant.created_at, SessionParticipant.id)
+    ).all()
+    if len(confirmed) < 2:
+        remove_together_event(session, ts)
+        return
+    ev = session.get(FeedEvent, ts.feed_event_id) if ts.feed_event_id else None
+    payload = _together_payload(session, ts, list(confirmed))
+    if ev is not None:
+        ev.payload_json = json.dumps(payload)
+        session.add(ev)
+        session.flush()
+        return
+    if ts.feed_event_id is not None:  # Verweis ins Leere
+        ts.feed_event_id = None
+        session.add(ts)
+        session.flush()
+    if not emit:
+        return
+    ev = _emit(session, type_="together", payload=payload)
+    if ev is not None:
+        ts.feed_event_id = ev.id
+        session.add(ts)
+        session.flush()
 
 
 def _events_in_period(session: Session, von: date_type, bis: date_type,

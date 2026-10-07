@@ -1,17 +1,17 @@
 from sqlmodel import Session, select
 
 from ..models import Activity, ActivityTrack, StravaIgnored
-from . import feed
+from . import feed, together
 
 
 def delete_activity(session: Session, act: Activity, *, ignore_strava: bool) -> None:
     """Gemeinsamer Lösch-Helfer: entfernt Feed-Events, Track und die
     Aktivität selbst. Bei ignore_strava=True wird eine importierte
     Strava-Aktivität zusätzlich auf die Ignore-Liste gesetzt, damit sie beim
-    nächsten Webhook-Event nicht erneut importiert wird.
-
-    Ab Task 8: entfernt hier auch die Together-Teilnahme der Aktivität.
+    nächsten Webhook-Event nicht erneut importiert wird. Eine
+    Together-Teilnahme der Aktivität wird ebenfalls entfernt.
     """
+    together.remove_activity(session, act.id)
     feed.remove_activity_events(session, act.id)
     track = session.exec(
         select(ActivityTrack).where(ActivityTrack.activity_id == act.id)

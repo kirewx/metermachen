@@ -1,8 +1,7 @@
 """Together-Matching (Spec 2026-10-05 Teil 1, 2.1): erkennt, dass Strava-
 Aktivitäten verschiedener Mitglieder gemeinsam absolviert wurden, und führt
-sie in `TrainingSession`s zusammen.
-
-Feed-Events, Achievements, Bestätigen/Ablehnen und Ablauf folgen separat."""
+sie in `TrainingSession`s zusammen; Lebenszyklus (Spec 2.2–2.7: Bestätigen,
+Ablehnen, Ablauf, Löschen) und Feed-Event `together` (Spec 3.1)."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -17,6 +16,7 @@ from ..models import (
     TrainingSession,
     User,
 )
+from . import feed
 from .notify import notify
 from .together_geo import decode_polyline, route_overlap, times_overlap
 
@@ -91,13 +91,15 @@ def _pair_blocked(pa: SessionParticipant | None, pb: SessionParticipant | None) 
     return pa is not None and pb is not None and pa.session_id == pb.session_id
 
 
+def _naive_utc(ts: datetime) -> datetime:
+    """Frisch angelegte Objekte tragen eine zeitzonen-bewusste Zeit, aus
+    SQLite geladene eine naive (UTC) — für Vergleiche vereinheitlichen."""
+    return ts.astimezone(timezone.utc).replace(tzinfo=None) if ts.tzinfo else ts
+
+
 def _age_key(obj) -> tuple[datetime, int]:
-    """Sortierschlüssel (created_at naiv UTC, id) — frisch angelegte Objekte
-    tragen eine zeitzonen-bewusste Zeit, aus SQLite geladene eine naive."""
-    ts = obj.created_at
-    if ts.tzinfo is not None:
-        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
-    return ts, obj.id
+    """Sortierschlüssel (created_at naiv UTC, id)."""
+    return _naive_utc(obj.created_at), obj.id
 
 
 def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> None:
@@ -124,6 +126,7 @@ def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> No
         p.session_id = keep.id
         session.add(p)
     session.flush()
+    feed.remove_together_event(session, drop)
     session.delete(drop)
     session.flush()
 
@@ -234,18 +237,107 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
         notify(user_id, kind, payload)
 
 
+def _confirmed(session: Session, ts: TrainingSession) -> list[SessionParticipant]:
+    return list(session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.session_id == ts.id,
+            SessionParticipant.status == "confirmed",
+        )
+    ).all())
+
+
+def is_real(session: Session, ts: TrainingSession) -> bool:
+    """Echt = mindestens zwei bestätigte Teilnahmen (Spec 2.1)."""
+    return len(_confirmed(session, ts)) >= 2
+
+
+def _now() -> datetime:
+    """Jetzt als naive UTC-Zeit (so liest SQLite die Zeitstempel zurück)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _respond(session: Session, participant: SessionParticipant, status: str) -> None:
+    participant.status = status
+    participant.responded_at = _now()
+    session.add(participant)
+    session.flush()
+    ts = session.get(TrainingSession, participant.session_id)
+    if ts is not None:
+        refresh_session(session, ts)
+    session.commit()
+
+
+def confirm(
+    session: Session, participant: SessionParticipant, activity_id: int | None = None
+) -> None:
+    """Eigene Teilnahme bestätigen. Eine mitgegebene `activity_id` wird hier
+    nur übernommen — ihre Prüfung (Tag ±1, noch in keiner Session) folgt mit
+    dem manuellen Taggen."""
+    if activity_id is not None:
+        participant.activity_id = activity_id
+    _respond(session, participant, "confirmed")
+
+
+def decline(session: Session, participant: SessionParticipant) -> None:
+    """„War ich nicht dabei“: Teilnahme bleibt als `declined` gespeichert
+    (Spec 2.3), damit das Paar nicht erneut vorgeschlagen wird."""
+    _respond(session, participant, "declined")
+
+
+def expire_suggestions(session: Session, now: datetime | None = None) -> None:
+    """Unbeantwortete Vorschläge älter als SUGGESTION_DAYS gelten als
+    abgelehnt (Spec 2.4, lazy beim Abruf). `responded_at` bleibt leer — es
+    gab keine Antwort."""
+    cutoff = _naive_utc(now or datetime.now(timezone.utc)) - timedelta(days=SUGGESTION_DAYS)
+    affected: dict[int, TrainingSession] = {}
+    for p in session.exec(
+        select(SessionParticipant).where(SessionParticipant.status == "suggested")
+    ).all():
+        if _naive_utc(p.created_at) >= cutoff:
+            continue
+        p.status = "declined"
+        session.add(p)
+        ts = session.get(TrainingSession, p.session_id)
+        if ts is not None:
+            affected[ts.id] = ts
+    if not affected:
+        return
+    session.flush()
+    for ts in affected.values():
+        refresh_session(session, ts)
+    session.commit()
+
+
+def remove_activity(session: Session, activity_id: int) -> None:
+    """Teilnahme einer gelöschten Aktivität entfernen (Spec 2.6). Session
+    ohne Teilnahmen wird samt Feed-Event gelöscht, sonst neu berechnet."""
+    p = participation_for(session, activity_id)
+    if p is None:
+        return
+    ts = session.get(TrainingSession, p.session_id)
+    session.delete(p)
+    session.flush()
+    if ts is not None:
+        rest = session.exec(
+            select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
+        ).first()
+        if rest is None:
+            feed.remove_together_event(session, ts)
+            session.delete(ts)
+            session.flush()
+        else:
+            refresh_session(session, ts)
+    session.commit()
+
+
 def refresh_session(
     session: Session, ts: TrainingSession, *, emit_feed: bool = True
 ) -> None:
     """`km_together`/`share` aus den bestätigten Teilnahmen neu berechnen
     (jeweils Maximum). `share` je Teilnahme = km_together / eigene Distanz,
-    gedeckelt auf 1 — das Maximum darüber entspricht dem paarweisen Maximum."""
-    confirmed = session.exec(
-        select(SessionParticipant).where(
-            SessionParticipant.session_id == ts.id,
-            SessionParticipant.status == "confirmed",
-        )
-    ).all()
+    gedeckelt auf 1 — das Maximum darüber entspricht dem paarweisen Maximum.
+    Danach Feed-Event angleichen und, wenn echt, Achievements prüfen."""
+    confirmed = _confirmed(session, ts)
     ts.km_together = max((p.km_together for p in confirmed), default=0)
     shares = []
     for p in confirmed:
@@ -257,3 +349,14 @@ def refresh_session(
     ts.share = max(shares) if shares else None
     session.add(ts)
     session.flush()
+
+    feed.sync_together_event(session, ts, emit=emit_feed)
+    if len(confirmed) < 2:
+        return
+    # Achievements committen selbst und rollen bei Unique-Konflikten zurück —
+    # vorher sichern, damit nichts Ungespeichertes verloren geht.
+    session.commit()
+    from . import achievements  # function-level: achievements kennt bald together
+
+    for p in confirmed:
+        achievements.check_unlocks(session, p.user_id)

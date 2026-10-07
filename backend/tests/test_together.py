@@ -2,7 +2,8 @@
 verschiedener Mitglieder zu gemeinsamen TrainingSessions zusammenführen."""
 
 import itertools
-from datetime import datetime, timedelta
+import json
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlmodel import select
@@ -11,11 +12,14 @@ from app import config
 from app.models import (
     Activity,
     ActivityTrack,
+    FeedEvent,
+    FeedReaction,
+    Season,
     SessionParticipant,
     StravaConnection,
     TrainingSession,
 )
-from app.services import strava, together
+from app.services import activity_delete, strava, together
 from tests.conftest import make_addon, make_category, make_user
 
 T0 = datetime(2026, 10, 1, 7, 0, 0)  # naiv UTC
@@ -593,3 +597,232 @@ def test_notify_payload_follows_merge_in_same_run(session, addon, monkeypatch):
     together.match_activity(session, m)
     assert [s.id for s in sessions(session)] == [old_id]
     assert calls and all(sid == old_id for sid in calls)
+
+
+# --- Lebenszyklus und Feed (Task 8) -------------------------------------------
+
+
+@pytest.fixture
+def season(session):
+    s = Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20),
+               end_date=date(2027, 5, 16))
+    session.add(s)
+    session.commit()
+    return s
+
+
+def together_events(session):
+    return session.exec(select(FeedEvent).where(FeedEvent.type == "together")).all()
+
+
+def _payload(ev):
+    return json.loads(ev.payload_json)
+
+
+def test_auto_match_creates_feed_event(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+
+    [ts] = sessions(session)
+    [ev] = together_events(session)
+    assert ts.feed_event_id == ev.id
+    assert ev.user_id is None
+    assert ev.season_year == 2026
+    p = _payload(ev)
+    assert p["session_id"] == ts.id
+    assert {x["display_name"] for x in p["participants"]} == {"Erik", "Anna"}
+    assert {x["user_id"] for x in p["participants"]} == {erik.id, anna.id}
+    assert p["km_together"] == pytest.approx(5.0, abs=0.1)
+    assert p["share"] == pytest.approx(1.0, abs=0.03)
+    assert set(p["category"]) == {"name", "icon", "color"}
+    assert together.is_real(session, ts) is True
+
+
+def test_feed_event_category_from_oldest_confirmed_activity(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    rad = make_category(session, name="Rad")
+    lauf = make_category(session, name="Lauf")
+    run(session, erik, category=rad)
+    a = run(session, anna, category=lauf)
+    together.match_activity(session, a)
+    [ev] = together_events(session)
+    assert _payload(ev)["category"]["name"] == "Rad"
+
+
+def test_third_person_updates_event(session, addon, season):
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    [ev] = together_events(session)
+    ev_id = ev.id
+
+    t = run(session, tom)
+    together.match_activity(session, t)
+    [ev] = together_events(session)
+    assert ev.id == ev_id
+    names = [x["display_name"] for x in _payload(ev)["participants"]]
+    assert sorted(names) == ["Anna", "Erik", "Tom"]
+
+
+def test_decline_removes_event(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    [ev] = together_events(session)
+    session.add(FeedReaction(event_id=ev.id, user_id=erik.id, emoji="🔥"))
+    session.commit()
+
+    p_anna = together.participation_for(session, a.id)
+    together.decline(session, p_anna)
+
+    assert together_events(session) == []
+    assert session.exec(select(FeedReaction)).all() == []
+    [ts] = sessions(session)
+    assert ts.feed_event_id is None
+    assert together.is_real(session, ts) is False
+    p_anna = together.participation_for(session, a.id)
+    assert p_anna.status == "declined"
+    assert p_anna.responded_at is not None
+    assert len(parts(session)) == 2
+
+
+def _suggested_pair(session):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = run(session, erik, points=path([("N", 4.5)]), km=4.5)
+    a = run(session, anna, points=path([("N", 1.8), ("E", 2.7)]), km=4.5)
+    together.match_activity(session, a)
+    assert all(p.status == "suggested" for p in parts(session))
+    return e, a
+
+
+def test_suggestion_confirmed_by_both_becomes_real(session, addon, season):
+    e, a = _suggested_pair(session)
+    [ts] = sessions(session)
+    assert together_events(session) == []
+
+    together.confirm(session, together.participation_for(session, e.id))
+    assert together.is_real(session, ts) is False
+    assert together_events(session) == []
+    assert together.participation_for(session, e.id).responded_at is not None
+
+    together.confirm(session, together.participation_for(session, a.id))
+    assert together.is_real(session, ts) is True
+    [ev] = together_events(session)
+    assert ts.feed_event_id == ev.id
+    assert ts.km_together > 0
+
+
+def _age(session, p, days):
+    p.created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+    session.add(p)
+    session.commit()
+
+
+def test_suggestion_expires_after_14_days(session, addon, season):
+    e, a = _suggested_pair(session)
+    pe, pa = together.participation_for(session, e.id), together.participation_for(session, a.id)
+    _age(session, pe, 15)
+    _age(session, pa, 13)
+
+    together.expire_suggestions(session)
+    assert together.participation_for(session, e.id).status == "declined"
+    assert together.participation_for(session, a.id).status == "suggested"
+
+
+def test_expire_suggestions_with_explicit_now(session, addon, season):
+    e, a = _suggested_pair(session)
+    for p in parts(session):
+        _age(session, p, 0)
+    later = datetime.now(timezone.utc) + timedelta(days=15)
+    together.expire_suggestions(session, now=later)
+    assert all(p.status == "declined" for p in parts(session))
+
+
+def test_expire_leaves_confirmed_alone(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    for p in parts(session):
+        _age(session, p, 30)
+    together.expire_suggestions(session)
+    assert all(p.status == "confirmed" for p in parts(session))
+    assert len(together_events(session)) == 1
+
+
+def test_delete_activity_dissolves_session(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    [ts] = sessions(session)
+    ts_id = ts.id
+
+    activity_delete.delete_activity(session, a, ignore_strava=False)
+    assert together.participation_for(session, a.id) is None
+    assert together_events(session) == []
+    ts = session.get(TrainingSession, ts_id)
+    assert ts is not None and ts.feed_event_id is None
+    assert [p.user_id for p in parts(session)] == [erik.id]
+
+    activity_delete.delete_activity(session, e, ignore_strava=False)
+    assert parts(session) == []
+    assert sessions(session) == []
+
+
+def test_remove_activity_without_participation_is_noop(session, addon, season):
+    erik = make_user(session, "erik")
+    e = run(session, erik)
+    together.remove_activity(session, e.id)
+    assert sessions(session) == []
+
+
+def test_backfill_match_without_feed_event(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a, emit_feed=False)
+    [ts] = sessions(session)
+    assert together.is_real(session, ts) is True
+    assert ts.feed_event_id is None
+    assert together_events(session) == []
+
+
+def test_real_session_triggers_check_unlocks(session, addon, season, monkeypatch):
+    from app.services import achievements
+
+    calls = []
+    monkeypatch.setattr(achievements, "check_unlocks", lambda s, uid: calls.append(uid))
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    assert sorted(set(calls)) == sorted([erik.id, anna.id])
+
+
+def test_session_merge_removes_younger_event(session, addon, season):
+    erik, anna, tom, lisa, max_ = (
+        make_user(session, n) for n in ("erik", "anna", "tom", "lisa", "max")
+    )
+    run(session, erik, points=path([("N", 5.0)]))
+    a = run(session, anna, points=path([("N", 5.0)]))
+    together.match_activity(session, a)
+    east_start = (ORIGIN[0] + 5.0 / _KM_PER_DEG_LAT, ORIGIN[1])
+    run(session, tom, points=path([("E", 5.0)], start=east_start))
+    lisa_act = run(session, lisa, points=path([("E", 5.0)], start=east_start))
+    together.match_activity(session, lisa_act)
+    assert len(together_events(session)) == 2
+    s1, s2 = sorted(sessions(session), key=lambda s: s.id)
+    s1_event = s1.feed_event_id
+
+    m = run(session, max_, points=path([("N", 5.0), ("E", 5.0)]), km=10.0)
+    together.match_activity(session, m)
+
+    [ev] = together_events(session)
+    [ts] = sessions(session)
+    assert ev.id == s1_event == ts.feed_event_id
+    assert len(_payload(ev)["participants"]) == 5
