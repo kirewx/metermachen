@@ -394,3 +394,202 @@ def test_matching_error_does_not_break_import(session, addon, monkeypatch):
     assert strava.import_activity(session, conn, _import_payload(3, "")) is True
     # Session bleibt benutzbar
     assert session.exec(select(Activity).where(Activity.user_id == anna.id)).first()
+
+
+# --- Fix-Runde 1 ---------------------------------------------------------------
+
+
+def _decline(session, act):
+    p = together.participation_for(session, act.id)
+    p.status = "declined"
+    session.add(p)
+    session.commit()
+
+
+def _declined_setup(session):
+    """A (Erik, 0–2 h) und C (Tom, 0–30 min) auto; B (Anna, 1 h–1,5 h)
+    überlappt nur mit A. A lehnt ab."""
+    erik, tom, anna = (make_user(session, n) for n in ("erik", "tom", "anna"))
+    a = run(session, erik, elapsed=7200)
+    c = run(session, tom, elapsed=1800)
+    together.match_activity(session, c)
+    _decline(session, a)
+    b = run(session, anna, start=T0 + timedelta(hours=1), elapsed=1800)
+    return a, b, c, anna
+
+
+def _record_notify(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        together, "notify", lambda uid, kind, payload: calls.append((uid, kind))
+    )
+    return calls
+
+
+def test_declined_candidate_does_not_pull_in_new_partner(session, addon, monkeypatch):
+    a, b, c, anna = _declined_setup(session)
+    calls = _record_notify(monkeypatch)
+    together.match_activity(session, b)
+    assert together.participation_for(session, b.id) is None
+    assert len(sessions(session)) == 1
+    assert calls == []
+
+
+def test_declined_own_activity_does_not_match_new_partner(session, addon, monkeypatch):
+    a, b, c, anna = _declined_setup(session)
+    calls = _record_notify(monkeypatch)
+    together.match_activity(session, a)
+    assert together.participation_for(session, b.id) is None
+    assert together.participation_for(session, a.id).status == "declined"
+    assert len(sessions(session)) == 1
+    assert calls == []
+
+
+def test_suggested_pair_does_not_raise_confirmed_km(session, addon):
+    erik, tom, anna = (make_user(session, n) for n in ("erik", "tom", "anna"))
+    a = run(session, erik, points=path([("N", 20.0)]), km=20.0, elapsed=7200)
+    c = run(session, tom, points=path([("N", 3.0)]), km=3.0, elapsed=1800)
+    together.match_activity(session, c)  # A–C auto, 3 km
+    # B überlappt zeitlich nur mit A: 8 km gemeinsam, Anteil 0,4 → Vorschlag
+    b = run(
+        session, anna, points=path([("N", 8.0), ("E", 12.0)]), km=20.0,
+        start=T0 + timedelta(hours=1), elapsed=3600,
+    )
+    together.match_activity(session, b)
+
+    [ts] = sessions(session)
+    assert together.participation_for(session, b.id).status == "suggested"
+    assert together.participation_for(session, a.id).km_together == pytest.approx(3.0, abs=0.1)
+    assert ts.km_together == pytest.approx(3.0, abs=0.1)
+
+
+def test_suggested_upgraded_by_auto_uses_auto_km(session, addon):
+    erik, tom, anna = (make_user(session, n) for n in ("erik", "tom", "anna"))
+    # A–B Vorschlag mit 8 km (Anteil 0,4)
+    a = run(session, erik, points=path([("N", 20.0)]), km=20.0, elapsed=7200)
+    b = run(
+        session, anna, points=path([("N", 8.0), ("E", 12.0)]), km=20.0,
+        start=T0 + timedelta(hours=1), elapsed=3600,
+    )
+    together.match_activity(session, b)
+    assert together.participation_for(session, a.id).status == "suggested"
+    # A–C auto mit 3 km → A wird bestätigt, km aus dem Auto-Paar
+    c = run(session, tom, points=path([("N", 3.0)]), km=3.0, elapsed=1800)
+    together.match_activity(session, c)
+    pa = together.participation_for(session, a.id)
+    assert pa.status == "confirmed"
+    assert pa.km_together == pytest.approx(3.0, abs=0.1)
+    [ts] = sessions(session)
+    assert ts.km_together == pytest.approx(3.0, abs=0.1)
+
+
+def test_merge_collision_discards_younger_participation(session, addon):
+    erik, anna, tom, max_ = (make_user(session, n) for n in ("erik", "anna", "tom", "max"))
+    an = run(session, anna, points=path([("N", 5.0)]))
+    east_start = (ORIGIN[0] + 5.0 / _KM_PER_DEG_LAT, ORIGIN[1])
+    to = run(session, tom, points=path([("E", 5.0)], start=east_start))
+    cat = make_category(session, name="Ohne-Spur")
+    watch, phone = (
+        Activity(user_id=erik.id, category_id=cat.id, date=T0.date(), distance_km=5.0)
+        for _ in range(2)
+    )
+    session.add_all([watch, phone])
+    session.commit()
+    t = [T0 + timedelta(minutes=m) for m in range(3)]
+    s1 = TrainingSession(source="auto", created_at=t[0])
+    s2 = TrainingSession(source="auto", created_at=t[1])
+    session.add_all([s1, s2])
+    session.commit()
+    session.add_all([
+        SessionParticipant(session_id=s1.id, user_id=anna.id, activity_id=an.id,
+                           status="confirmed", km_together=5, created_at=t[0]),
+        SessionParticipant(session_id=s1.id, user_id=erik.id, activity_id=watch.id,
+                           status="confirmed", km_together=5, created_at=t[2]),
+        SessionParticipant(session_id=s2.id, user_id=tom.id, activity_id=to.id,
+                           status="confirmed", km_together=5, created_at=t[1]),
+        SessionParticipant(session_id=s2.id, user_id=erik.id, activity_id=phone.id,
+                           status="confirmed", km_together=5, created_at=t[1]),
+    ])
+    session.commit()
+    s1_id, s2_id = s1.id, s2.id
+
+    m = run(session, max_, points=path([("N", 5.0), ("E", 5.0)]), km=10.0)
+    together.match_activity(session, m)
+
+    assert [s.id for s in sessions(session)] == [s1_id]
+    assert session.get(TrainingSession, s2_id) is None
+    # Ältere Teilnahme (phone, t1) bleibt, jüngere (watch, t2) wird verworfen
+    assert together.participation_for(session, watch.id) is None
+    assert together.participation_for(session, phone.id).session_id == s1_id
+
+
+def test_notify_only_after_commit(session, addon, monkeypatch):
+    seen = []
+
+    def spy(uid, kind, payload):
+        # nach dem Commit läuft keine (ungespeicherte) Transaktion mehr
+        seen.append((uid, kind, session.in_transaction()))
+
+    monkeypatch.setattr(together, "notify", spy)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    assert len(seen) == 2
+    assert not any(pending for _, _, pending in seen)
+    assert len(parts(session)) == 2
+
+
+def test_update_path_triggers_matching(session, addon, monkeypatch):
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "")
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    conn = _conn(session, anna, 4711)
+    assert strava.import_activity(session, conn, _import_payload(9, ""))
+    assert sessions(session) == []
+    strava.update_activity(session, conn, _import_payload(9, encode_polyline(ROUTE_5)))
+    assert len(sessions(session)) == 1
+    assert all(p.status == "confirmed" for p in parts(session))
+
+
+@pytest.mark.parametrize(
+    "km, share, expected",
+    [
+        (2.0, 0.5, "auto"),
+        (1.99, 0.5, "suggest"),
+        (2.0, 0.49, "suggest"),
+        (1.9, 0.3, "suggest"),
+        (2.0, 0.0, "suggest"),
+        (1.9, 0.29, None),
+        (0.0, 0.0, None),
+    ],
+)
+def test_classify_thresholds(km, share, expected):
+    assert together._classify(km, share) == expected
+
+
+def test_notify_payload_follows_merge_in_same_run(session, addon, monkeypatch):
+    """A matcht zuerst B (neue Session), dann C aus einer älteren Session →
+    die neue geht auf; Benachrichtigungen nennen die überlebende Session."""
+    calls = []
+    monkeypatch.setattr(
+        together, "notify", lambda uid, kind, payload: calls.append(payload["session_id"])
+    )
+    erik, anna, tom, lisa, max_ = (
+        make_user(session, n) for n in ("erik", "anna", "tom", "lisa", "max")
+    )
+    # ältere Session: Tom + Lisa, später gestartet (Kandidaten nach start_utc sortiert)
+    later = T0 + timedelta(minutes=5)
+    run(session, tom, start=later)
+    lisa_act = run(session, lisa, start=later)
+    together.match_activity(session, lisa_act)
+    [old] = sessions(session)
+    old_id = old.id
+    calls.clear()
+    # Anna ohne Session, früher gestartet → Max matcht zuerst Anna, dann Tom
+    run(session, anna)
+    m = run(session, max_)
+    together.match_activity(session, m)
+    assert [s.id for s in sessions(session)] == [old_id]
+    assert calls and all(sid == old_id for sid in calls)

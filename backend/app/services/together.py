@@ -83,27 +83,46 @@ def _candidates(session: Session, act: Activity, track: ActivityTrack):
 
 
 def _pair_blocked(pa: SessionParticipant | None, pb: SessionParticipant | None) -> bool:
-    """Schon in derselben Session (ggf. mit `declined` einer Seite, Spec 2.3)."""
+    """Schon in derselben Session, oder eine Seite hat ihre Teilnahme
+    abgelehnt (Spec 2.3) — eine abgelehnte Aktivität zieht keine neuen
+    Partner in ihre Session und löst keine Zusammenführung aus."""
+    if any(p is not None and p.status == "declined" for p in (pa, pb)):
+        return True
     return pa is not None and pb is not None and pa.session_id == pb.session_id
+
+
+def _age_key(obj) -> tuple[datetime, int]:
+    """Sortierschlüssel (created_at naiv UTC, id) — frisch angelegte Objekte
+    tragen eine zeitzonen-bewusste Zeit, aus SQLite geladene eine naive."""
+    ts = obj.created_at
+    if ts.tzinfo is not None:
+        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+    return ts, obj.id
 
 
 def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> None:
     """Teilnahmen von `drop` nach `keep` umhängen und `drop` löschen. Hat der
-    Nutzer in `keep` schon eine Teilnahme, wird die jüngere verworfen."""
-    users_in_keep = {
-        p.user_id for p in session.exec(
+    Nutzer in beiden Sessions eine Teilnahme, wird die jüngere verworfen."""
+    in_keep = {
+        p.user_id: p for p in session.exec(
             select(SessionParticipant).where(SessionParticipant.session_id == keep.id)
         ).all()
     }
+    moving = []
     for p in session.exec(
         select(SessionParticipant).where(SessionParticipant.session_id == drop.id)
     ).all():
-        if p.user_id in users_in_keep:
+        other = in_keep.get(p.user_id)
+        if other is not None and _age_key(other) <= _age_key(p):
             session.delete(p)
-        else:
-            p.session_id = keep.id
-            session.add(p)
-            users_in_keep.add(p.user_id)
+            continue
+        if other is not None:
+            session.delete(other)
+        moving.append(p)
+    session.flush()  # Löschungen vor dem Umhängen (unique session_id, user_id)
+    for p in moving:
+        p.session_id = keep.id
+        session.add(p)
     session.flush()
     session.delete(drop)
     session.flush()
@@ -111,21 +130,23 @@ def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> No
 
 def _choose_session(
     session: Session, pa: SessionParticipant | None, pb: SessionParticipant | None
-) -> TrainingSession:
+) -> tuple[TrainingSession, int | None]:
+    """Ziel-Session für das Paar und ggf. die id der darin aufgegangenen."""
     if pa is not None and pb is not None:
         sa = session.get(TrainingSession, pa.session_id)
         sb = session.get(TrainingSession, pb.session_id)
-        keep, drop = sorted((sa, sb), key=lambda s: (s.created_at, s.id))
+        keep, drop = sorted((sa, sb), key=_age_key)
+        drop_id = drop.id
         _merge(session, keep, drop)
-        return keep
+        return keep, drop_id
     if pb is not None:
-        return session.get(TrainingSession, pb.session_id)
+        return session.get(TrainingSession, pb.session_id), None
     if pa is not None:
-        return session.get(TrainingSession, pa.session_id)
+        return session.get(TrainingSession, pa.session_id), None
     ts = TrainingSession(source="auto")
     session.add(ts)
     session.flush()
-    return ts
+    return ts, None
 
 
 def _join(
@@ -150,8 +171,11 @@ def _join(
         session.flush()
         return p
     if p.status == "suggested" and status == "confirmed":
+        # Session-Werte stammen nur aus bestätigten Paaren (Spec 1.6)
         p.status = "confirmed"
-    p.km_together = max(p.km_together, km)
+        p.km_together = km
+    elif p.status == status:
+        p.km_together = max(p.km_together, km)
     session.add(p)
     session.flush()
     return None
@@ -174,6 +198,7 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
         return
 
     touched: dict[int, TrainingSession] = {}
+    pending: list[tuple[int, str, dict]] = []
     for track_b, act_b in _candidates(session, act, track):
         pa, pb = participation_for(session, act.id), participation_for(session, act_b.id)
         if _pair_blocked(pa, pb):
@@ -186,21 +211,27 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
         if result is None:
             continue
 
-        ts = _choose_session(session, pa, pb)
-        touched = {k: v for k, v in touched.items() if session.get(TrainingSession, k)}
+        ts, dropped = _choose_session(session, pa, pb)
+        if dropped is not None:
+            touched.pop(dropped, None)
+            for _, _, payload in pending:
+                if payload["session_id"] == dropped:
+                    payload["session_id"] = ts.id
         touched[ts.id] = ts
         status = "confirmed" if result == "auto" else "suggested"
         kind = "together_auto" if result == "auto" else "together_suggested"
         for a in (act, act_b):
             new = _join(session, ts, a, status, km)
             if new is not None:
-                notify(a.user_id, kind, {
+                pending.append((a.user_id, kind, {
                     "session_id": ts.id, "activity_id": a.id, "km_together": km,
-                })
+                }))
 
     for ts in touched.values():
         refresh_session(session, ts, emit_feed=emit_feed)
     session.commit()
+    for user_id, kind, payload in pending:
+        notify(user_id, kind, payload)
 
 
 def refresh_session(
