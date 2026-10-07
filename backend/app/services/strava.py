@@ -162,9 +162,18 @@ def upsert_track(session: Session, act: Activity, data: dict) -> ActivityTrack |
 
 
 def _after_change(session: Session, act: Activity, emit_feed: bool = True) -> None:
-    """Hook für Together-Matching (ausgefüllt in einem späteren Task, siehe
-    Spec 2026-10-05 Teil B) — in diesem PR noch ein No-op."""
-    pass
+    """Together-Matching nach Import/Update (Spec 2026-10-05 Teil 1.2). Ein
+    Fehler wird nur geloggt und bricht den Import nie; die Session bleibt
+    nach einem Rollback benutzbar."""
+    from . import together
+
+    try:
+        together.match_activity(session, act, emit_feed=emit_feed)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Together-Matching fehlgeschlagen fuer activity_id=%s", act.id
+        )
+        session.rollback()
 
 
 def _derive_fields(session: Session, data: dict) -> dict:
