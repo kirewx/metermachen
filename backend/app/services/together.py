@@ -3,6 +3,8 @@ Aktivitäten verschiedener Mitglieder gemeinsam absolviert wurden, und führt
 sie in `TrainingSession`s zusammen; Lebenszyklus (Spec 2.2–2.7: Bestätigen,
 Ablehnen, Ablauf, Löschen) und Feed-Event `together` (Spec 3.1)."""
 
+import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, select
@@ -26,6 +28,8 @@ MIN_KM = 2.0
 SUGGESTION_DAYS = 14
 
 ADDON_KEY = "together"
+
+log = logging.getLogger(__name__)
 
 
 def enabled(session: Session) -> bool:
@@ -201,11 +205,17 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
         return
 
     touched: dict[int, TrainingSession] = {}
+    was_real: dict[int, bool] = {}  # Stand vor diesem Lauf je Session
     pending: list[tuple[int, str, dict]] = []
     for track_b, act_b in _candidates(session, act, track):
         pa, pb = participation_for(session, act.id), participation_for(session, act_b.id)
         if _pair_blocked(pa, pb):
             continue
+        for p in (pa, pb):
+            if p is not None and p.session_id not in was_real:
+                was_real[p.session_id] = is_real(
+                    session, session.get(TrainingSession, p.session_id)
+                )
         points_b = _decode(track_b.polyline)
         if points_b is None:
             continue
@@ -221,6 +231,7 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
                 if payload["session_id"] == dropped:
                     payload["session_id"] = ts.id
         touched[ts.id] = ts
+        was_real.setdefault(ts.id, False)  # in diesem Lauf neu angelegt
         status = "confirmed" if result == "auto" else "suggested"
         kind = "together_auto" if result == "auto" else "together_suggested"
         for a in (act, act_b):
@@ -231,10 +242,13 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
                 }))
 
     for ts in touched.values():
-        refresh_session(session, ts, emit_feed=emit_feed)
+        refresh_session(
+            session, ts, emit_feed=emit_feed, was_real=was_real.get(ts.id, False)
+        )
     session.commit()
     for user_id, kind, payload in pending:
         notify(user_id, kind, payload)
+    _check_achievements(session, touched.values())
 
 
 def _confirmed(session: Session, ts: TrainingSession) -> list[SessionParticipant]:
@@ -256,15 +270,37 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _check_achievements(session: Session, sessions: Iterable[TrainingSession]) -> None:
+    """Nach dem Commit: Achievements aller bestätigten Teilnehmer echter
+    Sessions prüfen (idempotent). Fehler brechen weder Matching noch
+    Löschen ab."""
+    from . import achievements  # function-level: achievements kennt bald together
+
+    user_ids: list[int] = []
+    for ts in sessions:
+        confirmed = _confirmed(session, ts)
+        if len(confirmed) >= 2:
+            user_ids += [p.user_id for p in confirmed if p.user_id not in user_ids]
+    for uid in user_ids:
+        try:
+            achievements.check_unlocks(session, uid)
+        except Exception:
+            log.exception("together: check_unlocks für Nutzer %s fehlgeschlagen", uid)
+            session.rollback()
+
+
 def _respond(session: Session, participant: SessionParticipant, status: str) -> None:
+    ts = session.get(TrainingSession, participant.session_id)
+    was = ts is not None and is_real(session, ts)
     participant.status = status
     participant.responded_at = _now()
     session.add(participant)
     session.flush()
-    ts = session.get(TrainingSession, participant.session_id)
     if ts is not None:
-        refresh_session(session, ts)
+        refresh_session(session, ts, was_real=was)
     session.commit()
+    if ts is not None:
+        _check_achievements(session, [ts])
 
 
 def confirm(
@@ -289,23 +325,29 @@ def expire_suggestions(session: Session, now: datetime | None = None) -> None:
     abgelehnt (Spec 2.4, lazy beim Abruf). `responded_at` bleibt leer — es
     gab keine Antwort."""
     cutoff = _naive_utc(now or datetime.now(timezone.utc)) - timedelta(days=SUGGESTION_DAYS)
+    expired = [
+        p for p in session.exec(
+            select(SessionParticipant).where(SessionParticipant.status == "suggested")
+        ).all()
+        if _naive_utc(p.created_at) < cutoff
+    ]
+    if not expired:
+        return
     affected: dict[int, TrainingSession] = {}
-    for p in session.exec(
-        select(SessionParticipant).where(SessionParticipant.status == "suggested")
-    ).all():
-        if _naive_utc(p.created_at) >= cutoff:
-            continue
+    was_real: dict[int, bool] = {}
+    for p in expired:
+        ts = session.get(TrainingSession, p.session_id)
+        if ts is not None and ts.id not in affected:
+            affected[ts.id] = ts
+            was_real[ts.id] = is_real(session, ts)
+    for p in expired:
         p.status = "declined"
         session.add(p)
-        ts = session.get(TrainingSession, p.session_id)
-        if ts is not None:
-            affected[ts.id] = ts
-    if not affected:
-        return
     session.flush()
     for ts in affected.values():
-        refresh_session(session, ts)
+        refresh_session(session, ts, was_real=was_real[ts.id])
     session.commit()
+    _check_achievements(session, affected.values())
 
 
 def remove_activity(session: Session, activity_id: int) -> None:
@@ -315,28 +357,36 @@ def remove_activity(session: Session, activity_id: int) -> None:
     if p is None:
         return
     ts = session.get(TrainingSession, p.session_id)
+    was = ts is not None and is_real(session, ts)
     session.delete(p)
     session.flush()
-    if ts is not None:
-        rest = session.exec(
-            select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
-        ).first()
-        if rest is None:
-            feed.remove_together_event(session, ts)
-            session.delete(ts)
-            session.flush()
-        else:
-            refresh_session(session, ts)
+    if ts is None:
+        session.commit()
+        return
+    rest = session.exec(
+        select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
+    ).first()
+    if rest is None:
+        feed.remove_together_event(session, ts)
+        session.delete(ts)
+        session.commit()
+        return
+    refresh_session(session, ts, was_real=was)
     session.commit()
+    _check_achievements(session, [ts])
 
 
 def refresh_session(
-    session: Session, ts: TrainingSession, *, emit_feed: bool = True
+    session: Session, ts: TrainingSession, *, was_real: bool, emit_feed: bool = True
 ) -> None:
     """`km_together`/`share` aus den bestätigten Teilnahmen neu berechnen
     (jeweils Maximum). `share` je Teilnahme = km_together / eigene Distanz,
     gedeckelt auf 1 — das Maximum darüber entspricht dem paarweisen Maximum.
-    Danach Feed-Event angleichen und, wenn echt, Achievements prüfen."""
+    Danach Feed-Event angleichen: angelegt wird es nur beim Übergang nicht
+    echt → echt (`was_real` = Stand vor der Änderung), sonst nur aktualisiert
+    oder entfernt — eine im Backfill echt gewordene Session bekommt nie
+    nachträglich ein Event. Committet nicht; Achievements prüft der Aufrufer
+    nach dem Commit (`_check_achievements`)."""
     confirmed = _confirmed(session, ts)
     ts.km_together = max((p.km_together for p in confirmed), default=0)
     shares = []
@@ -350,13 +400,4 @@ def refresh_session(
     session.add(ts)
     session.flush()
 
-    feed.sync_together_event(session, ts, emit=emit_feed)
-    if len(confirmed) < 2:
-        return
-    # Achievements committen selbst und rollen bei Unique-Konflikten zurück —
-    # vorher sichern, damit nichts Ungespeichertes verloren geht.
-    session.commit()
-    from . import achievements  # function-level: achievements kennt bald together
-
-    for p in confirmed:
-        achievements.check_unlocks(session, p.user_id)
+    feed.sync_together_event(session, ts, emit=emit_feed and not was_real)

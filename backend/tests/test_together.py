@@ -3,7 +3,7 @@ verschiedener Mitglieder zu gemeinsamen TrainingSessions zusammenführen."""
 
 import itertools
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from sqlmodel import select
@@ -640,15 +640,20 @@ def test_auto_match_creates_feed_event(session, addon, season):
     assert together.is_real(session, ts) is True
 
 
-def test_feed_event_category_from_oldest_confirmed_activity(session, addon, season):
+def test_feed_event_category_from_earliest_confirmed_activity(session, addon, season):
+    """Maßgeblich ist Datum + Startzeit, nicht die Import-Reihenfolge."""
     erik, anna = make_user(session, "erik"), make_user(session, "anna")
     rad = make_category(session, name="Rad")
     lauf = make_category(session, name="Lauf")
-    run(session, erik, category=rad)
+    e = run(session, erik, category=rad)  # zuerst importiert, startet aber später
+    e.start_time = time(9, 5)
     a = run(session, anna, category=lauf)
+    a.start_time = time(9, 0)
+    session.add_all([e, a])
+    session.commit()
     together.match_activity(session, a)
     [ev] = together_events(session)
-    assert _payload(ev)["category"]["name"] == "Rad"
+    assert _payload(ev)["category"]["name"] == "Lauf"
 
 
 def test_third_person_updates_event(session, addon, season):
@@ -826,3 +831,131 @@ def test_session_merge_removes_younger_event(session, addon, season):
     [ts] = sessions(session)
     assert ev.id == s1_event == ts.feed_event_id
     assert len(_payload(ev)["participants"]) == 5
+
+
+# --- Fix-Runde 1 (Task 8) -------------------------------------------------------
+
+TOM_PARTIAL = path([("N", 2.0), ("E", 3.0)])  # 2 km gemeinsam, Anteil 0,4 → Vorschlag
+
+
+def _backfilled_real_with_suggested_tom(session):
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a, emit_feed=False)
+    t = run(session, tom, points=TOM_PARTIAL)
+    together.match_activity(session, t, emit_feed=False)
+    pt = together.participation_for(session, t.id)
+    assert pt is not None and pt.status == "suggested"
+    [ts] = sessions(session)
+    assert together.is_real(session, ts) and ts.feed_event_id is None
+    return t
+
+
+def test_backfilled_session_no_event_after_decline(session, addon, season):
+    t = _backfilled_real_with_suggested_tom(session)
+    together.decline(session, together.participation_for(session, t.id))
+    assert together_events(session) == []
+
+
+def test_backfilled_session_no_event_after_expiry(session, addon, season):
+    t = _backfilled_real_with_suggested_tom(session)
+    _age(session, together.participation_for(session, t.id), 15)
+    together.expire_suggestions(session)
+    assert together.participation_for(session, t.id).status == "declined"
+    assert together_events(session) == []
+
+
+def test_backfilled_session_no_event_when_third_confirms(session, addon, season):
+    t = _backfilled_real_with_suggested_tom(session)
+    together.confirm(session, together.participation_for(session, t.id))
+    assert together.participation_for(session, t.id).status == "confirmed"
+    assert together_events(session) == []
+
+
+def test_backfilled_session_no_event_on_live_rematch(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a, emit_feed=False)
+    together.match_activity(session, e)  # Update-Webhook, live
+    assert together_events(session) == []
+
+
+def _boom(*a, **kw):
+    raise RuntimeError("Achievement kaputt")
+
+
+def test_check_unlocks_failure_does_not_break_matching(session, addon, season, monkeypatch):
+    from app.services import achievements
+
+    monkeypatch.setattr(achievements, "check_unlocks", _boom)
+    calls = _record_notify(monkeypatch)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)  # wirft nicht
+
+    session.rollback()  # nur Committetes zählt
+    assert len(sessions(session)) == 1
+    assert len(parts(session)) == 2
+    assert len(together_events(session)) == 1
+    assert sorted(calls) == sorted([(erik.id, "together_auto"), (anna.id, "together_auto")])
+
+
+def test_check_unlocks_failure_does_not_break_delete(session, addon, season, monkeypatch):
+    from app.services import achievements
+
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    run(session, erik)
+    run(session, anna)
+    t = run(session, tom)
+    together.match_activity(session, t)
+    monkeypatch.setattr(achievements, "check_unlocks", _boom)
+    t_id = t.id
+
+    activity_delete.delete_activity(session, t, ignore_strava=False)
+    session.rollback()
+    assert session.get(Activity, t_id) is None
+    assert together.participation_for(session, t_id) is None
+    assert len(parts(session)) == 2
+
+
+def test_merge_removes_dropped_event_reactions(session, addon, season):
+    erik, anna, tom, lisa, max_ = (
+        make_user(session, n) for n in ("erik", "anna", "tom", "lisa", "max")
+    )
+    run(session, erik, points=path([("N", 5.0)]))
+    a = run(session, anna, points=path([("N", 5.0)]))
+    together.match_activity(session, a)
+    east_start = (ORIGIN[0] + 5.0 / _KM_PER_DEG_LAT, ORIGIN[1])
+    run(session, tom, points=path([("E", 5.0)], start=east_start))
+    lisa_act = run(session, lisa, points=path([("E", 5.0)], start=east_start))
+    together.match_activity(session, lisa_act)
+    s1, s2 = sorted(sessions(session), key=lambda s: s.id)
+    session.add(FeedReaction(event_id=s1.feed_event_id, user_id=erik.id, emoji="🔥"))
+    session.add(FeedReaction(event_id=s2.feed_event_id, user_id=tom.id, emoji="👏"))
+    session.commit()
+    s1_event = s1.feed_event_id
+
+    m = run(session, max_, points=path([("N", 5.0), ("E", 5.0)]), km=10.0)
+    together.match_activity(session, m)
+
+    [r] = session.exec(select(FeedReaction)).all()
+    assert r.event_id == s1_event and r.emoji == "🔥"
+
+
+def test_delete_from_three_person_session_updates_payload(session, addon, season):
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    run(session, erik)
+    run(session, anna)
+    t = run(session, tom)
+    together.match_activity(session, t)
+    [ev] = together_events(session)
+    ev_id = ev.id
+    assert len(_payload(ev)["participants"]) == 3
+
+    activity_delete.delete_activity(session, t, ignore_strava=False)
+    [ev] = together_events(session)
+    assert ev.id == ev_id
+    assert sorted(x["display_name"] for x in _payload(ev)["participants"]) == ["Anna", "Erik"]

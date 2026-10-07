@@ -35,7 +35,10 @@ _MESZ = timezone(timedelta(hours=2))
 
 def _emit(session: Session, *, type_: str, user_id: int | None = None,
           activity_id: int | None = None, payload: dict | None = None,
-          created_at: datetime | None = None) -> FeedEvent | None:
+          created_at: datetime | None = None,
+          commit: bool = True) -> FeedEvent | None:
+    """Legt ein Event in der aktuellen Season an (keine Season → None).
+    `commit=False` nur flushen — für Aufrufer mit eigener Transaktion."""
     season = current_season(session)
     if season is None:
         return None
@@ -46,7 +49,10 @@ def _emit(session: Session, *, type_: str, user_id: int | None = None,
     if created_at is not None:
         ev.created_at = created_at.astimezone(timezone.utc)
     session.add(ev)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     return ev
 
 
@@ -220,13 +226,16 @@ def _together_payload(
             select(User).where(User.id.in_([p.user_id for p in confirmed]))  # type: ignore[union-attr]
         ).all()
     }
-    first = session.exec(
-        select(Activity)
-        .where(Activity.id.in_(  # type: ignore[union-attr]
+    acts = session.exec(
+        select(Activity).where(Activity.id.in_(  # type: ignore[union-attr]
             [p.activity_id for p in confirmed if p.activity_id is not None]
         ))
-        .order_by(Activity.created_at, Activity.id)
-    ).first()
+    ).all()
+    # früheste sportlich (Datum + Startzeit, fehlt sie: 12:00 wie im Backfill)
+    first = min(
+        acts, key=lambda a: (a.date, a.start_time or time_type(12, 0), a.id),
+        default=None,
+    )
     cat = session.get(Category, first.category_id) if first is not None else None
     return {
         "session_id": ts.id,
@@ -251,8 +260,9 @@ def sync_together_event(
     session: Session, ts: TrainingSession, *, emit: bool = True
 ) -> None:
     """Feed-Event `together` an den Session-Stand angleichen (Spec 3.1):
-    echt (≥ 2 bestätigt) → anlegen (nur mit `emit`) bzw. Payload
-    aktualisieren; nicht echt → Event + Reaktionen entfernen."""
+    echt (≥ 2 bestätigt) → anlegen (nur mit `emit`; der Aufrufer setzt es
+    nur beim Übergang nicht echt → echt) bzw. Payload aktualisieren; nicht
+    echt → Event + Reaktionen entfernen. Committet nicht."""
     confirmed = session.exec(
         select(SessionParticipant)
         .where(
@@ -277,7 +287,7 @@ def sync_together_event(
         session.flush()
     if not emit:
         return
-    ev = _emit(session, type_="together", payload=payload)
+    ev = _emit(session, type_="together", payload=payload, commit=False)
     if ev is not None:
         ts.feed_event_id = ev.id
         session.add(ts)
