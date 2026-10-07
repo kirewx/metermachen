@@ -52,6 +52,10 @@ def migrate(target=engine) -> None:
             )
         if user_cols and "strava_consent_at" not in user_cols:
             conn.execute(text('ALTER TABLE "user" ADD COLUMN strava_consent_at DATETIME'))
+        if user_cols and "detect_together" not in user_cols:
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN detect_together BOOLEAN NOT NULL DEFAULT 1')
+            )
 
         if _table_exists(conn, "category"):
             cat_cols = _columns(conn, "category")
