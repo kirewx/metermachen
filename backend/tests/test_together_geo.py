@@ -80,9 +80,15 @@ def test_half_route():
     dist_a = _route_length_km(line)
     dist_b = _route_length_km(half)
     km, share = route_overlap(line, half, dist_a, dist_b)
-    assert km == pytest.approx(2.45, abs=0.1)
+    # Spec-konsistente Werte (nicht die grobe "≈2.45"-Näherung aus dem Plan):
+    # covered_km(A, B) deckt auch das letzte A-Segment ab, dessen Mittelpunkt
+    # genau radius_m=50m vom Ende von B entfernt liegt -> 25 Segmente = 2.5km.
+    # covered_km(B, A) deckt alle 24 B-Segmente ab -> 2.4km. km_together ist
+    # das Minimum davon.
+    assert covered_km(line, half) == pytest.approx(2.5, abs=0.02)
+    assert covered_km(half, line) == pytest.approx(2.4, abs=0.02)
+    assert km == pytest.approx(2.4, abs=0.02)
     assert share == pytest.approx(1.0, abs=0.01)
-    assert covered_km(line, half) == pytest.approx(2.45, abs=0.1)
 
 
 def test_parallel_street_100m_no_overlap():
@@ -136,3 +142,46 @@ def test_times_overlap_min_zero_only_600s_rule():
     start = datetime(2026, 1, 1, 10, 0, 0)
     # elapsed_b == 0 -> min == 0, nur die 600s-Regel darf greifen, Overlap hier 0
     assert times_overlap(start, 3000, start, 0) is False
+
+
+def test_route_overlap_zero_distance_gives_zero_share():
+    line = _line_north()
+    dist = _route_length_km(line)
+
+    km_a, share_a = route_overlap(line, line, 0.0, dist)
+    assert share_a == 0.0
+
+    km_b, share_b = route_overlap(line, line, dist, 0.0)
+    assert share_b == 0.0
+
+    km_both, share_both = route_overlap(line, line, 0.0, 0.0)
+    assert share_both == 0.0
+
+    # km_together selbst ist unabhängig von dist_a_km/dist_b_km
+    assert km_a == km_b == km_both == pytest.approx(4.9, abs=0.1)
+
+
+def _with_duplicates(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Verdoppelt jeden Punkt konsekutiv -> abwechselnd Zero-Length- und
+    reale Segmente, zum Testen der Degenerierte-Segmente-Behandlung."""
+    duplicated: list[tuple[float, float]] = []
+    for point in points:
+        duplicated.append(point)
+        duplicated.append(point)
+    return duplicated
+
+
+def test_covered_km_duplicate_points_no_raise_and_same_coverage():
+    line = _line_north()
+    dup_line = _with_duplicates(line)
+
+    # Duplikate (Zero-Length-Segmente) in B dürfen nicht crashen und liefern
+    # praktisch die gleiche Abdeckung wie ohne Duplikate.
+    assert covered_km(line, dup_line) == pytest.approx(4.9, abs=0.1)
+
+    # Duplikate in A: Zero-Length-Segmente tragen 0 km bei, die realen
+    # Segmente bleiben unverändert abgedeckt.
+    assert covered_km(dup_line, line) == pytest.approx(4.9, abs=0.1)
+
+    # Duplikate auf beiden Seiten gleichzeitig.
+    assert covered_km(dup_line, dup_line) == pytest.approx(4.9, abs=0.1)
