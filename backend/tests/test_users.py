@@ -1,8 +1,17 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlmodel import select
 
-from app.models import Activity, CategoryFactorChange, StravaConnection, User
+from app.models import (
+    Activity,
+    ActivityTrack,
+    CategoryFactorChange,
+    FeedEvent,
+    StravaConnection,
+    StravaIgnored,
+    User,
+)
+from app.services import feed
 from tests.conftest import login, make_category, make_user
 
 
@@ -146,6 +155,45 @@ def test_delete_user_removes_dependent_data(client, session):
     assert session.exec(select(Activity).where(Activity.user_id == lisa.id)).first() is None
     assert session.exec(
         select(StravaConnection).where(StravaConnection.user_id == lisa.id)
+    ).first() is None
+
+
+def test_delete_user_removes_strava_track_and_ignore_list(client, session):
+    """Admin-Löschung muss über den Lösch-Helfer laufen — sonst bleiben
+    ActivityTrack-Zeilen verwaist (SQLite recycelt Rowids: eine künftige
+    Aktivität könnte sonst die GPS-Spur eines fremden Nutzers erben) und
+    FeedEvents hängen. Auch die StravaIgnored-Einträge des Nutzers müssen weg."""
+    make_user(session, username="chef", is_admin=True)
+    lisa = make_user(session, username="lisa")
+    cat = make_category(session, strava_sport_types='["Run"]')
+    act = Activity(
+        user_id=lisa.id, category_id=cat.id, date=date(2026, 3, 1),
+        distance_km=5.0, source="strava", external_id="555",
+    )
+    session.add(act)
+    session.commit()
+    session.refresh(act)
+    session.add(ActivityTrack(
+        activity_id=act.id,
+        start_utc=datetime(2026, 3, 1, 7, 0, tzinfo=timezone.utc),
+        elapsed_s=1800,
+    ))
+    session.add(StravaIgnored(user_id=lisa.id, external_id="999"))
+    session.commit()
+    feed.activity_event(session, act)
+
+    login(client, username="chef")
+    assert client.delete(f"/api/users/{lisa.id}").status_code == 204
+    assert session.get(User, lisa.id) is None
+    assert session.exec(select(Activity).where(Activity.user_id == lisa.id)).first() is None
+    assert session.exec(
+        select(ActivityTrack).where(ActivityTrack.activity_id == act.id)
+    ).first() is None
+    assert session.exec(
+        select(StravaIgnored).where(StravaIgnored.user_id == lisa.id)
+    ).first() is None
+    assert session.exec(
+        select(FeedEvent).where(FeedEvent.activity_id == act.id)
     ).first() is None
 
 

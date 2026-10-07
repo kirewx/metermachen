@@ -240,6 +240,20 @@ def test_backfill_saisonende_ueberschreibt_nicht(session):
     assert s.end_date == date(2027, 6, 1)
 
 
+def test_init_erzeugt_activitytrack_und_stravaignored_tabellen(tmp_path):
+    from sqlmodel import SQLModel
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    # Bestands-DB-Simulation: create_all + migrate = init_db()-Ablauf
+    SQLModel.metadata.create_all(engine)
+    migrate(engine)
+    with engine.begin() as conn:
+        track_cols = [row[1] for row in conn.execute(text('PRAGMA table_info("activitytrack")'))]
+        ignored_cols = [row[1] for row in conn.execute(text('PRAGMA table_info("stravaignored")'))]
+    assert {"id", "activity_id", "start_utc", "elapsed_s", "polyline"} <= set(track_cols)
+    assert {"id", "user_id", "external_id", "created_at"} <= set(ignored_cols)
+
+
 def test_migrate_adds_group_columns_to_challenge():
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool

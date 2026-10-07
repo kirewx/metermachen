@@ -5,7 +5,7 @@ from ..deps import get_current_user, get_session
 from ..models import Activity, Category, User
 from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
 from ..models import utcnow
-from ..services import feed
+from ..services import activity_delete, feed
 from ..services.achievements import check_unlocks
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
@@ -126,7 +126,5 @@ def delete_activity(
 ):
     act = _own_activity(session, user, activity_id)
     order_before = feed.challenge_order(session)
-    feed.remove_activity_events(session, act.id)
-    session.delete(act)
-    session.commit()
+    activity_delete.delete_activity(session, act, ignore_strava=True)
     feed.rank_events(session, order_before, feed.challenge_order(session))

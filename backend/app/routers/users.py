@@ -6,8 +6,9 @@ from sqlmodel import Session, select
 
 from .. import auth, config
 from ..deps import get_current_user, get_session, require_admin
-from ..models import Activity, Invite, StravaConnection, User, utcnow
+from ..models import Activity, Invite, StravaConnection, StravaIgnored, User, utcnow
 from ..schemas import ActivityOut
+from ..services import activity_delete
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
 from .activities import _to_out
@@ -184,14 +185,22 @@ def delete_user(
             status_code=409, detail="Den eigenen Account kannst du nicht löschen"
         )
     # Abhängige Daten mitnehmen — SQLite erzwingt die FKs hier nicht,
-    # also explizit: Aktivitäten + Strava-Verbindung weg, Einladungen entkoppeln.
+    # also explizit: Aktivitäten (über den Lösch-Helfer, sonst bleiben
+    # ActivityTrack-Zeilen verwaist — SQLite recycelt Rowids, eine künftige
+    # Aktivität könnte sonst die GPS-Spur eines fremden Nutzers erben —
+    # und FeedEvents hängen) + Strava-Verbindung/Ignore-Liste weg,
+    # Einladungen entkoppeln.
     for act in session.exec(select(Activity).where(Activity.user_id == user.id)).all():
-        session.delete(act)
+        activity_delete.delete_activity(session, act, ignore_strava=False)
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()
     if conn is not None:
         session.delete(conn)
+    for ignored in session.exec(
+        select(StravaIgnored).where(StravaIgnored.user_id == user.id)
+    ).all():
+        session.delete(ignored)
     for inv in session.exec(select(Invite).where(Invite.created_by == user.id)).all():
         session.delete(inv)
     for inv in session.exec(

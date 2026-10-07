@@ -27,3 +27,6 @@ skills-lock.json
 
 # Crash-Dumps (Git Bash unter Windows)
 *.stackdump
+
+# Editor-Swapfiles (vim)
+*.swp
