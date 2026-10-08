@@ -178,8 +178,8 @@ def _join(
         session.add(p)
         session.flush()
         return p
-    if p.activity_id is None:  # getaggt, jetzt per Auto-Match verknüpft
-        p.activity_id = act.id
+    if p.activity_id is None and p.status != "declined":
+        p.activity_id = act.id  # getaggt, jetzt per Auto-Match verknüpft
     if p.status == "suggested" and status == "confirmed":
         # Session-Werte stammen nur aus bestätigten Paaren (Spec 1.6)
         p.status = "confirmed"
@@ -379,23 +379,28 @@ def confirm(
     if participation_for(session, act.id) is not None:
         raise _bad("Aktivität gehört schon zu einer gemeinsamen Session")
     ref = _reference(session, participant)
-    if ref is not None and abs((act.date - ref[1].date).days) > 1:
+    if ref is None:
+        raise _bad("Keine bestätigte Aktivität zum Verknüpfen in dieser Session")
+    if abs((act.date - ref[1].date).days) > 1:
         raise _bad("Aktivität liegt nicht am selben Tag (±1)")
 
     ts = session.get(TrainingSession, participant.session_id)
     was = ts is not None and is_real(session, ts)
-    km = min(act.distance_km, ref[1].distance_km) if ref is not None else 0.0
+    km = min(act.distance_km, ref[1].distance_km)
     participant.activity_id = act.id
     participant.km_together = km
-    if ref is not None:
-        ref[0].km_together = max(ref[0].km_together, km)
-        session.add(ref[0])
+    ref[0].km_together = max(ref[0].km_together, km)
+    session.add(ref[0])
     _respond(session, participant, "confirmed", was_real=was)
 
 
-def check_partners(session: Session, user_id: int, partner_ids: list[int] | None) -> None:
+def check_partners(
+    session: Session, user_id: int, partner_ids: list[int] | None,
+    act: Activity | None = None,
+) -> None:
     """Partnerliste prüfen, ohne etwas zu ändern: 404 bei Add-on aus, 400 bei
-    eigenem, unbekanntem, inaktivem oder Opt-out-Nutzer. Leer → nichts."""
+    eigenem, unbekanntem, inaktivem oder Opt-out-Nutzer oder wenn die eigene
+    Teilnahme von `act` abgelehnt ist. Leer → nichts."""
     if not partner_ids:
         return
     if not enabled(session):
@@ -404,6 +409,10 @@ def check_partners(session: Session, user_id: int, partner_ids: list[int] | None
         u = session.get(User, pid)
         if pid == user_id or u is None or not u.is_active or not u.detect_together:
             raise _bad("Dieses Mitglied kann nicht getaggt werden")
+    if act is not None and act.id is not None:
+        own = participation_for(session, act.id)
+        if own is not None and own.status == "declined":
+            raise _bad("Eigene Teilnahme ist abgelehnt")
 
 
 def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> None:
@@ -412,7 +421,9 @@ def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> Non
     unverknüpfte Vorschläge werden gelöscht, bestätigte bleiben. Ohne Session
     entsteht eine `manual`-Session; bleibt sie ohne Partner, wird sie
     aufgelöst."""
-    check_partners(session, act.user_id, partner_ids)
+    check_partners(session, act.user_id, partner_ids, act)
+    if not enabled(session):
+        return  # Add-on aus: leere Liste ist wirkungslos
     wanted = set(partner_ids or [])
     own = participation_for(session, act.id)
     if own is None:
@@ -431,8 +442,6 @@ def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> Non
     else:
         ts = session.get(TrainingSession, own.session_id)
         was = is_real(session, ts)
-    if own.status == "declined" and wanted:
-        raise _bad("Eigene Teilnahme ist abgelehnt")
 
     existing = {
         p.user_id: p for p in session.exec(

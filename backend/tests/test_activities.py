@@ -318,11 +318,57 @@ def test_patch_without_partner_ids_keeps_tags(client, session):
     assert len(_parts(session)) == 2
 
 
-def test_patch_adds_partner(client, session):
-    _, anna, tom, cat = _together_setup(session)
+def test_patch_adds_partner(client, session, monkeypatch):
+    from app.services import together
+
+    calls = []
+    monkeypatch.setattr(together, "notify", lambda uid, kind, payload: calls.append((uid, kind)))
+    erik, anna, tom, cat = _together_setup(session)
     login(client)
     act_id = create_activity(client, cat.id).json()["id"]
     r = client.patch(f"/api/activities/{act_id}", json={"partner_ids": [anna.id, tom.id]})
     assert r.status_code == 200
     session.expire_all()
-    assert {p.user_id for p in _parts(session)} >= {anna.id, tom.id}
+    by_user = {p.user_id: p for p in _parts(session)}
+    assert set(by_user) == {erik.id, anna.id, tom.id}
+    assert by_user[erik.id].status == "confirmed"
+    assert by_user[anna.id].status == "suggested"
+    assert by_user[tom.id].status == "suggested"
+    assert sorted(calls) == sorted([(anna.id, "together_tagged"), (tom.id, "together_tagged")])
+
+
+def test_patch_with_addon_off_and_empty_list_keeps_tags(client, session):
+    from sqlmodel import select
+
+    from app.models import AddOn
+
+    _, anna, _, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(client, cat.id, partner_ids=[anna.id]).json()["id"]
+    addon = session.exec(select(AddOn).where(AddOn.key == "together")).one()
+    addon.enabled = False
+    session.add(addon)
+    session.commit()
+    r = client.patch(f"/api/activities/{act_id}", json={"partner_ids": []})
+    assert r.status_code == 200, r.text
+    assert len(_parts(session)) == 2
+
+
+def test_patch_declined_own_participation_400_before_saving(client, session):
+    from app.models import Activity
+
+    _, anna, tom, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(client, cat.id, partner_ids=[anna.id], note="alt").json()["id"]
+    own = next(p for p in _parts(session) if p.activity_id == act_id)
+    own.status = "declined"
+    session.add(own)
+    session.commit()
+    r = client.patch(
+        f"/api/activities/{act_id}", json={"note": "neu", "partner_ids": [anna.id, tom.id]}
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "Eigene Teilnahme ist abgelehnt"
+    session.expire_all()
+    assert session.get(Activity, act_id).note == "alt"
+    assert {p.user_id for p in _parts(session)} == {own.user_id, anna.id}

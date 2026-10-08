@@ -109,7 +109,7 @@ def patch_activity(
     }
     if "category_id" in changes:
         _validate_category(session, changes["category_id"])
-    together.check_partners(session, user.id, data.partner_ids)
+    together.check_partners(session, user.id, data.partner_ids, act)
     for key, value in changes.items():
         setattr(act, key, value)
     act.updated_at = utcnow()

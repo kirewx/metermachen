@@ -1039,12 +1039,13 @@ def _tagged_anna(session):
     return erik, anna, e
 
 
-def _confirm_400(session, participant, activity_id):
+def _confirm_400(session, participant, activity_id, detail):
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc:
         together.confirm(session, participant, activity_id=activity_id)
     assert exc.value.status_code == 400
+    assert exc.value.detail == detail
     session.rollback()
     p = session.get(SessionParticipant, participant.id)
     assert p.status == "suggested" and p.activity_id is None
@@ -1052,25 +1053,27 @@ def _confirm_400(session, participant, activity_id):
 
 def test_confirm_tag_without_activity_400(session, addon, season):
     _, anna, _ = _tagged_anna(session)
-    _confirm_400(session, _part(session, anna), None)
+    _confirm_400(session, _part(session, anna), None, "Bitte eine eigene Aktivität wählen")
 
 
 def test_confirm_with_foreign_activity_400(session, addon, season):
     _, anna, _ = _tagged_anna(session)
     tom = make_user(session, "tom")
     toms = manual(session, tom)
-    _confirm_400(session, _part(session, anna), toms.id)
+    _confirm_400(session, _part(session, anna), toms.id, "Aktivität unbekannt")
 
 
 def test_confirm_with_unknown_activity_400(session, addon, season):
     _, anna, _ = _tagged_anna(session)
-    _confirm_400(session, _part(session, anna), 99999)
+    _confirm_400(session, _part(session, anna), 99999, "Aktivität unbekannt")
 
 
 def test_confirm_with_activity_three_days_off_400(session, addon, season):
     _, anna, _ = _tagged_anna(session)
     far = manual(session, anna, day=date(2026, 10, 4))
-    _confirm_400(session, _part(session, anna), far.id)
+    _confirm_400(
+        session, _part(session, anna), far.id, "Aktivität liegt nicht am selben Tag (±1)"
+    )
 
 
 def test_confirm_with_activity_already_in_session_400(session, addon, season):
@@ -1086,7 +1089,9 @@ def test_confirm_with_activity_already_in_session_400(session, addon, season):
             SessionParticipant.activity_id.is_(None),
         )
     ).one()
-    _confirm_400(session, p_anna, a.id)
+    _confirm_400(
+        session, p_anna, a.id, "Aktivität gehört schon zu einer gemeinsamen Session"
+    )
 
 
 def test_cannot_tag_opted_out_or_inactive_user(session, addon):
@@ -1177,3 +1182,62 @@ def test_link_candidates_excludes_linked_and_far_dates(session, addon):
     ).one()
     got = together.link_candidates(session, p_anna)
     assert {a.id for a in got} == {same.id, before.id, after.id}
+
+
+def test_confirm_without_reference_activity_400(session, addon, season):
+    erik, anna, e = _tagged_anna(session)
+    p_erik = together.participation_for(session, e.id)
+    p_erik.status = "declined"  # keine bestätigte Bezugs-Aktivität mehr
+    session.add(p_erik)
+    session.commit()
+    annas = manual(session, anna)
+    assert together.link_candidates(session, _part(session, anna)) == []
+    _confirm_400(
+        session, _part(session, anna), annas.id,
+        "Keine bestätigte Aktivität zum Verknüpfen in dieser Session",
+    )
+
+
+def test_untag_with_addon_off_is_noop(session, addon):
+    erik, anna, e = _tagged_anna(session)
+    addon.enabled = False
+    session.add(addon)
+    session.commit()
+    together.tag_partners(session, e, [])
+    assert len(sessions(session)) == 1
+    assert {p.user_id for p in parts(session)} == {erik.id, anna.id}
+
+
+def test_tagged_partner_linked_by_auto_match(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = run(session, erik)
+    _tag(session, e, [anna])
+    a = run(session, anna)
+    together.match_activity(session, a)
+
+    [ts] = sessions(session)
+    annas = [p for p in parts(session) if p.user_id == anna.id]
+    assert len(annas) == 1
+    assert annas[0].activity_id == a.id
+    assert annas[0].status == "confirmed"
+    assert annas[0].km_together == pytest.approx(5.0, abs=0.3)
+    assert together.is_real(session, ts) is True
+    assert len(together_events(session)) == 1
+
+
+def test_declined_tag_not_resuggested_by_auto_match(session, addon, season, monkeypatch):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = run(session, erik)
+    _tag(session, e, [anna])
+    together.decline(session, _part(session, anna))
+    calls = _record_notify(monkeypatch)
+    a = run(session, anna)
+    together.match_activity(session, a)
+
+    annas = [p for p in parts(session) if p.user_id == anna.id]
+    assert len(annas) == 1
+    assert annas[0].status == "declined"
+    assert annas[0].activity_id is None
+    assert together.participation_for(session, a.id) is None
+    assert calls == []
+    assert together_events(session) == []
