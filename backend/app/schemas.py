@@ -200,6 +200,29 @@ class ActivityPatch(BaseModel):
         return v
 
 
+class TogetherPartnerBrief(BaseModel):
+    user_id: int
+    display_name: str
+
+
+class TogetherOut(BaseModel):
+    """Together-Badge einer Aktivität (Spec 4.3): nur gefüllt, wenn das
+    Add-on aktiv ist und die eigene Teilnahme nicht `declined` ist."""
+
+    session_id: int
+    participant_id: int
+    status: str
+    partners: list[TogetherPartnerBrief]
+    km_together: float
+
+
+class PartnerActivityBrief(BaseModel):
+    category_name: str
+    date: date_type
+    duration_min: int | None
+    distance_km: float
+
+
 class ActivityOut(BaseModel):
     id: int
     category_id: int
@@ -213,6 +236,7 @@ class ActivityOut(BaseModel):
     edited: bool
     source: str
     strava_url: str | None
+    together: TogetherOut | None = None
 
 
 class CategoryShare(BaseModel):

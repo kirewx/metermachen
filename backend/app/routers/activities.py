@@ -2,8 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..deps import get_current_user, get_session
-from ..models import Activity, Category, User
-from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
+from ..models import Activity, Category, SessionParticipant, User
+from ..schemas import (
+    ActivityCreate,
+    ActivityOut,
+    ActivityPatch,
+    TogetherOut,
+    TogetherPartnerBrief,
+)
 from ..models import utcnow
 from ..services import activity_delete, feed, together
 from ..services.achievements import check_unlocks
@@ -20,7 +26,55 @@ def _validate_category(session: Session, category_id: int) -> Category:
     return cat
 
 
-def _to_out(activity: Activity, resolver: FactorResolver) -> ActivityOut:
+def _together_map(session: Session, activities: list[Activity]) -> dict[int, TogetherOut]:
+    """Together-Badge-Daten (Spec 4.3) für mehrere Aktivitäten in zwei
+    Abfragen (kein N+1 je Aktivität): nur, wenn das Add-on aktiv ist und die
+    eigene Teilnahme nicht `declined` ist; `partners` = andere `confirmed`."""
+    ids = [a.id for a in activities if a.id is not None]
+    if not ids or not together.enabled(session):
+        return {}
+    own = {
+        p.activity_id: p
+        for p in session.exec(
+            select(SessionParticipant).where(SessionParticipant.activity_id.in_(ids))
+        ).all()
+        if p.status != "declined"
+    }
+    if not own:
+        return {}
+    session_ids = {p.session_id for p in own.values()}
+    all_parts = session.exec(
+        select(SessionParticipant).where(SessionParticipant.session_id.in_(session_ids))
+    ).all()
+    by_session: dict[int, list[SessionParticipant]] = {}
+    for p in all_parts:
+        by_session.setdefault(p.session_id, []).append(p)
+    user_ids = {p.user_id for p in all_parts if p.status == "confirmed"}
+    users = (
+        {u.id: u for u in session.exec(select(User).where(User.id.in_(user_ids))).all()}
+        if user_ids
+        else {}
+    )
+    result: dict[int, TogetherOut] = {}
+    for activity_id, p in own.items():
+        partners = [
+            TogetherPartnerBrief(user_id=o.user_id, display_name=users[o.user_id].display_name)
+            for o in by_session.get(p.session_id, [])
+            if o.status == "confirmed" and o.user_id != p.user_id and o.user_id in users
+        ]
+        result[activity_id] = TogetherOut(
+            session_id=p.session_id,
+            participant_id=p.id,
+            status=p.status,
+            partners=partners,
+            km_together=p.km_together,
+        )
+    return result
+
+
+def _to_out(
+    activity: Activity, resolver: FactorResolver, together_out: TogetherOut | None = None
+) -> ActivityOut:
     # The factor depends on the activity date (cutover changes), never on the
     # category's stored base factor alone.
     strava_url = (
@@ -41,6 +95,7 @@ def _to_out(activity: Activity, resolver: FactorResolver) -> ActivityOut:
         edited=activity.updated_at is not None,
         source=activity.source,
         strava_url=strava_url,
+        together=together_out,
     )
 
 
@@ -63,8 +118,10 @@ def list_my_activities(
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
     window = window_bounds(session, year)
+    visible = [a for a in acts if in_window(a.date, window)]
     resolver = FactorResolver.load(session)
-    return [_to_out(a, resolver) for a in acts if in_window(a.date, window)]
+    together_map = _together_map(session, visible)
+    return [_to_out(a, resolver, together_map.get(a.id)) for a in visible]
 
 
 @router.post("", response_model=ActivityOut, status_code=201)
@@ -88,7 +145,8 @@ def create_activity(
     feed.rank_events(session, order_before, feed.challenge_order(session))
     if data.partner_ids:
         together.tag_partners(session, act, data.partner_ids)
-    return _to_out(act, FactorResolver.load(session))
+    resolver = FactorResolver.load(session)
+    return _to_out(act, resolver, _together_map(session, [act]).get(act.id))
 
 
 @router.patch("/{activity_id}", response_model=ActivityOut)
@@ -122,7 +180,8 @@ def patch_activity(
     feed.rank_events(session, order_before, feed.challenge_order(session))
     if data.partner_ids is not None:
         together.tag_partners(session, act, data.partner_ids)
-    return _to_out(act, FactorResolver.load(session))
+    resolver = FactorResolver.load(session)
+    return _to_out(act, resolver, _together_map(session, [act]).get(act.id))
 
 
 @router.delete("/{activity_id}", status_code=204)

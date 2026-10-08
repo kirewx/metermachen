@@ -11,7 +11,7 @@ from ..schemas import ActivityOut
 from ..services import activity_delete
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
-from .activities import _to_out
+from .activities import _to_out, _together_map
 from .auth_router import MeOut
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -30,6 +30,7 @@ class ProfilePatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1)
     avatar: str | None = None
     password: str | None = Field(default=None, min_length=4)
+    detect_together: bool | None = None
 
 
 class UserAdminOut(BaseModel):
@@ -121,8 +122,10 @@ def user_activities(
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
     window = window_bounds(session, year)
+    visible = [a for a in rows if in_window(a.date, window)]
     resolver = FactorResolver.load(session)
-    return [_to_out(a, resolver) for a in rows if in_window(a.date, window)]
+    together_map = _together_map(session, visible)
+    return [_to_out(a, resolver, together_map.get(a.id)) for a in visible]
 
 
 @router.patch("/me", response_model=MeOut)
@@ -141,6 +144,8 @@ def patch_me(
         user.avatar = data.avatar
     if data.password is not None:
         user.password_hash = auth.hash_password(data.password)
+    if data.detect_together is not None:
+        user.detect_together = data.detect_together
     session.add(user)
     session.commit()
     session.refresh(user)

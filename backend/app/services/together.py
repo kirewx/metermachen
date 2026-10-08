@@ -15,6 +15,7 @@ from ..models import (
     Activity,
     ActivityTrack,
     AddOn,
+    Category,
     SessionParticipant,
     TrainingSession,
     User,
@@ -355,6 +356,24 @@ def link_candidates(session: Session, participant: SessionParticipant) -> list[A
     ).all())
 
 
+def partner_activity_brief(session: Session, participant: SessionParticipant) -> dict | None:
+    """Für `SuggestionOut.partner_activity` (Spec 4.3): Kategorie, Datum,
+    Dauer und Distanz der ältesten bestätigten Aktivität eines anderen
+    Teilnehmers der Session (derselbe Bezug wie `link_candidates`), oder
+    `None`, wenn es keine gibt."""
+    ref = _reference(session, participant)
+    if ref is None:
+        return None
+    _, act = ref
+    cat = session.get(Category, act.category_id)
+    return {
+        "category_name": cat.name if cat is not None else "",
+        "date": act.date,
+        "duration_min": act.duration_min,
+        "distance_km": act.distance_km,
+    }
+
+
 def _bad(detail: str) -> HTTPException:
     return HTTPException(status_code=400, detail=detail)
 
@@ -564,3 +583,43 @@ def refresh_session(
     session.flush()
 
     feed.sync_together_event(session, ts, emit=emit_feed and not was_real)
+
+
+def partner_stats(session: Session, user_id: int) -> list[dict]:
+    """Partner-Statistik fürs Profil (Spec 3.2): für jeden Partner die Anzahl
+    echter Sessions, an denen beide bestätigt teilnehmen, und die Summe von
+    `TrainingSession.km_together` dieser Sessions; sortiert nach Anzahl
+    absteigend, dann nach km."""
+    mine = session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.user_id == user_id,
+            SessionParticipant.status == "confirmed",
+        )
+    ).all()
+    stats: dict[int, dict] = {}
+    for p in mine:
+        ts = session.get(TrainingSession, p.session_id)
+        if ts is None or not is_real(session, ts):
+            continue
+        for other in _confirmed(session, ts):
+            if other.user_id == user_id:
+                continue
+            entry = stats.setdefault(other.user_id, {"sessions": 0, "km_together": 0.0})
+            entry["sessions"] += 1
+            entry["km_together"] += ts.km_together
+    users = (
+        {u.id: u for u in session.exec(select(User).where(User.id.in_(stats))).all()}
+        if stats
+        else {}
+    )
+    result = [
+        {
+            "user_id": uid,
+            "display_name": users[uid].display_name if uid in users else "",
+            "sessions": data["sessions"],
+            "km_together": round(data["km_together"], 2),
+        }
+        for uid, data in stats.items()
+    ]
+    result.sort(key=lambda r: (-r["sessions"], -r["km_together"]))
+    return result
