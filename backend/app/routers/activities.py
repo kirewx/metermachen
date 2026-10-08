@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
@@ -18,6 +20,8 @@ from ..services.season_window import in_window, window_bounds
 
 router = APIRouter(prefix="/api/activities", tags=["activities"])
 
+log = logging.getLogger(__name__)
+
 
 def _validate_category(session: Session, category_id: int) -> Category:
     cat = session.get(Category, category_id)
@@ -26,23 +30,40 @@ def _validate_category(session: Session, category_id: int) -> Category:
     return cat
 
 
-def _together_map(session: Session, activities: list[Activity]) -> dict[int, TogetherOut]:
-    """Together-Badge-Daten (Spec 4.3) für mehrere Aktivitäten in zwei
-    Abfragen (kein N+1 je Aktivität): nur, wenn das Add-on aktiv ist und die
-    eigene Teilnahme nicht `declined` ist; `partners` = andere `confirmed`."""
+def _together_map(
+    session: Session, activities: list[Activity], *, own: bool = True
+) -> dict[int, TogetherOut]:
+    """Together-Badge-Daten (Spec 4.3); ein Fehler wird nur geloggt — die
+    Liste bricht nie, sie kommt dann ohne Badges."""
+    try:
+        return _build_together_map(session, activities, own=own)
+    except Exception:
+        log.exception("together: Badge-Daten fehlgeschlagen")
+        return {}
+
+
+def _build_together_map(
+    session: Session, activities: list[Activity], *, own: bool
+) -> dict[int, TogetherOut]:
+    """Badge-Daten für mehrere Aktivitäten in wenigen Abfragen (kein N+1 je
+    Aktivität): nur, wenn das Add-on aktiv ist und die Teilnahme des
+    Besitzers nicht `declined` ist; `partners` = andere `confirmed`.
+    Eigene Listen (`own`): `confirmed`/`suggested`, aber nur, solange noch
+    ein anderer nicht abgelehnter Teilnehmer da ist. Fremde Profile: nur
+    `confirmed` in echten Sessions (≥ 2 bestätigt)."""
     ids = [a.id for a in activities if a.id is not None]
     if not ids or not together.enabled(session):
         return {}
-    own = {
+    mine = {
         p.activity_id: p
         for p in session.exec(
             select(SessionParticipant).where(SessionParticipant.activity_id.in_(ids))
         ).all()
         if p.status != "declined"
     }
-    if not own:
+    if not mine:
         return {}
-    session_ids = {p.session_id for p in own.values()}
+    session_ids = {p.session_id for p in mine.values()}
     all_parts = session.exec(
         select(SessionParticipant).where(SessionParticipant.session_id.in_(session_ids))
     ).all()
@@ -56,10 +77,18 @@ def _together_map(session: Session, activities: list[Activity]) -> dict[int, Tog
         else {}
     )
     result: dict[int, TogetherOut] = {}
-    for activity_id, p in own.items():
+    for activity_id, p in mine.items():
+        members = by_session.get(p.session_id, [])
+        if own:
+            if not any(o.id != p.id and o.status != "declined" for o in members):
+                continue
+        elif p.status != "confirmed" or sum(
+            o.status == "confirmed" for o in members
+        ) < 2:
+            continue
         partners = [
             TogetherPartnerBrief(user_id=o.user_id, display_name=users[o.user_id].display_name)
-            for o in by_session.get(p.session_id, [])
+            for o in members
             if o.status == "confirmed" and o.user_id != p.user_id and o.user_id in users
         ]
         result[activity_id] = TogetherOut(
@@ -97,6 +126,24 @@ def _to_out(
         strava_url=strava_url,
         together=together_out,
     )
+
+
+def _together_safely(session: Session, act: Activity, fn, *args) -> None:
+    """Together-Schritt nach dem Speichern der Aktivität: ein Fehler wird
+    geloggt und zurückgerollt, die Aktivität bleibt gespeichert (kein 500).
+    HTTPExceptions laufen weiter — `check_partners` hat vor dem Speichern
+    geprüft, sie kommen hier nicht mehr vor."""
+    try:
+        fn(*args)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("together: Nachverarbeitung für activity_id=%s fehlgeschlagen", act.id)
+        session.rollback()
+
+
+def _tag_safely(session: Session, act: Activity, partner_ids: list[int]) -> None:
+    _together_safely(session, act, together.tag_partners, session, act, partner_ids)
 
 
 def _own_activity(session: Session, user: User, activity_id: int) -> Activity:
@@ -144,7 +191,7 @@ def create_activity(
     feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
     feed.rank_events(session, order_before, feed.challenge_order(session))
     if data.partner_ids:
-        together.tag_partners(session, act, data.partner_ids)
+        _tag_safely(session, act, data.partner_ids)
     resolver = FactorResolver.load(session)
     return _to_out(act, resolver, _together_map(session, [act]).get(act.id))
 
@@ -178,8 +225,10 @@ def patch_activity(
     # Kein neues activity-Event beim Bearbeiten — Spec B5.
     feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
     feed.rank_events(session, order_before, feed.challenge_order(session))
+    if changes.keys() & {"distance_km", "category_id", "date"}:
+        _together_safely(session, act, together.activity_changed, session, act)
     if data.partner_ids is not None:
-        together.tag_partners(session, act, data.partner_ids)
+        _tag_safely(session, act, data.partner_ids)
     resolver = FactorResolver.load(session)
     return _to_out(act, resolver, _together_map(session, [act]).get(act.id))
 

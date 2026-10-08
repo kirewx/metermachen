@@ -589,3 +589,30 @@ def test_group_challenge_feed_payloads(session):
     p = json.loads(sieger[0].payload_json)
     assert (p["user_id"], p["group_id"], p["gruppe"]) == (anna.id, 1, "Gruppe A")
     assert sieger[0].user_id == anna.id
+
+
+def test_feed_hides_together_events_while_addon_inactive(client, session):
+    from tests.conftest import make_addon
+
+    _setup_saison(session)
+    user = make_user(session)
+    session.add_all([
+        FeedEvent(season_year=2026, type="together", payload_json="{}"),
+        FeedEvent(season_year=2026, type="rank_change", user_id=user.id, payload_json="{}"),
+    ])
+    session.commit()
+    login(client)
+
+    def types():
+        r = client.get("/api/feed", params={"year": 2026})
+        assert r.status_code == 200, r.text
+        return {e["type"] for e in r.json()["events"]}
+
+    assert "together" not in types()  # Add-on fehlt
+    addon = make_addon(session, key="together", label="Zusammen", enabled=False)
+    assert "together" not in types()  # Add-on aus
+    addon.enabled = True
+    session.add(addon)
+    session.commit()
+    assert "together" in types()
+    assert "rank_change" in types()

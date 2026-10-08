@@ -176,6 +176,20 @@ def _after_change(session: Session, act: Activity, emit_feed: bool = True) -> No
         session.rollback()
 
 
+def _together_changed(session: Session, act: Activity) -> None:
+    """Session-Werte nach geänderten Feldern angleichen; Fehler wie in
+    `_after_change` nur loggen."""
+    from . import together
+
+    try:
+        together.activity_changed(session, act)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Together-Aktualisierung fehlgeschlagen fuer activity_id=%s", act.id
+        )
+        session.rollback()
+
+
 def _derive_fields(session: Session, data: dict) -> dict:
     """Berechnet die aus Strava-Rohdaten abgeleiteten Aktivitätsfelder —
     gemeinsame Logik für Import und Update. Die Skip-Regeln (Import) bzw.
@@ -364,6 +378,7 @@ def update_activity(session: Session, conn: StravaConnection, data: dict) -> Non
 
     if changed:
         feed.refresh_activity_events(session, act)
+        _together_changed(session, act)
 
         from .achievements import check_unlocks
 

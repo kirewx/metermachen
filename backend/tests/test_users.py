@@ -275,3 +275,29 @@ def test_user_activities_404_for_inactive(client, session):
     session.commit()
     login(client)
     assert client.get(f"/api/users/{lisa.id}/activities", params={"year": 2026}).status_code == 404
+
+
+def test_delete_user_removes_together_tags_and_dissolves_sessions(client, session):
+    from app.models import SessionParticipant, TrainingSession
+    from app.services import together
+    from tests.conftest import make_addon
+
+    make_addon(session, key="together", label="Zusammen")
+    make_user(session, username="chef", is_admin=True)
+    erik, lisa, tom = (make_user(session, n) for n in ("erik", "lisa", "tom"))
+    cat = make_category(session)
+    e = Activity(user_id=erik.id, category_id=cat.id, date=date(2026, 3, 1), distance_km=5)
+    e2 = Activity(user_id=erik.id, category_id=cat.id, date=date(2026, 3, 2), distance_km=5)
+    session.add_all([e, e2])
+    session.commit()
+    together.tag_partners(session, e, [lisa.id])  # nur Lisa → Session löst sich auf
+    together.tag_partners(session, e2, [lisa.id, tom.id])  # Tom bleibt
+    login(client, username="chef")
+    assert client.delete(f"/api/users/{lisa.id}").status_code == 204
+    session.expire_all()
+    rest = session.exec(select(SessionParticipant)).all()
+    assert all(p.user_id != lisa.id for p in rest)
+    [ts] = session.exec(select(TrainingSession)).all()
+    assert {p.user_id for p in rest} == {erik.id, tom.id}
+    assert all(p.session_id == ts.id for p in rest)
+    assert together.participation_for(session, e.id) is None

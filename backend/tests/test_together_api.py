@@ -231,3 +231,119 @@ def test_activity_list_includes_together_partners(client, session):
     assert out["together"]["status"] == "confirmed"
     assert out["together"]["partners"] == [{"user_id": anna.id, "display_name": "Anna"}]
     assert out["together"]["km_together"] == pytest.approx(4.0)
+
+
+def _session_with(session, rows, source="auto"):
+    """TrainingSession mit Teilnahmen [(user, activity|None, status)]."""
+    ts = TrainingSession(source=source, km_together=4.0, share=1.0)
+    session.add(ts)
+    session.commit()
+    for user, act, status in rows:
+        session.add(SessionParticipant(
+            session_id=ts.id, user_id=user.id,
+            activity_id=act.id if act is not None else None,
+            status=status, km_together=4.0,
+        ))
+    session.commit()
+    return ts
+
+
+def _badge(client, url, act_id):
+    r = client.get(url)
+    assert r.status_code == 200, r.text
+    [out] = [x for x in r.json() if x["id"] == act_id]
+    return out["together"]
+
+
+def test_badge_null_when_addon_off(client, session):
+    addon = _addon(session)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    today = date.today()
+    e, a = manual(session, erik, day=today), manual(session, anna, day=today)
+    _session_with(session, [(erik, e, "confirmed"), (anna, a, "confirmed")])
+    addon.enabled = False
+    session.add(addon)
+    session.commit()
+    login(client, "erik")
+    assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
+
+
+def test_badge_null_when_own_declined(client, session):
+    _addon(session)
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    today = date.today()
+    e, a, t = (manual(session, u, day=today) for u in (erik, anna, tom))
+    _session_with(session, [
+        (erik, e, "declined"), (anna, a, "confirmed"), (tom, t, "confirmed"),
+    ])
+    login(client, "erik")
+    assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
+
+
+def test_badge_other_profile_hides_suggested(client, session):
+    _addon(session)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    today = date.today()
+    e, a = manual(session, erik, day=today), manual(session, anna, day=today)
+    _session_with(session, [(erik, e, "suggested"), (anna, a, "confirmed")])
+    make_user(session, "tom")
+    login(client, "tom")
+    url = f"/api/users/{erik.id}/activities?year={today.year}"
+    assert _badge(client, url, e.id) is None
+    # eigene Liste: Vorschlag mit nicht abgelehntem Partner bleibt sichtbar
+    login(client, "erik")
+    own = _badge(client, f"/api/activities?year={today.year}", e.id)
+    assert own["status"] == "suggested"
+
+
+def test_badge_other_profile_shows_real_confirmed(client, session):
+    _addon(session)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    today = date.today()
+    e, a = manual(session, erik, day=today), manual(session, anna, day=today)
+    ts = _session_with(session, [(erik, e, "confirmed"), (anna, a, "confirmed")])
+    make_user(session, "tom")
+    login(client, "tom")
+    out = _badge(client, f"/api/users/{erik.id}/activities?year={today.year}", e.id)
+    assert out["session_id"] == ts.id
+    assert out["partners"] == [{"user_id": anna.id, "display_name": "Anna"}]
+
+
+def test_badge_other_profile_hides_confirmed_but_not_real(client, session):
+    _addon(session)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    today = date.today()
+    e = manual(session, erik, day=today)
+    _session_with(session, [(erik, e, "confirmed"), (anna, None, "suggested")],
+                  source="manual")
+    make_user(session, "tom")
+    login(client, "tom")
+    assert _badge(client, f"/api/users/{erik.id}/activities?year={today.year}", e.id) is None
+
+
+def test_badge_own_list_null_when_partner_left(client, session):
+    _addon(session)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    today = date.today()
+    e = manual(session, erik, day=today)
+    _session_with(session, [(erik, e, "confirmed"), (anna, None, "declined")],
+                  source="manual")
+    login(client, "erik")
+    assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
+
+
+def test_together_map_failure_keeps_list_working(client, session, monkeypatch):
+    from app.services import together
+
+    _addon(session)
+    erik = make_user(session, "erik")
+    today = date.today()
+    e = manual(session, erik, day=today)
+
+    def boom(*a, **kw):
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(together, "enabled", boom)
+    login(client, "erik")
+    assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
+    assert _badge(client, f"/api/users/{erik.id}/activities?year={today.year}", e.id) is None

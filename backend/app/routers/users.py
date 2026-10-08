@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +9,7 @@ from .. import auth, config
 from ..deps import get_current_user, get_session, require_admin
 from ..models import Activity, Invite, StravaConnection, StravaIgnored, User, utcnow
 from ..schemas import ActivityOut
-from ..services import activity_delete
+from ..services import activity_delete, together
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
 from .activities import _to_out, _together_map
@@ -124,7 +125,7 @@ def user_activities(
     window = window_bounds(session, year)
     visible = [a for a in rows if in_window(a.date, window)]
     resolver = FactorResolver.load(session)
-    together_map = _together_map(session, visible)
+    together_map = _together_map(session, visible, own=False)
     return [_to_out(a, resolver, together_map.get(a.id)) for a in visible]
 
 
@@ -197,6 +198,13 @@ def delete_user(
     # Einladungen entkoppeln.
     for act in session.exec(select(Activity).where(Activity.user_id == user.id)).all():
         activity_delete.delete_activity(session, act, ignore_strava=False)
+    try:  # übrige Together-Tags des Nutzers; Löschen scheitert nie daran
+        together.remove_user(session, user.id)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "together: remove_user fehlgeschlagen fuer user_id=%s", user.id
+        )
+        session.rollback()
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()

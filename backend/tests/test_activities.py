@@ -372,3 +372,71 @@ def test_patch_declined_own_participation_400_before_saving(client, session):
     session.expire_all()
     assert session.get(Activity, act_id).note == "alt"
     assert {p.user_id for p in _parts(session)} == {own.user_id, anna.id}
+
+
+def _boom(*a, **kw):
+    raise RuntimeError("kaputt")
+
+
+def test_tag_error_after_save_does_not_500(client, session, monkeypatch):
+    from app.services import together
+
+    _, anna, _, cat = _together_setup(session)
+    monkeypatch.setattr(together, "tag_partners", _boom)
+    login(client)
+    r = create_activity(client, cat.id, partner_ids=[anna.id])
+    assert r.status_code == 201, r.text
+    act_id = r.json()["id"]
+    r = client.patch(f"/api/activities/{act_id}", json={"partner_ids": [anna.id]})
+    assert r.status_code == 200, r.text
+    assert len(client.get("/api/activities", params={"year": 2026}).json()) == 1
+
+
+def test_delete_survives_together_error(client, session, monkeypatch):
+    from app.models import Activity
+    from app.services import together
+
+    *_, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(client, cat.id).json()["id"]
+    monkeypatch.setattr(together, "remove_activity", _boom)
+    assert client.delete(f"/api/activities/{act_id}").status_code == 204
+    session.expire_all()
+    assert session.get(Activity, act_id) is None
+
+
+def test_patch_distance_refreshes_manual_session(client, session):
+    import json
+
+    from sqlmodel import select
+
+    from app.models import Activity, FeedEvent, Season, TrainingSession
+    from app.services import together
+
+    session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20),
+                       end_date=date(2027, 5, 16)))
+    session.commit()
+    _, anna, _, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(
+        client, cat.id, date="2026-10-01", distance_km=10.0, partner_ids=[anna.id]
+    ).json()["id"]
+    annas = Activity(user_id=anna.id, category_id=cat.id, date=date(2026, 10, 1),
+                     distance_km=8.0)
+    session.add(annas)
+    session.commit()
+    p_anna = next(p for p in _parts(session) if p.user_id == anna.id)
+    together.confirm(session, p_anna, activity_id=annas.id)
+    [ts] = session.exec(select(TrainingSession)).all()
+    assert ts.km_together == 8.0
+
+    r = client.patch(f"/api/activities/{act_id}", json={"distance_km": 5.0})
+    assert r.status_code == 200, r.text
+    session.expire_all()
+    [ts] = session.exec(select(TrainingSession)).all()
+    assert ts.km_together == 5.0
+    ev = session.exec(select(FeedEvent).where(FeedEvent.type == "together")).one()
+    payload = json.loads(ev.payload_json)
+    assert payload["km_together"] == 5.0
+    assert payload["share"] == 1.0
+    assert r.json()["together"]["km_together"] == 5.0

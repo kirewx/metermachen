@@ -1,3 +1,5 @@
+import logging
+
 from sqlmodel import Session, select
 
 from ..models import Activity, ActivityTrack, StravaIgnored
@@ -11,7 +13,14 @@ def delete_activity(session: Session, act: Activity, *, ignore_strava: bool) -> 
     nächsten Webhook-Event nicht erneut importiert wird. Eine
     Together-Teilnahme der Aktivität wird ebenfalls entfernt.
     """
-    together.remove_activity(session, act.id)
+    try:
+        together.remove_activity(session, act.id)
+    except Exception:
+        # Löschen darf nie an Together scheitern.
+        logging.getLogger(__name__).exception(
+            "together: remove_activity fehlgeschlagen fuer activity_id=%s", act.id
+        )
+        session.rollback()
     feed.remove_activity_events(session, act.id)
     track = session.exec(
         select(ActivityTrack).where(ActivityTrack.activity_id == act.id)

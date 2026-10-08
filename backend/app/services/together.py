@@ -293,6 +293,29 @@ def _check_achievements(session: Session, sessions: Iterable[TrainingSession]) -
             session.rollback()
 
 
+def _drop_dangling_tags(session: Session, ts: TrainingSession) -> None:
+    """Ohne bestätigte Teilnahme mit Aktivität kann ein Tag (`suggested`
+    ohne Aktivität) nie mehr bestätigt werden — solche Tags löschen."""
+    anchors = session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.session_id == ts.id,
+            SessionParticipant.status == "confirmed",
+            SessionParticipant.activity_id.is_not(None),
+        )
+    ).first()
+    if anchors is not None:
+        return
+    for p in session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.session_id == ts.id,
+            SessionParticipant.status == "suggested",
+            SessionParticipant.activity_id.is_(None),
+        )
+    ).all():
+        session.delete(p)
+    session.flush()
+
+
 def _respond(
     session: Session, participant: SessionParticipant, status: str,
     was_real: bool | None = None,
@@ -306,6 +329,8 @@ def _respond(
     participant.responded_at = _now()
     session.add(participant)
     session.flush()
+    if ts is not None and status == "declined":
+        _drop_dangling_tags(session, ts)
     if ts is not None:
         refresh_session(session, ts, was_real=was_real)
     session.commit()
@@ -545,6 +570,7 @@ def remove_activity(session: Session, activity_id: int) -> None:
     if ts is None:
         session.commit()
         return
+    _drop_dangling_tags(session, ts)
     rest = session.exec(
         select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
     ).first()
@@ -553,6 +579,76 @@ def remove_activity(session: Session, activity_id: int) -> None:
         session.delete(ts)
         session.commit()
         return
+    refresh_session(session, ts, was_real=was)
+    session.commit()
+    _check_achievements(session, [ts])
+
+
+def remove_user(session: Session, user_id: int) -> None:
+    """Admin-Löschung: übrige Teilnahmen des Nutzers (Tags ohne Aktivität;
+    die mit Aktivität entfernt schon `remove_activity`) löschen und die
+    betroffenen Sessions angleichen — leere bzw. `manual`-Sessions mit nur
+    noch einer Teilnahme werden samt Feed-Event aufgelöst."""
+    mine = session.exec(
+        select(SessionParticipant).where(SessionParticipant.user_id == user_id)
+    ).all()
+    if not mine:
+        return
+    affected: dict[int, TrainingSession] = {}
+    was_real: dict[int, bool] = {}
+    for p in mine:
+        ts = session.get(TrainingSession, p.session_id)
+        if ts is not None and ts.id not in affected:
+            affected[ts.id] = ts
+            was_real[ts.id] = is_real(session, ts)
+    for p in mine:
+        session.delete(p)
+    session.flush()
+    kept: list[TrainingSession] = []
+    for ts in affected.values():
+        _drop_dangling_tags(session, ts)
+        rest = session.exec(
+            select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
+        ).all()
+        if not rest or (ts.source == "manual" and len(rest) == 1):
+            for p in rest:
+                session.delete(p)
+            feed.remove_together_event(session, ts)
+            session.delete(ts)
+            session.flush()
+            continue
+        refresh_session(session, ts, was_real=was_real[ts.id])
+        kept.append(ts)
+    session.commit()
+    _check_achievements(session, kept)
+
+
+def activity_changed(session: Session, act: Activity) -> None:
+    """Nach dem Bearbeiten von Distanz/Kategorie/Datum einer Aktivität
+    (MeterMachen oder Strava-Update): Session-Werte und Feed-Payload
+    angleichen. In `manual`-Sessions ist `km_together` je Paar die kürzere
+    der beiden Distanzen (Spec 2.5) und wird neu berechnet; in `auto`-
+    Sessions stammt es aus dem Routenabgleich und bleibt."""
+    p = participation_for(session, act.id)
+    if p is None:
+        return
+    ts = session.get(TrainingSession, p.session_id)
+    if ts is None:
+        return
+    was = is_real(session, ts)
+    if ts.source == "manual":
+        linked = [
+            (q, session.get(Activity, q.activity_id))
+            for q in _confirmed(session, ts) if q.activity_id is not None
+        ]
+        linked = [(q, a) for q, a in linked if a is not None]
+        for q, a in linked:
+            q.km_together = max(
+                (min(a.distance_km, b.distance_km) for o, b in linked if o.id != q.id),
+                default=0.0,
+            )
+            session.add(q)
+        session.flush()
     refresh_session(session, ts, was_real=was)
     session.commit()
     _check_achievements(session, [ts])

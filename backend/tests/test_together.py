@@ -1241,3 +1241,74 @@ def test_declined_tag_not_resuggested_by_auto_match(session, addon, season, monk
     assert together.participation_for(session, a.id) is None
     assert calls == []
     assert together_events(session) == []
+
+
+# --- Final-Review-Nachbesserungen (PR 2) --------------------------------------
+
+
+def test_strava_update_refreshes_manual_session_km(session, addon, season, monkeypatch):
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "")
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    conn = _conn(session, erik, 4711)
+    assert strava.import_activity(session, conn, _import_payload(21, ""))
+    e = session.exec(select(Activity).where(Activity.user_id == erik.id)).one()
+    _tag(session, e, [anna])
+    a = manual(session, anna, day=e.date, km=8.0)
+    together.confirm(session, _part(session, anna), activity_id=a.id)
+    [ts] = sessions(session)
+    assert ts.km_together == 5.0
+
+    payload = _import_payload(21, "")
+    payload["distance"] = 3000
+    strava.update_activity(session, conn, payload)
+    session.expire_all()
+    [ts] = sessions(session)
+    assert ts.km_together == 3.0
+    [ev] = together_events(session)
+    assert _payload(ev)["km_together"] == 3.0
+
+
+def test_strava_update_together_error_is_isolated(session, addon, season, monkeypatch):
+    monkeypatch.setattr(config, "STRAVA_IMPORT_SINCE", "")
+    make_category(session, name="Laufen", strava_sport_types='["Run"]')
+    erik = make_user(session, "erik")
+    conn = _conn(session, erik, 4711)
+    assert strava.import_activity(session, conn, _import_payload(22, ""))
+
+    def boom(*a, **kw):
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(together, "activity_changed", boom)
+    payload = _import_payload(22, "")
+    payload["distance"] = 3000
+    strava.update_activity(session, conn, payload)
+    session.expire_all()
+    e = session.exec(select(Activity).where(Activity.user_id == erik.id)).one()
+    assert e.distance_km == 3.0
+
+
+def test_delete_tagging_activity_drops_open_tags(session, addon, season):
+    erik, anna, e = _tagged_anna(session)
+    activity_delete.delete_activity(session, e, ignore_strava=False)
+    assert parts(session) == []
+    assert sessions(session) == []
+
+
+def test_decline_own_drops_unconfirmable_tags(session, addon, season):
+    erik, anna, e = _tagged_anna(session)
+    together.decline(session, together.participation_for(session, e.id))
+    remaining = parts(session)
+    assert [(p.user_id, p.status) for p in remaining] == [(erik.id, "declined")]
+
+
+def test_delete_keeps_tags_while_confirmed_activity_left(session, addon, season):
+    erik, anna, e = _tagged_anna(session)
+    tom = make_user(session, "tom")
+    _tag(session, e, [anna, tom])
+    t = manual(session, tom, day=e.date)
+    together.confirm(session, _part(session, tom), activity_id=t.id)
+    activity_delete.delete_activity(session, e, ignore_strava=False)
+    by_user = {p.user_id: p for p in parts(session)}
+    assert set(by_user) == {anna.id, tom.id}
+    assert by_user[anna.id].status == "suggested"
