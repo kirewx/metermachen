@@ -5,7 +5,7 @@ from ..deps import get_current_user, get_session
 from ..models import Activity, Category, User
 from ..schemas import ActivityCreate, ActivityOut, ActivityPatch
 from ..models import utcnow
-from ..services import activity_delete, feed
+from ..services import activity_delete, feed, together
 from ..services.achievements import check_unlocks
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
@@ -74,9 +74,11 @@ def create_activity(
     session: Session = Depends(get_session),
 ):
     _validate_category(session, data.category_id)
+    # Partner vor dem Anlegen prüfen — bei 400/404 entsteht keine Aktivität.
+    together.check_partners(session, user.id, data.partner_ids)
     order_before = feed.challenge_order(session)
     total_before = feed.challenge_total(session, user.id)
-    act = Activity(user_id=user.id, **data.model_dump())
+    act = Activity(user_id=user.id, **data.model_dump(exclude={"partner_ids"}))
     session.add(act)
     session.commit()
     session.refresh(act)
@@ -84,6 +86,8 @@ def create_activity(
     feed.activity_event(session, act)
     feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
     feed.rank_events(session, order_before, feed.challenge_order(session))
+    if data.partner_ids:
+        together.tag_partners(session, act, data.partner_ids)
     return _to_out(act, FactorResolver.load(session))
 
 
@@ -99,12 +103,13 @@ def patch_activity(
     total_before = feed.challenge_total(session, user.id)
     changes = {
         key: value
-        for key, value in data.model_dump(exclude_unset=True).items()
+        for key, value in data.model_dump(exclude_unset=True, exclude={"partner_ids"}).items()
         if value is not None
         or key in ("note", "duration_min", "start_time", "elevation_m")
     }
     if "category_id" in changes:
         _validate_category(session, changes["category_id"])
+    together.check_partners(session, user.id, data.partner_ids)
     for key, value in changes.items():
         setattr(act, key, value)
     act.updated_at = utcnow()
@@ -115,6 +120,8 @@ def patch_activity(
     # Kein neues activity-Event beim Bearbeiten — Spec B5.
     feed.milestone_events(session, user.id, total_before, feed.challenge_total(session, user.id))
     feed.rank_events(session, order_before, feed.challenge_order(session))
+    if data.partner_ids is not None:
+        together.tag_partners(session, act, data.partner_ids)
     return _to_out(act, FactorResolver.load(session))
 
 

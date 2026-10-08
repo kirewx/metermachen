@@ -206,3 +206,123 @@ def test_patch_rescales_with_factor_of_new_date(client, session):
     r = client.patch(f"/api/activities/{act_id}", json={"date": "2026-09-01"})
     assert r.status_code == 200, r.text
     assert r.json()["scaled_km"] == 50.0
+
+
+# --- Together: Partner taggen (Spec 2026-10-05, 2.5) --------------------------
+
+
+def _together_setup(session):
+    from tests.conftest import make_addon
+
+    make_addon(session, key="together", label="Zusammen")
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    return erik, anna, tom, make_category(session)
+
+
+def _parts(session):
+    from sqlmodel import select
+
+    from app.models import SessionParticipant
+
+    return session.exec(select(SessionParticipant)).all()
+
+
+def test_tag_creates_manual_session(client, session):
+    from sqlmodel import select
+
+    from app.models import FeedEvent, TrainingSession
+
+    erik, anna, _, cat = _together_setup(session)
+    login(client)
+    r = create_activity(client, cat.id, partner_ids=[anna.id])
+    assert r.status_code == 201, r.text
+
+    [ts] = session.exec(select(TrainingSession)).all()
+    assert ts.source == "manual"
+    by_user = {p.user_id: p for p in _parts(session)}
+    assert by_user[erik.id].status == "confirmed"
+    assert by_user[erik.id].activity_id == r.json()["id"]
+    assert by_user[anna.id].status == "suggested"
+    assert by_user[anna.id].activity_id is None
+    assert session.exec(select(FeedEvent).where(FeedEvent.type == "together")).all() == []
+
+
+def test_create_without_partners_creates_no_session(client, session):
+    *_, cat = _together_setup(session)
+    login(client)
+    assert create_activity(client, cat.id).status_code == 201
+    assert create_activity(client, cat.id, partner_ids=[]).status_code == 201
+    assert _parts(session) == []
+
+
+def test_cannot_tag_opted_out_or_inactive_user_400(client, session):
+    _, anna, tom, cat = _together_setup(session)
+    anna.detect_together = False
+    tom.is_active = False
+    session.add_all([anna, tom])
+    session.commit()
+    login(client)
+    for pid in (anna.id, tom.id, 99999):
+        r = create_activity(client, cat.id, partner_ids=[pid])
+        assert r.status_code == 400, r.text
+    # Atomar: bei Fehler wird auch die Aktivität nicht angelegt
+    assert client.get("/api/activities", params={"year": 2026}).json() == []
+    assert _parts(session) == []
+
+
+def test_cannot_tag_self_400(client, session):
+    erik, _, _, cat = _together_setup(session)
+    login(client)
+    r = create_activity(client, cat.id, partner_ids=[erik.id])
+    assert r.status_code == 400
+    assert client.get("/api/activities", params={"year": 2026}).json() == []
+
+
+def test_tag_with_addon_off_404(client, session):
+    make_user(session)
+    anna = make_user(session, "anna")
+    cat = make_category(session)
+    login(client)
+    assert create_activity(client, cat.id, partner_ids=[anna.id]).status_code == 404
+    assert create_activity(client, cat.id, partner_ids=[]).status_code == 201
+
+
+def test_patch_removes_suggested_tag_keeps_confirmed(client, session):
+    from app.models import Activity
+    from app.services import together
+
+    erik, anna, tom, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(client, cat.id, partner_ids=[anna.id, tom.id]).json()["id"]
+    toms = Activity(user_id=tom.id, category_id=cat.id, date=date(2026, 3, 1), distance_km=4.0)
+    session.add(toms)
+    session.commit()
+    p_tom = next(p for p in _parts(session) if p.user_id == tom.id)
+    together.confirm(session, p_tom, activity_id=toms.id)
+
+    r = client.patch(f"/api/activities/{act_id}", json={"partner_ids": []})
+    assert r.status_code == 200, r.text
+    session.expire_all()
+    by_user = {p.user_id: p for p in _parts(session)}
+    assert set(by_user) == {erik.id, tom.id}
+    assert by_user[tom.id].status == "confirmed"
+
+
+def test_patch_without_partner_ids_keeps_tags(client, session):
+    _, anna, _, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(client, cat.id, partner_ids=[anna.id]).json()["id"]
+    r = client.patch(f"/api/activities/{act_id}", json={"note": "Gym"})
+    assert r.status_code == 200
+    assert r.json()["note"] == "Gym"
+    assert len(_parts(session)) == 2
+
+
+def test_patch_adds_partner(client, session):
+    _, anna, tom, cat = _together_setup(session)
+    login(client)
+    act_id = create_activity(client, cat.id).json()["id"]
+    r = client.patch(f"/api/activities/{act_id}", json={"partner_ids": [anna.id, tom.id]})
+    assert r.status_code == 200
+    session.expire_all()
+    assert {p.user_id for p in _parts(session)} >= {anna.id, tom.id}

@@ -959,3 +959,221 @@ def test_delete_from_three_person_session_updates_payload(session, addon, season
     [ev] = together_events(session)
     assert ev.id == ev_id
     assert sorted(x["display_name"] for x in _payload(ev)["participants"]) == ["Anna", "Erik"]
+
+
+# --- Manuelles Taggen und Verknüpfen (Task 9) ---------------------------------
+
+
+def manual(session, user, *, day=date(2026, 10, 1), km=5.0, category=None) -> Activity:
+    if category is None:
+        category = make_category(session, name=f"Gym-{next(_seq)}")
+    act = Activity(user_id=user.id, category_id=category.id, date=day, distance_km=km)
+    session.add(act)
+    session.commit()
+    session.refresh(act)
+    return act
+
+
+def _tag(session, act, partners):
+    together.tag_partners(session, act, [u.id for u in partners])
+
+
+def _part(session, user):
+    return session.exec(
+        select(SessionParticipant).where(SessionParticipant.user_id == user.id)
+    ).one()
+
+
+def test_tag_partners_creates_manual_session(session, addon, season, monkeypatch):
+    calls = []
+    monkeypatch.setattr(together, "notify", lambda *a: calls.append(a))
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = manual(session, erik)
+    _tag(session, e, [anna])
+
+    [ts] = sessions(session)
+    assert ts.source == "manual"
+    p_erik = together.participation_for(session, e.id)
+    assert p_erik.status == "confirmed" and p_erik.session_id == ts.id
+    p_anna = _part(session, anna)
+    assert p_anna.status == "suggested" and p_anna.activity_id is None
+    assert together_events(session) == []
+    assert [(u, k) for u, k, _ in calls] == [(anna.id, "together_tagged")]
+    assert calls[0][2]["session_id"] == ts.id
+
+
+def test_tag_partners_is_idempotent(session, addon, monkeypatch):
+    calls = _record_notify(monkeypatch)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = manual(session, erik)
+    _tag(session, e, [anna])
+    _tag(session, e, [anna])
+    assert len(sessions(session)) == 1
+    assert len(parts(session)) == 2
+    assert len(calls) == 1
+
+
+def test_tagged_confirms_with_own_activity(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = manual(session, erik, km=5.0)
+    _tag(session, e, [anna])
+    annas_gym = manual(session, anna, day=date(2026, 10, 2), km=3.0)
+
+    together.confirm(session, _part(session, anna), activity_id=annas_gym.id)
+
+    [ts] = sessions(session)
+    assert together.is_real(session, ts) is True
+    [ev] = together_events(session)
+    assert ts.feed_event_id == ev.id
+    p_anna = _part(session, anna)
+    assert p_anna.status == "confirmed"
+    assert p_anna.activity_id == annas_gym.id
+    assert p_anna.km_together == pytest.approx(3.0)
+    assert ts.km_together == pytest.approx(3.0)
+
+
+def _tagged_anna(session):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = manual(session, erik)
+    _tag(session, e, [anna])
+    return erik, anna, e
+
+
+def _confirm_400(session, participant, activity_id):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        together.confirm(session, participant, activity_id=activity_id)
+    assert exc.value.status_code == 400
+    session.rollback()
+    p = session.get(SessionParticipant, participant.id)
+    assert p.status == "suggested" and p.activity_id is None
+
+
+def test_confirm_tag_without_activity_400(session, addon, season):
+    _, anna, _ = _tagged_anna(session)
+    _confirm_400(session, _part(session, anna), None)
+
+
+def test_confirm_with_foreign_activity_400(session, addon, season):
+    _, anna, _ = _tagged_anna(session)
+    tom = make_user(session, "tom")
+    toms = manual(session, tom)
+    _confirm_400(session, _part(session, anna), toms.id)
+
+
+def test_confirm_with_unknown_activity_400(session, addon, season):
+    _, anna, _ = _tagged_anna(session)
+    _confirm_400(session, _part(session, anna), 99999)
+
+
+def test_confirm_with_activity_three_days_off_400(session, addon, season):
+    _, anna, _ = _tagged_anna(session)
+    far = manual(session, anna, day=date(2026, 10, 4))
+    _confirm_400(session, _part(session, anna), far.id)
+
+
+def test_confirm_with_activity_already_in_session_400(session, addon, season):
+    _, anna, _ = _tagged_anna(session)
+    tom = make_user(session, "tom")
+    a = run(session, anna)
+    t = run(session, tom)
+    together.match_activity(session, t)
+    assert together.participation_for(session, a.id) is not None
+    p_anna = session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.user_id == anna.id,
+            SessionParticipant.activity_id.is_(None),
+        )
+    ).one()
+    _confirm_400(session, p_anna, a.id)
+
+
+def test_cannot_tag_opted_out_or_inactive_user(session, addon):
+    from fastapi import HTTPException
+
+    erik = make_user(session, "erik")
+    out, gone = make_user(session, "out"), make_user(session, "gone")
+    out.detect_together = False
+    gone.is_active = False
+    session.add_all([out, gone])
+    session.commit()
+    e = manual(session, erik)
+    for ids in ([out.id], [gone.id], [erik.id], [99999]):
+        with pytest.raises(HTTPException) as exc:
+            together.tag_partners(session, e, ids)
+        assert exc.value.status_code == 400
+    assert sessions(session) == []
+
+
+def test_tag_partners_addon_off(session):
+    from fastapi import HTTPException
+
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = manual(session, erik)
+    together.tag_partners(session, e, [])  # leere Liste: nichts, kein Fehler
+    with pytest.raises(HTTPException) as exc:
+        together.tag_partners(session, e, [anna.id])
+    assert exc.value.status_code == 404
+    assert sessions(session) == []
+
+
+def test_untag_removes_only_suggested(session, addon, season):
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    e = manual(session, erik)
+    _tag(session, e, [anna, tom])
+    toms = manual(session, tom)
+    together.confirm(session, _part(session, tom), activity_id=toms.id)
+
+    together.tag_partners(session, e, [])
+
+    assert {p.user_id for p in parts(session)} == {erik.id, tom.id}
+    [ts] = sessions(session)
+    assert together.is_real(session, ts) is True
+    assert len(together_events(session)) == 1
+
+
+def test_untag_last_partner_dissolves_manual_session(session, addon):
+    erik, anna, e = _tagged_anna(session)
+    together.tag_partners(session, e, [])
+    assert sessions(session) == []
+    assert parts(session) == []
+
+
+def test_tag_into_existing_auto_session(session, addon, season):
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    e = run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    [ts] = sessions(session)
+
+    together.tag_partners(session, e, [tom.id])
+    assert len(sessions(session)) == 1
+    p_tom = _part(session, tom)
+    assert p_tom.session_id == ts.id and p_tom.status == "suggested"
+    # Entfernen des Tags lässt Auto-Teilnahmen unberührt
+    together.tag_partners(session, e, [])
+    assert {p.user_id for p in parts(session)} == {erik.id, anna.id}
+
+
+def test_link_candidates_excludes_linked_and_far_dates(session, addon):
+    _, anna, _ = _tagged_anna(session)  # Erik am 1.10.
+    tom = make_user(session, "tom")
+    same = manual(session, anna, day=date(2026, 10, 1))
+    before = manual(session, anna, day=date(2026, 9, 30))
+    after = manual(session, anna, day=date(2026, 10, 2))
+    manual(session, anna, day=date(2026, 9, 29))
+    manual(session, anna, day=date(2026, 10, 3))
+    manual(session, tom, day=date(2026, 10, 1))
+    linked = run(session, anna)  # 1.10., gleich in einer Auto-Session
+    together.match_activity(session, run(session, tom))
+    assert together.participation_for(session, linked.id) is not None
+
+    p_anna = session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.user_id == anna.id,
+            SessionParticipant.activity_id.is_(None),
+        )
+    ).one()
+    got = together.link_candidates(session, p_anna)
+    assert {a.id for a in got} == {same.id, before.id, after.id}

@@ -172,6 +172,7 @@ class ActivityCreate(BaseModel):
     start_time: time_type | None = None
     elevation_m: float | None = Field(default=None, ge=0)
     note: str | None = None
+    partner_ids: list[int] = []
 
     @field_validator("date")
     @classmethod
@@ -189,6 +190,7 @@ class ActivityPatch(BaseModel):
     start_time: time_type | None = None
     elevation_m: float | None = Field(default=None, ge=0)
     note: str | None = None
+    partner_ids: list[int] | None = None
 
     @field_validator("date")
     @classmethod

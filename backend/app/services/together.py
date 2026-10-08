@@ -7,6 +7,7 @@ import logging
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 
+from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from ..deps import addon_active
@@ -177,6 +178,8 @@ def _join(
         session.add(p)
         session.flush()
         return p
+    if p.activity_id is None:  # getaggt, jetzt per Auto-Match verknüpft
+        p.activity_id = act.id
     if p.status == "suggested" and status == "confirmed":
         # Session-Werte stammen nur aus bestätigten Paaren (Spec 1.6)
         p.status = "confirmed"
@@ -289,29 +292,180 @@ def _check_achievements(session: Session, sessions: Iterable[TrainingSession]) -
             session.rollback()
 
 
-def _respond(session: Session, participant: SessionParticipant, status: str) -> None:
+def _respond(
+    session: Session, participant: SessionParticipant, status: str,
+    was_real: bool | None = None,
+) -> None:
+    """`was_real` = Stand vor der Änderung, falls der Aufrufer vorher schon
+    mutiert hat; sonst wird er hier ermittelt."""
     ts = session.get(TrainingSession, participant.session_id)
-    was = ts is not None and is_real(session, ts)
+    if was_real is None:
+        was_real = ts is not None and is_real(session, ts)
     participant.status = status
     participant.responded_at = _now()
     session.add(participant)
     session.flush()
     if ts is not None:
-        refresh_session(session, ts, was_real=was)
+        refresh_session(session, ts, was_real=was_real)
     session.commit()
     if ts is not None:
         _check_achievements(session, [ts])
 
 
+def _reference(
+    session: Session, participant: SessionParticipant
+) -> tuple[SessionParticipant, Activity] | None:
+    """Älteste bestätigte Teilnahme (mit Aktivität) der Session außer der
+    eigenen — Bezug für Datum (±1 Tag) und Distanz beim Verknüpfen."""
+    others = sorted(
+        (p for p in session.exec(
+            select(SessionParticipant).where(
+                SessionParticipant.session_id == participant.session_id,
+                SessionParticipant.status == "confirmed",
+                SessionParticipant.activity_id.is_not(None),
+                SessionParticipant.user_id != participant.user_id,
+            )
+        ).all()),
+        key=_age_key,
+    )
+    for p in others:
+        act = session.get(Activity, p.activity_id)
+        if act is not None:
+            return p, act
+    return None
+
+
+def link_candidates(session: Session, participant: SessionParticipant) -> list[Activity]:
+    """Eigene Aktivitäten ±1 Tag zum Bezugsdatum, die in keiner Session sind
+    (Spec 2.5)."""
+    ref = _reference(session, participant)
+    if ref is None:
+        return []
+    day = ref[1].date
+    linked = select(SessionParticipant.activity_id).where(
+        SessionParticipant.activity_id.is_not(None)
+    )
+    return list(session.exec(
+        select(Activity).where(
+            Activity.user_id == participant.user_id,
+            Activity.date >= day - timedelta(days=1),
+            Activity.date <= day + timedelta(days=1),
+            Activity.id.not_in(linked),
+        ).order_by(Activity.date, Activity.id)
+    ).all())
+
+
+def _bad(detail: str) -> HTTPException:
+    return HTTPException(status_code=400, detail=detail)
+
+
 def confirm(
     session: Session, participant: SessionParticipant, activity_id: int | None = None
 ) -> None:
-    """Eigene Teilnahme bestätigen. Eine mitgegebene `activity_id` wird hier
-    nur übernommen — ihre Prüfung (Tag ±1, noch in keiner Session) folgt mit
-    dem manuellen Taggen."""
-    if activity_id is not None:
-        participant.activity_id = activity_id
-    _respond(session, participant, "confirmed")
+    """Eigene Teilnahme bestätigen. Eine Teilnahme ohne Aktivität (Tag) braucht
+    eine `activity_id`: eigene Aktivität, ±1 Tag zur ältesten bestätigten
+    Aktivität der Session, in keiner anderen Session. `km_together` = kürzere
+    der beiden Distanzen (Spec 2.5)."""
+    if participant.activity_id is not None:
+        if activity_id is not None and activity_id != participant.activity_id:
+            raise _bad("Teilnahme ist bereits mit einer Aktivität verknüpft")
+        _respond(session, participant, "confirmed")
+        return
+    if activity_id is None:
+        raise _bad("Bitte eine eigene Aktivität wählen")
+    act = session.get(Activity, activity_id)
+    if act is None or act.user_id != participant.user_id:
+        raise _bad("Aktivität unbekannt")
+    if participation_for(session, act.id) is not None:
+        raise _bad("Aktivität gehört schon zu einer gemeinsamen Session")
+    ref = _reference(session, participant)
+    if ref is not None and abs((act.date - ref[1].date).days) > 1:
+        raise _bad("Aktivität liegt nicht am selben Tag (±1)")
+
+    ts = session.get(TrainingSession, participant.session_id)
+    was = ts is not None and is_real(session, ts)
+    km = min(act.distance_km, ref[1].distance_km) if ref is not None else 0.0
+    participant.activity_id = act.id
+    participant.km_together = km
+    if ref is not None:
+        ref[0].km_together = max(ref[0].km_together, km)
+        session.add(ref[0])
+    _respond(session, participant, "confirmed", was_real=was)
+
+
+def check_partners(session: Session, user_id: int, partner_ids: list[int] | None) -> None:
+    """Partnerliste prüfen, ohne etwas zu ändern: 404 bei Add-on aus, 400 bei
+    eigenem, unbekanntem, inaktivem oder Opt-out-Nutzer. Leer → nichts."""
+    if not partner_ids:
+        return
+    if not enabled(session):
+        raise HTTPException(status_code=404)
+    for pid in set(partner_ids):
+        u = session.get(User, pid)
+        if pid == user_id or u is None or not u.is_active or not u.detect_together:
+            raise _bad("Dieses Mitglied kann nicht getaggt werden")
+
+
+def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> None:
+    """Partner für `act` setzen (Spec 2.5). Neue Partner → `suggested` ohne
+    Aktivität + `notify("together_tagged")`; aus der Liste entfernte, noch
+    unverknüpfte Vorschläge werden gelöscht, bestätigte bleiben. Ohne Session
+    entsteht eine `manual`-Session; bleibt sie ohne Partner, wird sie
+    aufgelöst."""
+    check_partners(session, act.user_id, partner_ids)
+    wanted = set(partner_ids or [])
+    own = participation_for(session, act.id)
+    if own is None:
+        if not wanted:
+            return
+        ts = TrainingSession(source="manual")
+        session.add(ts)
+        session.flush()
+        own = SessionParticipant(
+            session_id=ts.id, user_id=act.user_id, activity_id=act.id,
+            status="confirmed", km_together=0.0, responded_at=_now(),
+        )
+        session.add(own)
+        session.flush()
+        was = False
+    else:
+        ts = session.get(TrainingSession, own.session_id)
+        was = is_real(session, ts)
+    if own.status == "declined" and wanted:
+        raise _bad("Eigene Teilnahme ist abgelehnt")
+
+    existing = {
+        p.user_id: p for p in session.exec(
+            select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
+        ).all()
+    }
+    pending: list[tuple[int, str, dict]] = []
+    for uid in sorted(wanted - set(existing)):
+        session.add(SessionParticipant(
+            session_id=ts.id, user_id=uid, status="suggested", km_together=0.0,
+        ))
+        pending.append((uid, "together_tagged", {
+            "session_id": ts.id, "activity_id": act.id, "by_user_id": act.user_id,
+        }))
+    for uid, p in existing.items():
+        if uid not in wanted and p.status == "suggested" and p.activity_id is None:
+            session.delete(p)
+    session.flush()
+
+    rest = session.exec(
+        select(SessionParticipant).where(SessionParticipant.session_id == ts.id)
+    ).all()
+    if ts.source == "manual" and [p.id for p in rest] == [own.id]:
+        session.delete(own)
+        feed.remove_together_event(session, ts)
+        session.delete(ts)
+        session.commit()
+        return
+    refresh_session(session, ts, was_real=was)
+    session.commit()
+    for uid, kind, payload in pending:
+        notify(uid, kind, payload)
+    _check_achievements(session, [ts])
 
 
 def decline(session: Session, participant: SessionParticipant) -> None:
