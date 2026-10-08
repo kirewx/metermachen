@@ -1312,3 +1312,23 @@ def test_delete_keeps_tags_while_confirmed_activity_left(session, addon, season)
     by_user = {p.user_id: p for p in parts(session)}
     assert set(by_user) == {anna.id, tom.id}
     assert by_user[anna.id].status == "suggested"
+
+
+def test_delete_recomputes_manual_km_of_remaining(session, addon, season):
+    erik, anna, e = _tagged_anna(session)
+    tom = make_user(session, "tom")
+    _tag(session, e, [anna, tom])
+    a = manual(session, anna, day=e.date, km=10.0)
+    together.confirm(session, _part(session, anna), activity_id=a.id)
+    t = manual(session, tom, day=e.date, km=3.0)
+    together.confirm(session, _part(session, tom), activity_id=t.id)
+    [ts] = sessions(session)
+    assert ts.km_together == 5.0
+
+    activity_delete.delete_activity(session, a, ignore_strava=False)
+    session.expire_all()
+    [ts] = sessions(session)
+    assert ts.km_together == 3.0
+    assert together.participation_for(session, e.id).km_together == 3.0
+    [ev] = together_events(session)
+    assert _payload(ev)["km_together"] == 3.0

@@ -347,3 +347,16 @@ def test_together_map_failure_keeps_list_working(client, session, monkeypatch):
     login(client, "erik")
     assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
     assert _badge(client, f"/api/users/{erik.id}/activities?year={today.year}", e.id) is None
+
+
+def test_patch_only_partner_ids_does_not_mark_edited(client, session):
+    _addon(session)
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = manual(session, erik)
+    login(client, "erik")
+    r = client.patch(f"/api/activities/{e.id}", json={"partner_ids": [anna.id]})
+    assert r.status_code == 200
+    assert r.json()["edited"] is False
+    session.expire_all()
+    assert session.get(type(e), e.id).updated_at is None
+    assert _part(session, anna).status == "suggested"

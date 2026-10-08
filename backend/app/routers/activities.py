@@ -217,7 +217,8 @@ def patch_activity(
     together.check_partners(session, user.id, data.partner_ids, act)
     for key, value in changes.items():
         setattr(act, key, value)
-    act.updated_at = utcnow()
+    if changes:  # nur Partner taggen ist keine Bearbeitung (Strava-Sync bleibt aktiv)
+        act.updated_at = utcnow()
     session.add(act)
     session.commit()
     session.refresh(act)

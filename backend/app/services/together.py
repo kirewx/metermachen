@@ -559,7 +559,8 @@ def expire_suggestions(session: Session, now: datetime | None = None) -> None:
 
 def remove_activity(session: Session, activity_id: int) -> None:
     """Teilnahme einer gelöschten Aktivität entfernen (Spec 2.6). Session
-    ohne Teilnahmen wird samt Feed-Event gelöscht, sonst neu berechnet."""
+    ohne Teilnahmen wird samt Feed-Event gelöscht, sonst neu berechnet
+    (in `manual`-Sessions auch `km_together` der übrigen Teilnahmen)."""
     p = participation_for(session, activity_id)
     if p is None:
         return
@@ -579,6 +580,7 @@ def remove_activity(session: Session, activity_id: int) -> None:
         session.delete(ts)
         session.commit()
         return
+    _recompute_manual_km(session, ts)
     refresh_session(session, ts, was_real=was)
     session.commit()
     _check_achievements(session, [ts])
@@ -623,12 +625,32 @@ def remove_user(session: Session, user_id: int) -> None:
     _check_achievements(session, kept)
 
 
+def _recompute_manual_km(session: Session, ts: TrainingSession) -> None:
+    """In `manual`-Sessions ist `km_together` je Teilnahme das Maximum der
+    paarweise kürzeren Distanz zu den übrigen verknüpften Aktivitäten
+    (Spec 2.5); in `auto`-Sessions stammt es aus dem Routenabgleich und
+    bleibt."""
+    if ts.source != "manual":
+        return
+    linked = [
+        (q, session.get(Activity, q.activity_id))
+        for q in _confirmed(session, ts) if q.activity_id is not None
+    ]
+    linked = [(q, a) for q, a in linked if a is not None]
+    for q, a in linked:
+        q.km_together = max(
+            (min(a.distance_km, b.distance_km) for o, b in linked if o.id != q.id),
+            default=0.0,
+        )
+        session.add(q)
+    session.flush()
+
+
 def activity_changed(session: Session, act: Activity) -> None:
     """Nach dem Bearbeiten von Distanz/Kategorie/Datum einer Aktivität
     (MeterMachen oder Strava-Update): Session-Werte und Feed-Payload
-    angleichen. In `manual`-Sessions ist `km_together` je Paar die kürzere
-    der beiden Distanzen (Spec 2.5) und wird neu berechnet; in `auto`-
-    Sessions stammt es aus dem Routenabgleich und bleibt."""
+    angleichen; in `manual`-Sessions wird `km_together` neu berechnet
+    (`_recompute_manual_km`)."""
     p = participation_for(session, act.id)
     if p is None:
         return
@@ -636,19 +658,7 @@ def activity_changed(session: Session, act: Activity) -> None:
     if ts is None:
         return
     was = is_real(session, ts)
-    if ts.source == "manual":
-        linked = [
-            (q, session.get(Activity, q.activity_id))
-            for q in _confirmed(session, ts) if q.activity_id is not None
-        ]
-        linked = [(q, a) for q, a in linked if a is not None]
-        for q, a in linked:
-            q.km_together = max(
-                (min(a.distance_km, b.distance_km) for o, b in linked if o.id != q.id),
-                default=0.0,
-            )
-            session.add(q)
-        session.flush()
+    _recompute_manual_km(session, ts)
     refresh_session(session, ts, was_real=was)
     session.commit()
     _check_achievements(session, [ts])
