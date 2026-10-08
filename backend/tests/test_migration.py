@@ -254,6 +254,51 @@ def test_init_erzeugt_activitytrack_und_stravaignored_tabellen(tmp_path):
     assert {"id", "user_id", "external_id", "created_at"} <= set(ignored_cols)
 
 
+def test_migration_adds_user_detect_together(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE user (id INTEGER PRIMARY KEY, username VARCHAR, "
+            "password_hash VARCHAR, display_name VARCHAR, avatar VARCHAR, "
+            "is_admin BOOLEAN, is_active BOOLEAN, km_factor FLOAT, created_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO user (username, password_hash, display_name, avatar, "
+            "is_admin, is_active, km_factor) "
+            "VALUES ('erik', 'x', 'Erik', 'icon:laufen', 1, 1, 1.0)"
+        ))
+    migrate(engine)
+    migrate(engine)  # idempotent
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text('PRAGMA table_info("user")'))]
+        assert "detect_together" in cols
+        val = conn.execute(text("SELECT detect_together FROM user")).scalar()
+    assert val == 1
+
+
+def test_init_erzeugt_trainingsession_und_sessionparticipant_tabellen(tmp_path):
+    from sqlmodel import SQLModel
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    # Bestands-DB-Simulation: create_all + migrate = init_db()-Ablauf
+    SQLModel.metadata.create_all(engine)
+    migrate(engine)
+    with engine.begin() as conn:
+        session_cols = [
+            row[1] for row in conn.execute(text('PRAGMA table_info("trainingsession")'))
+        ]
+        participant_cols = [
+            row[1] for row in conn.execute(text('PRAGMA table_info("sessionparticipant")'))
+        ]
+    assert {"id", "source", "km_together", "share", "feed_event_id", "created_at"} <= set(
+        session_cols
+    )
+    assert {
+        "id", "session_id", "user_id", "activity_id", "status", "km_together",
+        "created_at", "responded_at",
+    } <= set(participant_cols)
+
+
 def test_migrate_adds_group_columns_to_challenge():
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool

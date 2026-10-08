@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,10 +9,10 @@ from .. import auth, config
 from ..deps import get_current_user, get_session, require_admin
 from ..models import Activity, Invite, StravaConnection, StravaIgnored, User, utcnow
 from ..schemas import ActivityOut
-from ..services import activity_delete
+from ..services import activity_delete, together
 from ..services.factors import FactorResolver
 from ..services.season_window import in_window, window_bounds
-from .activities import _to_out
+from .activities import _to_out, _together_map
 from .auth_router import MeOut
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -30,6 +31,7 @@ class ProfilePatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1)
     avatar: str | None = None
     password: str | None = Field(default=None, min_length=4)
+    detect_together: bool | None = None
 
 
 class UserAdminOut(BaseModel):
@@ -121,8 +123,10 @@ def user_activities(
         .order_by(Activity.date.desc(), Activity.id.desc())
     ).all()
     window = window_bounds(session, year)
+    visible = [a for a in rows if in_window(a.date, window)]
     resolver = FactorResolver.load(session)
-    return [_to_out(a, resolver) for a in rows if in_window(a.date, window)]
+    together_map = _together_map(session, visible, own=False)
+    return [_to_out(a, resolver, together_map.get(a.id)) for a in visible]
 
 
 @router.patch("/me", response_model=MeOut)
@@ -141,6 +145,8 @@ def patch_me(
         user.avatar = data.avatar
     if data.password is not None:
         user.password_hash = auth.hash_password(data.password)
+    if data.detect_together is not None:
+        user.detect_together = data.detect_together
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -192,6 +198,13 @@ def delete_user(
     # Einladungen entkoppeln.
     for act in session.exec(select(Activity).where(Activity.user_id == user.id)).all():
         activity_delete.delete_activity(session, act, ignore_strava=False)
+    try:  # übrige Together-Tags des Nutzers; Löschen scheitert nie daran
+        together.remove_user(session, user.id)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "together: remove_user fehlgeschlagen fuer user_id=%s", user.id
+        )
+        session.rollback()
     conn = session.exec(
         select(StravaConnection).where(StravaConnection.user_id == user.id)
     ).first()

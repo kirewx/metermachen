@@ -172,6 +172,7 @@ class ActivityCreate(BaseModel):
     start_time: time_type | None = None
     elevation_m: float | None = Field(default=None, ge=0)
     note: str | None = None
+    partner_ids: list[int] = []
 
     @field_validator("date")
     @classmethod
@@ -189,6 +190,7 @@ class ActivityPatch(BaseModel):
     start_time: time_type | None = None
     elevation_m: float | None = Field(default=None, ge=0)
     note: str | None = None
+    partner_ids: list[int] | None = None
 
     @field_validator("date")
     @classmethod
@@ -196,6 +198,29 @@ class ActivityPatch(BaseModel):
         if v is not None and v > date_type.today():
             raise ValueError("Datum darf nicht in der Zukunft liegen")
         return v
+
+
+class TogetherPartnerBrief(BaseModel):
+    user_id: int
+    display_name: str
+
+
+class TogetherOut(BaseModel):
+    """Together-Badge einer Aktivität (Spec 4.3): nur gefüllt, wenn das
+    Add-on aktiv ist und die eigene Teilnahme nicht `declined` ist."""
+
+    session_id: int
+    participant_id: int
+    status: str
+    partners: list[TogetherPartnerBrief]
+    km_together: float
+
+
+class PartnerActivityBrief(BaseModel):
+    category_name: str
+    date: date_type
+    duration_min: int | None
+    distance_km: float
 
 
 class ActivityOut(BaseModel):
@@ -211,6 +236,7 @@ class ActivityOut(BaseModel):
     edited: bool
     source: str
     strava_url: str | None
+    together: TogetherOut | None = None
 
 
 class CategoryShare(BaseModel):
