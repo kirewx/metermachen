@@ -22,6 +22,7 @@ class MeOut(BaseModel):
     display_name: str
     avatar: str
     is_admin: bool
+    detect_together: bool
 
 
 @router.post("/login", response_model=MeOut)

@@ -23,6 +23,7 @@ from .routers import (
     invites,
     seasons,
     strava_router,
+    together,
     users,
 )
 from .seed import seed_all
@@ -56,6 +57,7 @@ app.include_router(feed.router)
 app.include_router(invites.router)
 app.include_router(seasons.router)
 app.include_router(strava_router.router)
+app.include_router(together.router)
 app.include_router(users.router)
 
 

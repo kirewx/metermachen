@@ -32,6 +32,7 @@ from ..services.achievements import (
     SCHWIMM,
     STUFEN_ZIELE,
     TIERS,
+    TOGETHER_DEFS,
     ZEIT_EMOJI,
     ZEIT_STUFEN,
     achievement_info,
@@ -44,6 +45,7 @@ from ..services.achievements import (
     zeit_key,
     zeit_pro_kategorie,
 )
+from ..services import together
 from ..services.factors import FactorResolver
 from ..services.season_window import current_season
 
@@ -291,6 +293,25 @@ def achievements_for(session: Session, user: User) -> list[AchievementOut]:
                 claimed_by=inhaber.get(key),
             )
         )
+
+    # Together-Achievements (Spec §3.3): nur bei aktivem Add-on `together`
+    if together.enabled(session):
+        for key, title, description, icon in TOGETHER_DEFS:
+            ul = own.get(key)
+            out.append(
+                AchievementOut(
+                    key=key,
+                    title=title,
+                    description=description,
+                    icon=icon,
+                    achieved=ul is not None,
+                    progress=1.0 if ul else 0.0,
+                    parts=[],
+                    unlocked_at=ul.unlocked_at if ul else None,
+                    emoji=EMOJIS.get(key),
+                    showcased=ul.showcased if ul else None,
+                )
+            )
 
     # Frühstarter: sichtbar, kann jede Person bekommen — Fortschritt sind die
     # gewerteten Warm-up-MM (Kategorie-Faktor, ohne Handicap)

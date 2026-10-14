@@ -42,6 +42,12 @@ KNOWN_ADDONS = [
         "description": "Zeitlich begrenzte Wettbewerbe mit Ziel oder Rangliste.",
         "enabled": False,  # erst befuellen, dann scharfschalten
     },
+    {
+        "key": "together",
+        "label": "Zusammen",
+        "description": "Gemeinsame Aktivitäten erkennen: Feed, Trainingspartner, Achievements.",
+        "enabled": False,
+    },
 ]
 
 

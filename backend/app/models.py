@@ -24,6 +24,9 @@ class User(SQLModel, table=True):
     # importierten) Aktivitäten den anderen Gruppenmitgliedern im Ranking zu
     # zeigen. None = noch nicht zugestimmt. Voraussetzung für Strava-Connect.
     strava_consent_at: datetime | None = None
+    # Together-Erkennung (Spec 2026-10-05): ob gemeinsame Aktivitäten mit
+    # anderen Gruppenmitgliedern automatisch erkannt werden sollen.
+    detect_together: bool = True
 
 
 class Category(SQLModel, table=True):
@@ -276,6 +279,33 @@ class Challenge(SQLModel, table=True):
     seeding_days: int = 30  # window for the seeding list
     groups_json: str = "[]"
     groups_drawn_at: datetime | None = None
+
+
+class TrainingSession(SQLModel, table=True):
+    """Gemeinsame Trainingseinheit mehrerer Nutzer (Spec 2026-10-05 Together)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    source: str  # "auto" | "manual"
+    km_together: float = 0
+    share: float | None = None
+    feed_event_id: int | None = Field(default=None, foreign_key="feedevent.id")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class SessionParticipant(SQLModel, table=True):
+    """Teilnahme eines Nutzers an einer TrainingSession (Spec 2026-10-05
+    Together). Pro Aktivität höchstens eine Teilnahme."""
+
+    __table_args__ = (UniqueConstraint("session_id", "user_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="trainingsession.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    activity_id: int | None = Field(default=None, foreign_key="activity.id", unique=True)
+    status: str  # "confirmed" | "suggested" | "declined"
+    km_together: float = 0
+    created_at: datetime = Field(default_factory=utcnow)
+    responded_at: datetime | None = None
 
 
 class ChallengeParticipant(SQLModel, table=True):

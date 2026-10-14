@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from ..deps import get_current_user, get_session
 from ..models import FeedEvent, FeedReaction, FeedSeen, User, utcnow
 from ..schemas import FeedEventOut, FeedPage, FeedReactionIn, FeedReactionOut
+from ..services import together
 from ..services.achievements import ensure_monatssieger
 from ..services.feed import REACTION_EMOJIS, ensure_recaps
 
@@ -69,6 +70,8 @@ def feed_page(
     ensure_monatssieger(session)
     ensure_recaps(session)
     stmt = select(FeedEvent).where(FeedEvent.season_year == year)
+    if not together.enabled(session):  # Add-on aus: keine together-Events
+        stmt = stmt.where(FeedEvent.type != "together")
     if before is not None:
         stmt = stmt.where(FeedEvent.id < before)
     events = session.exec(

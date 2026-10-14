@@ -59,7 +59,7 @@ def test_seed_is_idempotent(session):
     assert len(session.exec(select(User)).all()) == 1
     assert len(session.exec(select(Category)).all()) == 7
     assert len(session.exec(select(Season)).all()) == 1
-    assert len(session.exec(select(AddOn)).all()) == 3
+    assert len(session.exec(select(AddOn)).all()) == 4
 
 
 def test_seed_registers_blackboard_addon_scheduled(session):
@@ -96,3 +96,23 @@ def test_seed_legt_challenges_addon_aus_an(session):
     # Bewusst aus: erst befuellen, dann scharfschalten.
     assert addon.enabled is False
     assert addon.active_from is None
+
+
+def test_seed_legt_together_addon_aus_an(session):
+    seed_all(session, admin_user="admin", admin_password="pw123456", year=2026)
+    addon = session.exec(select(AddOn).where(AddOn.key == "together")).first()
+    assert addon is not None
+    assert addon.label == "Zusammen"
+    # Bewusst aus: Feature-Flag, bis Together-Erkennung fertig ist.
+    assert addon.enabled is False
+
+
+def test_seed_does_not_override_existing_together_addon(session):
+    seed_all(session, admin_user="admin", admin_password="pw123456", year=2026)
+    addon = session.exec(select(AddOn).where(AddOn.key == "together")).one()
+    addon.enabled = True  # Admin schaltet bewusst scharf
+    session.add(addon)
+    session.commit()
+    seed_all(session, admin_user="admin", admin_password="pw123456", year=2026)
+    addon = session.exec(select(AddOn).where(AddOn.key == "together")).one()
+    assert addon.enabled is True

@@ -16,7 +16,14 @@ from datetime import timedelta
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ..models import AchievementUnlock, Activity, Category, User, utcnow
+from ..models import (
+    AchievementUnlock,
+    Activity,
+    Category,
+    SessionParticipant,
+    User,
+    utcnow,
+)
 from .factors import FactorResolver
 from .season_window import current_season, season_window
 
@@ -145,6 +152,19 @@ EINMAL_DEFS: list[tuple[str, str, str, str]] = [
      "Platz 1 der Warm-up-Phase zum Saison-Start.", "pokal"),
 ]
 
+# (key, titel, beschreibung, icon) — Together-Achievements (Spec §3.3), nur
+# sichtbar/prüfbar bei aktivem Add-on `together`. Jede Person kann sie bekommen.
+TOGETHER_DEFS: list[tuple[str, str, str, str]] = [
+    ("together_first", "Trainingspartner",
+     "Zum ersten Mal gemeinsam unterwegs gewesen.", "medaille"),
+    ("together_dream_team", "Dream Team",
+     "10 gemeinsame Einheiten mit derselben Person.", "medaille"),
+    ("together_pack", "Rudel",
+     "Eine Einheit mit mindestens 4 Leuten.", "medaille"),
+    ("together_social_butterfly", "Social Butterfly",
+     "Mit 5 verschiedenen Leuten gemeinsam trainiert.", "medaille"),
+]
+
 # Special-Emojis (Spec §2.6). Stufen vergeben bewusst KEIN Emoji.
 EMOJIS: dict[str, str] = {
     "testphasen_sieger": "🏆",
@@ -178,6 +198,10 @@ EMOJIS: dict[str, str] = {
     "mm_club_1k": "⚡",
     "mm_club_5k": "🚀",
     "mm_club_10k": "🤯",
+    "together_first": "🤝",
+    "together_dream_team": "💞",
+    "together_pack": "🐺",
+    "together_social_butterfly": "🦋",
 }
 
 # MM-Club: Leiter über gewertete MM (Kategorie-Faktor, ohne Handicap), alle
@@ -211,7 +235,7 @@ def _showcase_info() -> dict[str, tuple[str, str, str]]:
     titel_desc = {
         key: (titel, desc)
         for key, titel, desc, _icon in
-        (*HIDDEN_DEFS, *EINMAL_DEFS, FRUEHSTARTER_DEF, EARLY_BIRD_DEF)
+        (*HIDDEN_DEFS, *EINMAL_DEFS, *TOGETHER_DEFS, FRUEHSTARTER_DEF, EARLY_BIRD_DEF)
     } | {key: (titel, desc) for key, _stufe, titel, desc, _ziel in MM_CLUB_DEFS}
     return {
         key: (emoji, *titel_desc[key])
@@ -438,6 +462,11 @@ def check_unlocks(session: Session, user_id: int) -> None:
 
     _check_hidden_ausbau(session, user_id, acts, cats, have)
 
+    from . import together  # function-level: together kennt achievements.check_unlocks
+
+    if together.enabled(session):
+        _check_together(session, user_id, have)
+
     # Saison-abhängige Achievements — brauchen Challenge-Start
     today = date_type.today()
     season = current_season(session)
@@ -477,6 +506,56 @@ def check_unlocks(session: Session, user_id: int) -> None:
         ctx = _ueberhol_tag(session, user_id, start, bis)
         if ctx is not None and _unlock(session, user_id, "ueberholmanoever", ctx):
             have.add("ueberholmanoever")
+
+
+def _check_together(session: Session, user_id: int, have: set[str]) -> None:
+    """Together-Achievements (Spec §3.3): gezählt über echte Sessions
+    (>= 2 bestätigte Teilnahmen) mit eigener `confirmed`-Teilnahme, all-time,
+    nie zurückgenommen. Wird nur aufgerufen, wenn das Add-on aktiv ist."""
+    mine = session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.user_id == user_id,
+            SessionParticipant.status == "confirmed",
+        )
+    ).all()
+    real: list[list[SessionParticipant]] = []
+    for p in mine:
+        confirmed = session.exec(
+            select(SessionParticipant).where(
+                SessionParticipant.session_id == p.session_id,
+                SessionParticipant.status == "confirmed",
+            )
+        ).all()
+        if len(confirmed) >= 2:
+            real.append(confirmed)
+
+    if "together_first" not in have and real:
+        if _unlock(session, user_id, "together_first"):
+            have.add("together_first")
+
+    if "together_pack" not in have:
+        if any(len(confirmed) >= 4 for confirmed in real) and _unlock(
+            session, user_id, "together_pack"
+        ):
+            have.add("together_pack")
+
+    partner_sessions: dict[int, int] = defaultdict(int)
+    for confirmed in real:
+        for p in confirmed:
+            if p.user_id != user_id:
+                partner_sessions[p.user_id] += 1
+
+    if "together_dream_team" not in have:
+        if any(n >= 10 for n in partner_sessions.values()) and _unlock(
+            session, user_id, "together_dream_team"
+        ):
+            have.add("together_dream_team")
+
+    if "together_social_butterfly" not in have:
+        if len(partner_sessions) >= 5 and _unlock(
+            session, user_id, "together_social_butterfly"
+        ):
+            have.add("together_social_butterfly")
 
 
 def zeit_pro_kategorie(acts: list[Activity]) -> dict[int, float]:
