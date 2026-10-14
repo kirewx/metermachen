@@ -542,10 +542,28 @@ def test_sieger_can_be_a_group_or_a_member_of_a_winning_group(session):
     assert svc.sieger_group_id(ch) == 1 and svc.sieger_id(ch) is None
     svc.setze_sieger(session, ch, jetzt, user_id=ben.id)
     assert svc.sieger_id(ch) == ben.id and svc.sieger_group_id(ch) is None
+
+
+def test_sieger_may_come_from_a_group_that_missed_the_target(session):
+    """The wheel of fortune may include non-qualifiers (admin's choice)."""
+    _season(session)
+    ch, anna, ben, carla = _finished_team(session)
+    jetzt = datetime(2026, 9, 2, tzinfo=timezone.utc)
+    svc.setze_sieger(session, ch, jetzt, group_id=2)
+    assert svc.sieger_group_id(ch) == 2
+    svc.setze_sieger(session, ch, jetzt, user_id=carla.id)
+    assert svc.sieger_id(ch) == carla.id
+
+
+def test_sieger_must_have_taken_part(session):
+    _season(session)
+    ch, anna, ben, carla = _finished_team(session)
+    dora = make_user(session, username="dora")
+    jetzt = datetime(2026, 9, 2, tzinfo=timezone.utc)
     with pytest.raises(svc.NichtQualifiziert):
-        svc.setze_sieger(session, ch, jetzt, user_id=carla.id)
+        svc.setze_sieger(session, ch, jetzt, user_id=dora.id)
     with pytest.raises(svc.NichtQualifiziert):
-        svc.setze_sieger(session, ch, jetzt, group_id=2)
+        svc.setze_sieger(session, ch, jetzt, group_id=3)
 
 
 def test_sieger_person_in_team_mode_carries_the_group_name_into_the_feed(session):

@@ -221,11 +221,9 @@ def _challenge_out(
             {**e, "nicht_mehr_schaffbar": False} for e in ergebnis.get("entries", [])
         ]
         gewinner = ergebnis.get("gewinner_ids", [])
-        gewinner_gruppen = ergebnis.get("gewinner_group_ids", [])
     else:
         roh = svc.standings(session, ch, heute)
         gewinner = [e["user_id"] for e in roh if e["geschafft"]]
-        gewinner_gruppen = []
 
     def eintrag(e: dict) -> StandingEntryOut:
         """Works for standings entries and for the leaner group member dicts,
@@ -255,7 +253,6 @@ def _challenge_out(
     )
     if ch.team_mode and not beendet:
         gewinner = block.gewinner_ids
-        gewinner_gruppen = block.gewinner_group_ids
 
     meine_gruppe = next(
         (g for g in gruppen_json if me.id in g["member_ids"]), None
@@ -297,8 +294,7 @@ def _challenge_out(
             me.is_admin
             and ch.mode == "ziel"
             and ch.status == "beendet"
-            and len(gewinner) > 0
-            and (not ch.team_mode or len(gewinner_gruppen) > 0)
+            and len(svc.eingefrorene_teilnehmer_ids(ergebnis)) > 0
         ),
         team_mode=ch.team_mode,
         group_count=ch.group_count,
