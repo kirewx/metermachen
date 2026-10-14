@@ -5,6 +5,7 @@ import { api } from '../../api/client'
 import type { Challenge, SiegerWahl } from '../../api/client'
 import Avatar from '../ui/Avatar'
 import Select from '../ui/Select'
+import GluecksradDialog from './GluecksradDialog'
 import GroupCard from './GroupCard'
 import WertungsChip from './WertungsChip'
 import { einheit, fortschritt, siegerText, wertungText } from './wertung'
@@ -95,9 +96,11 @@ export default function ChallengeDetail() {
     },
   })
   const [wahl, setWahl] = useState<string>('')
+  const [radOffen, setRadOffen] = useState(false)
   const siegerSetzen = useMutation({
     mutationFn: (sieger: SiegerWahl) => api.setChallengeSieger(challengeId, sieger),
     onSuccess: () => {
+      setRadOffen(false)
       queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] })
       queryClient.invalidateQueries({ queryKey: ['challenges'] })
     },
@@ -159,30 +162,38 @@ export default function ChallengeDetail() {
               )}
             </p>
           ) : ch.kann_sieger_setzen ? (
-            <div className="flex items-end gap-2">
-              <Select
-                label="Sieger"
-                className="flex-1"
-                value={wahl}
-                onChange={(e) => setWahl(e.target.value)}
-              >
-                <option value="">– bitte wählen –</option>
-                {siegerOptionen(ch).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
+            <div className="space-y-3">
               <button
-                onClick={() => {
-                  const gewaehlt = parseWahl(wahl)
-                  if (gewaehlt) siegerSetzen.mutate(gewaehlt)
-                }}
-                disabled={!wahl || siegerSetzen.isPending}
-                className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
+                onClick={() => setRadOffen(true)}
+                className="w-full rounded-xl bg-accent px-3 py-2 text-sm font-black text-accent-ink"
               >
-                Sieger eintragen
+                🎡 Glücksrad drehen
               </button>
+              <div className="flex items-end gap-2">
+                <Select
+                  label="Sieger"
+                  className="flex-1"
+                  value={wahl}
+                  onChange={(e) => setWahl(e.target.value)}
+                >
+                  <option value="">– bitte wählen –</option>
+                  {siegerOptionen(ch).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+                <button
+                  onClick={() => {
+                    const gewaehlt = parseWahl(wahl)
+                    if (gewaehlt) siegerSetzen.mutate(gewaehlt)
+                  }}
+                  disabled={!wahl || siegerSetzen.isPending}
+                  className="shrink-0 rounded-xl border border-accent px-3 py-2 text-xs font-bold text-accent disabled:opacity-50"
+                >
+                  Sieger eintragen
+                </button>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-ink-mute">
@@ -192,6 +203,16 @@ export default function ChallengeDetail() {
             </p>
           )}
         </section>
+      )}
+
+      {radOffen && (
+        <GluecksradDialog
+          ch={ch}
+          open
+          onClose={() => setRadOffen(false)}
+          onSieger={(sieger) => siegerSetzen.mutate(sieger)}
+          speichert={siegerSetzen.isPending}
+        />
       )}
 
       {ch.team_mode ? (

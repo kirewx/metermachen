@@ -114,8 +114,8 @@ All under `/api/challenges`, behind the `challenges` add-on. Existing endpoints 
 | draw / groups on a non-group challenge | 409 |
 | join / leave a running group challenge | 409 |
 | sieger: both or neither of `user_id` / `group_id` | 422 |
-| sieger `group_id` not in `gewinner_group_ids` | 422 |
-| sieger `user_id` not a member of a winning group | 422 |
+| sieger `group_id` not a group of the frozen result | 422 |
+| sieger `user_id` not in the frozen result (any group, qualified or not — since 2026-10-14) | 422 |
 | sieger `group_id` on a non-group challenge | 422 |
 
 ### `ChallengeOut` additions

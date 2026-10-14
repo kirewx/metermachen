@@ -410,7 +410,7 @@ def emit_qualified(
 
 
 class NichtQualifiziert(ValueError):
-    """Sieger steht nicht auf der Liste der Qualifizierten — 422, nicht 409."""
+    """Sieger hat nicht an der Challenge teilgenommen — 422, nicht 409."""
 
 
 def sieger_id(ch: Challenge) -> int | None:
@@ -421,6 +421,15 @@ def sieger_group_id(ch: Challenge) -> int | None:
     return json.loads(ch.result_json or "{}").get("sieger", {}).get("group_id")
 
 
+def eingefrorene_teilnehmer_ids(ergebnis: dict) -> set[int]:
+    """Everyone in the frozen result: the entries plus the frozen group
+    members (a member who left keeps their place in the group snapshot)."""
+    ids = {e["user_id"] for e in ergebnis.get("entries", [])}
+    for g in ergebnis.get("groups", []):
+        ids.update(g["member_ids"])
+    return ids
+
+
 def setze_sieger(
     session: Session,
     ch: Challenge,
@@ -429,8 +438,10 @@ def setze_sieger(
     user_id: int | None = None,
     group_id: int | None = None,
 ) -> None:
-    """Record the offline-drawn prize winner: a person, or (group challenges
-    only) a whole group. Overwritable — a typo must be correctable.
+    """Record the drawn prize winner: a person, or (group challenges only) a
+    whole group. Anyone who took part may win — the admin decides on the
+    wheel of fortune who is in the draw. Overwritable — a typo must be
+    correctable.
 
     The group is read from the frozen snapshot, not from groups_json: a rename
     after the freeze must not change what the feed says about the result."""
@@ -449,12 +460,12 @@ def setze_sieger(
         gruppe = next(
             (g for g in eingefrorene_gruppen if g["id"] == group_id), None
         )
-        if gruppe is None or group_id not in ergebnis.get("gewinner_group_ids", []):
-            raise NichtQualifiziert("Diese Gruppe hat das Ziel nicht erreicht")
+        if gruppe is None:
+            raise NichtQualifiziert("Diese Gruppe gibt es nicht")
         ergebnis["sieger"] = {"group_id": group_id, "gesetzt_am": jetzt.isoformat()}
     else:
-        if user_id not in ergebnis.get("gewinner_ids", []):
-            raise NichtQualifiziert("Diese Person hat das Ziel nicht erreicht")
+        if user_id not in eingefrorene_teilnehmer_ids(ergebnis):
+            raise NichtQualifiziert("Diese Person hat nicht teilgenommen")
         gruppe = next(
             (g for g in eingefrorene_gruppen if user_id in g["member_ids"]), None
         )

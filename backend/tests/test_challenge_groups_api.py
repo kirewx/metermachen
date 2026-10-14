@@ -324,7 +324,8 @@ def test_sieger_endpoint_accepts_group_or_person(session, client):
     r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
     assert r.status_code == 200
     assert r.json()["sieger_id"] == ben.id and r.json()["sieger_group_id"] is None
-    assert client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": carla.id}).status_code == 422
-    assert client.put(f"/api/challenges/{ch.id}/sieger", json={"group_id": 2}).status_code == 422
+    assert client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": carla.id}).status_code == 200
+    assert client.put(f"/api/challenges/{ch.id}/sieger", json={"group_id": 2}).status_code == 200
+    assert client.put(f"/api/challenges/{ch.id}/sieger", json={"group_id": 9}).status_code == 422
     assert client.put(f"/api/challenges/{ch.id}/sieger", json={}).status_code == 422
     assert client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id, "group_id": 1}).status_code == 422

@@ -86,6 +86,21 @@ describe('ChallengeDetail', () => {
     await waitFor(() => expect(api.setChallengeSieger).toHaveBeenCalledWith(1, { user_id: 2 }))
   })
 
+  it('oeffnet fuer den Admin das Gluecksrad mit allen Teilnehmenden', async () => {
+    const { api } = await import('../../api/client')
+    vi.mocked(api.challenge).mockResolvedValue({
+      ...detail, status: 'beendet', vorlaeufig: false, sieger_id: null, kann_sieger_setzen: true,
+    } as never)
+    renderDetail()
+    fireEvent.click(await screen.findByRole('button', { name: /Glücksrad drehen/ }))
+    const dialog = screen.getByRole('dialog', { name: 'Glücksrad' })
+    expect(within(dialog).getByRole('checkbox', { name: /Rick/ })).toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: /Mia/ })).not.toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: /Lea/ })).not.toBeChecked()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Schließen' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('zeigt den eingetragenen Sieger allen', async () => {
     const { api } = await import('../../api/client')
     vi.mocked(api.challenge).mockResolvedValue({
@@ -99,6 +114,7 @@ describe('ChallengeDetail', () => {
     renderDetail()
     await waitFor(() => expect(screen.getByText(/Sieger: Rick/)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'Sieger eintragen' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Glücksrad/ })).toBeNull()
   })
 
   const teamDetail = {

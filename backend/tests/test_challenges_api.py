@@ -290,12 +290,33 @@ def test_sieger_eintragen_und_korrigieren(session, client):
     assert r.json()["sieger_id"] == ben.id
 
 
-def test_sieger_nur_aus_den_qualifizierten(session, client):
+def test_sieger_aus_allen_teilnehmenden(session, client):
+    """Glücksrad: auch wer das Ziel verpasst hat, darf gezogen werden —
+    wer gar nicht dabei war, nicht."""
     make_addon(session, key="challenges", label="Challenges", enabled=True)
     ch, _anna, ben = _beendete_mit_qualifizierten(session)
+    carla = make_user(session, username="carla")
     login(client, username="anna")
     r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id})
+    assert r.status_code == 200, r.text
+    assert r.json()["sieger_id"] == ben.id
+    r = client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": carla.id})
     assert r.status_code == 422
+
+
+def test_sieger_setzen_auch_wenn_niemand_das_ziel_erreicht(session, client):
+    import json
+
+    make_addon(session, key="challenges", label="Challenges", enabled=True)
+    ch, _anna, _ben = _beendete_mit_qualifizierten(session)
+    ergebnis = json.loads(ch.result_json)
+    for e in ergebnis["entries"]:
+        e["geschafft"] = False
+    ch.result_json = json.dumps({**ergebnis, "gewinner_ids": []})
+    session.add(ch)
+    session.commit()
+    login(client, username="anna")
+    assert client.get(f"/api/challenges/{ch.id}").json()["kann_sieger_setzen"] is True
 
 
 def test_sieger_nur_als_admin(session, client):

@@ -203,8 +203,10 @@ danach den Sieger ein, damit alle sehen, wer gewonnen hat.
   Sieger.
 - **Erst nach dem Einfrieren** (`status="beendet"`). Vorher steht der Kreis der
   Qualifizierten nicht fest.
-- **Nur aus den Qualifizierten.** Wer die Schwelle nicht geknackt hat, lässt
-  sich nicht eintragen — sonst wäre die ganze Wertung wertlos.
+- **Aus allen Teilnehmenden** (geändert 2026-10-14, Glücksrad). Der Admin
+  stellt den Lostopf im Glücksrad selbst zusammen; die Qualifizierten sind
+  vorgewählt. Eintragen lässt sich jede Person aus dem eingefrorenen Ergebnis,
+  wer gar nicht dabei war, nicht.
 - **Korrigierbar.** Anders als eine Auslosung ist ein Eintrag eine
   festgehaltene Tatsache; ein Vertipper muss sich beheben lassen. Ein erneutes
   Setzen überschreibt den vorherigen Eintrag.
@@ -271,7 +273,7 @@ hinter `Depends(require_addon("challenges"))`.
 | Wertungsregeln an nicht mehr `geplant`er Challenge ändern | 409 |
 | Sieger eintragen bei `mode="rangliste"` | 409 |
 | Sieger eintragen vor dem Einfrieren | 409 |
-| Sieger eintragen, der nicht qualifiziert ist | 422 |
+| Sieger eintragen, der nicht teilgenommen hat | 422 |
 | `period_end < period_start` | 422 |
 | `period_end` liegt in der Vergangenheit (beim Anlegen) | 422 |
 | `mode="ziel"` ohne `target` | 422 |
