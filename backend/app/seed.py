@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from . import auth
 from .models import AddOn, Category, Season, User
+from .services.factors import default_counts_elevation
 
 DEFAULT_CATEGORIES = [
     # (Name, Faktor, Farbe, Icon, Standard-km)
@@ -64,7 +65,10 @@ def seed_all(session: Session, admin_user: str, admin_password: str, year: int) 
     if session.exec(select(Category)).first() is None:
         for name, factor, color, icon, default_km in DEFAULT_CATEGORIES:
             session.add(
-                Category(name=name, factor=factor, color=color, icon=icon, default_km=default_km)
+                Category(
+                    name=name, factor=factor, color=color, icon=icon, default_km=default_km,
+                    counts_elevation=default_counts_elevation(name, icon, []),
+                )
             )
     # Nur wenn noch GAR KEINE Season existiert — sonst würde am 01.01. des
     # Folgejahres eine leere Season entstehen, obwohl die Challenge noch läuft.

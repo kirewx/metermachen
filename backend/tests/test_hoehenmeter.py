@@ -84,6 +84,13 @@ def test_migration_ebike_aus_und_wandern_neuer_faktor(tmp_path):
             ("EBike", 0.5, "rad", ["EBikeRide"]),
             ("Wandern", 3.0, "wandern", ["Hike"]),
             ("Radfahren", 1.0, "rad", ["Ride"]),
+            ("Joggen", 4.0, "laufen", ["Run"]),
+            ("Spazieren", 2.0, "gehen", ["Walk"]),
+            ("Schwimmen", 30.0, "schwimmen", ["Swim"]),
+            ("Tanzen", 3.0, "tanzen", []),
+            ("Tennis", 4.0, "medaille", ["Tennis"]),
+            ("Ski/Snowboard", 1.5, "ski", ["Snowboard", "AlpineSki"]),
+            ("Spinning", 1.0, "rad", ["VirtualRide"]),
         ]:
             conn.execute(text(
                 "INSERT INTO category (name, factor, color, icon, default_km, is_active, "
@@ -93,9 +100,35 @@ def test_migration_ebike_aus_und_wandern_neuer_faktor(tmp_path):
     migrate(engine)  # idempotent
     with Session(engine) as s:
         cats = {c.name: c for c in s.exec(select(Category)).all()}
-        assert cats["EBike"].counts_elevation is False
-        assert cats["Radfahren"].counts_elevation is True
+        mit_hm = {n for n, c in cats.items() if c.counts_elevation}
+        assert mit_hm == {"Wandern", "Radfahren", "Joggen", "Spazieren"}
         changes = s.exec(select(CategoryFactorChange)).all()
         assert [(c.category_id, c.factor, c.valid_from) for c in changes] == [
             (cats["Wandern"].id, 2.5, HM_AB)
         ]
+
+
+def test_neue_kategorie_bekommt_passenden_hm_standard(client, session):
+    make_user(session, username="chef", is_admin=True)
+    login(client, username="chef")
+
+    def neu(**kw):
+        body = {"name": "X", "factor": 1.0, "color": "#000000", **kw}
+        return client.post("/api/categories", json=body).json()["counts_elevation"]
+
+    assert neu(name="Trailrun", icon="laufen", strava_sport_types=["TrailRun"]) is True
+    assert neu(name="Yoga", icon="medaille") is False
+    assert neu(name="Aquajogging", icon="schwimmen") is False
+    assert neu(name="Indoor-Rad", icon="rad") is False
+    assert neu(name="Yoga 2", icon="medaille", counts_elevation=True) is True
+
+
+def test_strava_indoor_ohne_hm(session):
+    from app.services.strava import _derive_fields
+
+    make_category(session, name="Radfahren", factor=1.0)
+    base = {"sport_type": "Ride", "distance": 30000, "total_elevation_gain": 400,
+            "start_date_local": "2026-11-05T08:00:00Z"}
+    assert _derive_fields(session, base)["elevation_m"] == 400.0
+    assert _derive_fields(session, {**base, "trainer": True})["elevation_m"] is None
+    assert _derive_fields(session, {**base, "sport_type": "VirtualRide"})["elevation_m"] is None

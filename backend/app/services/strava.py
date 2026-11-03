@@ -195,9 +195,12 @@ def _derive_fields(session: Session, data: dict) -> dict:
     gemeinsame Logik für Import und Update. Die Skip-Regeln (Import) bzw.
     Pro-Feld-Bedingungen (Update) entscheiden jeweils der Aufrufer anhand
     dieser Werte."""
-    cat = category_for_sport(session, data.get("sport_type") or data.get("type"))
+    sport = data.get("sport_type") or data.get("type")
+    cat = category_for_sport(session, sport)
     distance_km = round((data.get("distance") or 0) / 1000, 2)
     elevation_m = round(data.get("total_elevation_gain") or 0, 1) or None
+    if data.get("trainer") or (sport or "").startswith("Virtual"):
+        elevation_m = None  # Indoor (Rolle, Laufband, Zwift): keine echten Höhenmeter
     act_date = _parse_date(data.get("start_date_local") or data.get("start_date"))
     act_time = _parse_time(data.get("start_date_local") or data.get("start_date"))
     # Mindestens 1 min, sobald etwas aufgezeichnet wurde ("Der nimmt alles mit")

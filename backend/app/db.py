@@ -37,22 +37,21 @@ def _icon_for(value: str, fallback: str) -> str:
 
 
 # Einmalig beim Einführen der Höhenmeter-Wertung (Spec 2026-11-03)
-_EBIKE_SPORTS = ("EBikeRide", "EMountainBikeRide")
 _WANDERN_FAKTOR_MIT_HM = 2.5
 
 
 def _hoehenmeter_einfuehren(conn) -> None:
-    """E-Bike zählt keine Höhenmeter; Wandern bekommt ab HM_AB den neuen
-    Faktor, weil die Höhenmeter jetzt separat zählen. Läuft genau einmal
-    (beim Anlegen der Spalte), damit Admin-Änderungen danach bestehen bleiben."""
-    from .services.factors import HM_AB
+    """Höhenmeter nur für Draußen-Fortbewegung (default_counts_elevation);
+    Wandern bekommt ab HM_AB den neuen Faktor, weil die Höhenmeter jetzt
+    separat zählen. Läuft genau einmal (beim Anlegen der Spalte), damit
+    Admin-Änderungen danach bestehen bleiben."""
+    from .services.factors import HM_AB, default_counts_elevation
 
     for id_, name, raw, icon in conn.execute(
         text("SELECT id, name, strava_sport_types, icon FROM category")
     ).fetchall():
         sports = json.loads(raw or "[]")
-        name_l = name.lower().replace("-", "")
-        if any(s in sports for s in _EBIKE_SPORTS) or "ebike" in name_l:
+        if not default_counts_elevation(name, icon, sports):
             conn.execute(
                 text("UPDATE category SET counts_elevation = 0 WHERE id = :id"), {"id": id_}
             )

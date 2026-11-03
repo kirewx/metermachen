@@ -8,7 +8,8 @@ multiplizieren nirgendwo mehr direkt mit Category.factor.
 
 Höhenmeter (Spec 2026-11-03): Ab HM_AB zählen je HM_PRO_KM Höhenmeter wie
 1 km, danach greift der Kategorie-Faktor — MM = (km + hm / 100) × Faktor.
-Kategorien mit counts_elevation=False (E-Bike) bleiben bei km × Faktor.
+Kategorien mit counts_elevation=False (E-Bike, Schwimmen, Tanzen, Indoor …)
+bleiben bei km × Faktor.
 Wie Faktor-Änderungen nie rückwirkend: Aktivitäten vor HM_AB zählen ohne hm.
 """
 
@@ -20,7 +21,26 @@ from sqlmodel import Session, select
 from ..models import Activity, Category, CategoryFactorChange
 
 HM_PRO_KM = 100.0
-HM_AB = date_type(2026, 11, 9)
+HM_AB = date_type(2026, 11, 5)
+
+# Standard für counts_elevation: nur Draußen-Fortbewegung, bei der man
+# Höhenmeter selbst macht. Alles andere (Schwimmen, Tanzen, Tennis, Ski mit
+# Lift, E-Bike, Indoor, unbekannt) startet aus — Admin kann umschalten.
+_HM_SPORTS = {
+    "Run", "TrailRun", "Walk", "Hike", "Ride", "MountainBikeRide", "GravelRide",
+    "InlineSkate", "Skateboard", "NordicSki", "BackcountrySki", "Snowshoe",
+}
+_HM_ICONS = {"laufen", "gehen", "wandern", "rad", "inline"}
+_NO_HM_SPORTS = {"EBikeRide", "EMountainBikeRide", "VirtualRide", "VirtualRun"}
+
+
+def default_counts_elevation(name: str, icon: str, sports: list[str]) -> bool:
+    name_l = name.lower().replace("-", "")
+    if "ebike" in name_l or "indoor" in name_l or _NO_HM_SPORTS & set(sports):
+        return False
+    if sports:
+        return bool(_HM_SPORTS & set(sports))
+    return icon in _HM_ICONS
 
 
 class FactorResolver:

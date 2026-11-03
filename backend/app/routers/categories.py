@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from ..deps import get_session, require_admin
 from ..models import Category, CategoryFactorChange
+from ..services.factors import default_counts_elevation
 from ..schemas import (
     CategoryCreate,
     CategoryOut,
@@ -34,6 +35,10 @@ def list_categories(session: Session = Depends(get_session)):
 )
 def create_category(data: CategoryCreate, session: Session = Depends(get_session)):
     values = data.model_dump()
+    if values["counts_elevation"] is None:
+        values["counts_elevation"] = default_counts_elevation(
+            data.name, data.icon, data.strava_sport_types
+        )
     values["strava_sport_types"] = json.dumps(values.get("strava_sport_types") or [])
     cat = Category(**values)
     session.add(cat)

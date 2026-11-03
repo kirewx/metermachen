@@ -22,7 +22,7 @@ class CategoryCreate(BaseModel):
     icon: str = "medaille"
     default_km: float = Field(default=10.0, gt=0)
     strava_sport_types: list[str] = []
-    counts_elevation: bool = True
+    counts_elevation: bool | None = None  # None → default_counts_elevation
 
 
 class CategoryPatch(BaseModel):
