@@ -158,7 +158,7 @@ def compute_comparison(
         hm_running = 0.0
         factor = user.km_factor if phase == "challenge" else 1.0
         for a, c in acts:
-            scaled = round(a.distance_km * resolver.factor(c.id, a.date) * factor, 2)
+            scaled = round(resolver.mm(a) * factor, 2)
             running = round(running + scaled, 2)
             real_running = round(real_running + a.distance_km, 2)
             # Höhenmeter bleiben roh: weder Kategorie- noch Personen-Faktor.

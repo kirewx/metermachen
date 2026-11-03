@@ -22,6 +22,12 @@ export default function Regeln() {
   const { data: addons = [] } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
   const sidebetsAktiv = addons.some((a) => a.key === 'sidebets' && a.active)
   const aktive = categories.filter((c) => c.is_active)
+  const hmAb = aktive
+    .flatMap((c) => c.elevation_changes ?? [])
+    .filter((e) => e.counts_elevation)
+    .map((e) => e.valid_from)
+    .sort()[0]
+  const ohneHm = aktive.filter((c) => c.counts_elevation === false)
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -53,6 +59,16 @@ export default function Regeln() {
           Jede Sportart hat einen Faktor. Gewertete km (MM) = echte km × Faktor. Die Faktoren
           gleichen aus, dass ein Rad-Kilometer schneller gesammelt ist als ein Schwimm-Kilometer.
         </p>
+        {hmAb && (
+          <p>
+            Ab dem <strong className="text-ink">{datumKurz(hmAb)}</strong> zählen auch
+            Höhenmeter: <strong className="text-ink">100 hm = 1 km</strong>, danach greift der
+            Faktor. Also MM = (km + hm / 100) × Faktor; 100 hm beim Laufen bringen 4 MM.
+            {ohneHm.length > 0 && <> Ausgenommen: {ohneHm.map((c) => c.name).join(', ')}.</>}{' '}
+            Wandern hat dafür einen niedrigeren Faktor, weil die Höhenmeter dort jetzt extra
+            zählen.
+          </p>
+        )}
         <table className="w-full text-left">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-ink-mute">

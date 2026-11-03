@@ -208,13 +208,19 @@ const datumKurz = (iso: string) => {
   return `${d}.${m}.${y}`
 }
 
+/** Start date of a not yet effective Höhenmeter change, if one is planned. */
+const geplanteHm = (c: Category): string | null => {
+  const letzte = c.elevation_changes?.at(-1)
+  return letzte && letzte.valid_from > new Date().toISOString().slice(0, 10) ? letzte.valid_from : null
+}
+
 function Kategorien() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['categories'] })
   const patch = useMutation({
-    mutationFn: ({ id, ...b }: { id: number; factor?: number; default_km?: number; is_active?: boolean; strava_sport_types?: string[] }) =>
+    mutationFn: ({ id, ...b }: { id: number; factor?: number; default_km?: number; is_active?: boolean; counts_elevation?: boolean; strava_sport_types?: string[] }) =>
       api.patchCategory(id, b),
     onSuccess: refresh,
     onError: (e) => toast(e.message),
@@ -302,6 +308,16 @@ function Kategorien() {
                   patch.mutate({ id: c.id, default_km })
               }}
             />
+            <Button
+              variant="ghost"
+              title="100 Höhenmeter zählen wie 1 km. Umschalten gilt ab heute, bereits erfasste Aktivitäten behalten ihre MM."
+              onClick={() => patch.mutate({ id: c.id, counts_elevation: !c.counts_elevation })}
+            >
+              {c.counts_elevation ? 'Höhenmeter zählen' : 'Höhenmeter zählen nicht'}
+              {geplanteHm(c) && (
+                <span className="ml-1 text-xs text-ink-mute">ab {datumKurz(geplanteHm(c)!)}</span>
+              )}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => patch.mutate({ id: c.id, is_active: !c.is_active })}
