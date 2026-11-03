@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..deps import get_session, require_admin
-from ..models import Category, CategoryFactorChange
-from ..services.factors import default_counts_elevation
+from ..models import Category, CategoryElevationChange, CategoryFactorChange
+from ..services.factors import default_counts_elevation, set_counts_elevation
 from ..schemas import (
     CategoryCreate,
     CategoryOut,
@@ -27,24 +27,44 @@ def list_categories(session: Session = Depends(get_session)):
     by_cat: dict[int, list[CategoryFactorChange]] = defaultdict(list)
     for ch in session.exec(select(CategoryFactorChange)).all():
         by_cat[ch.category_id].append(ch)
-    return [CategoryOut.from_category(c, by_cat.get(c.id)) for c in cats]
+    hm_by_cat: dict[int, list[CategoryElevationChange]] = defaultdict(list)
+    for ec in session.exec(select(CategoryElevationChange)).all():
+        hm_by_cat[ec.category_id].append(ec)
+    return [
+        CategoryOut.from_category(c, by_cat.get(c.id), hm_by_cat.get(c.id)) for c in cats
+    ]
+
+
+def _out(session: Session, cat: Category) -> CategoryOut:
+    return CategoryOut.from_category(
+        cat,
+        list(session.exec(
+            select(CategoryFactorChange).where(CategoryFactorChange.category_id == cat.id)
+        ).all()),
+        list(session.exec(
+            select(CategoryElevationChange).where(
+                CategoryElevationChange.category_id == cat.id
+            )
+        ).all()),
+    )
 
 
 @router.post(
     "", response_model=CategoryOut, status_code=201, dependencies=[Depends(require_admin)]
 )
 def create_category(data: CategoryCreate, session: Session = Depends(get_session)):
-    values = data.model_dump()
-    if values["counts_elevation"] is None:
-        values["counts_elevation"] = default_counts_elevation(
-            data.name, data.icon, data.strava_sport_types
-        )
+    values = data.model_dump(exclude={"counts_elevation"})
     values["strava_sport_types"] = json.dumps(values.get("strava_sport_types") or [])
-    cat = Category(**values)
+    cat = Category(**values)  # zählt bis zum Stichtag keine Höhenmeter
     session.add(cat)
+    session.flush()
+    hm = data.counts_elevation
+    if hm is None:
+        hm = default_counts_elevation(data.name, data.icon, data.strava_sport_types)
+    set_counts_elevation(session, cat, hm)
     session.commit()
     session.refresh(cat)
-    return CategoryOut.from_category(cat)
+    return _out(session, cat)
 
 
 @router.patch(
@@ -59,19 +79,15 @@ def patch_category(
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
     if "strava_sport_types" in changes:
         changes["strava_sport_types"] = json.dumps(changes["strava_sport_types"])
+    hm = changes.pop("counts_elevation", None)
+    if hm is not None:  # datierte Änderung ab heute, nie rückwirkend
+        set_counts_elevation(session, cat, hm)
     for key, value in changes.items():
         setattr(cat, key, value)
     session.add(cat)
     session.commit()
     session.refresh(cat)
-    factor_changes = list(
-        session.exec(
-            select(CategoryFactorChange).where(
-                CategoryFactorChange.category_id == cat.id
-            )
-        ).all()
-    )
-    return CategoryOut.from_category(cat, factor_changes)
+    return _out(session, cat)
 
 
 @router.post(

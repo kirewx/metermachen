@@ -1,10 +1,13 @@
 import json
+import logging
 
 from sqlalchemy import text
 from sqlmodel import SQLModel, create_engine
 
 from . import config
 from . import models  # noqa: F401  — Tabellen registrieren
+
+logger = logging.getLogger(__name__)
 
 engine = create_engine(config.database_url(), connect_args={"check_same_thread": False})
 
@@ -41,30 +44,39 @@ _WANDERN_FAKTOR_MIT_HM = 2.5
 
 
 def _hoehenmeter_einfuehren(conn) -> None:
-    """Höhenmeter nur für Draußen-Fortbewegung (default_counts_elevation);
-    Wandern bekommt ab HM_AB den neuen Faktor, weil die Höhenmeter jetzt
-    separat zählen. Läuft genau einmal (beim Anlegen der Spalte), damit
+    """Höhenmeter für Draußen-Fortbewegung (default_counts_elevation) ab
+    elevation_start einschalten; Wandern bekommt am selben Tag den neuen
+    Faktor, weil die Höhenmeter jetzt separat zählen. Beides als datierte
+    Änderung — läuft der Deploy nach HM_AB, startet es am Deploy-Tag statt
+    rückwirkend. Läuft genau einmal (beim Anlegen der Spalte), damit
     Admin-Änderungen danach bestehen bleiben."""
-    from .services.factors import HM_AB, default_counts_elevation
+    from .services.factors import HM_AB, default_counts_elevation, elevation_start
 
+    start = elevation_start()
+    if start > HM_AB:
+        logger.warning("Höhenmeter-Wertung startet verspätet am %s statt %s", start, HM_AB)
     for id_, name, raw, icon in conn.execute(
         text("SELECT id, name, strava_sport_types, icon FROM category")
     ).fetchall():
         sports = json.loads(raw or "[]")
         if not default_counts_elevation(name, icon, sports):
-            conn.execute(
-                text("UPDATE category SET counts_elevation = 0 WHERE id = :id"), {"id": id_}
-            )
-        elif ("Hike" in sports or icon == "wandern") and _table_exists(
-            conn, "categoryfactorchange"
-        ):
+            continue
+        conn.execute(
+            text(
+                "INSERT OR IGNORE INTO categoryelevationchange "
+                "(category_id, counts_elevation, valid_from, created_at) "
+                "VALUES (:id, 1, :d, CURRENT_TIMESTAMP)"
+            ),
+            {"id": id_, "d": start.isoformat()},
+        )
+        if "Hike" in sports or icon == "wandern":
             conn.execute(
                 text(
                     "INSERT OR IGNORE INTO categoryfactorchange "
                     "(category_id, factor, valid_from, created_at) "
                     "VALUES (:id, :f, :d, CURRENT_TIMESTAMP)"
                 ),
-                {"id": id_, "f": _WANDERN_FAKTOR_MIT_HM, "d": HM_AB.isoformat()},
+                {"id": id_, "f": _WANDERN_FAKTOR_MIT_HM, "d": start.isoformat()},
             )
 
 
@@ -108,9 +120,10 @@ def migrate(target=engine) -> None:
                 ))
             if "counts_elevation" not in cat_cols:
                 conn.execute(text(
-                    "ALTER TABLE category ADD COLUMN counts_elevation BOOLEAN NOT NULL DEFAULT 1"
+                    "ALTER TABLE category ADD COLUMN counts_elevation BOOLEAN NOT NULL DEFAULT 0"
                 ))
-                _hoehenmeter_einfuehren(conn)
+                if _table_exists(conn, "categoryelevationchange"):
+                    _hoehenmeter_einfuehren(conn)
 
         if _table_exists(conn, "season"):
             season_cols = _columns(conn, "season")

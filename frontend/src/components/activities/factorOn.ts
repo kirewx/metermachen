@@ -17,13 +17,18 @@ export function factorOn(category: Category, isoDate: string): number {
 
 export const HM_PRO_KM = 100
 
-/**
- * MM of an entry as the backend computes it: from elevation_from on, every
- * 100 hm count like 1 km (unless the category opts out), then the factor
- * valid on that date applies.
- */
+/** Whether a category counts Höhenmeter on a 'YYYY-MM-DD' date (latest change wins). */
+export function countsElevationOn(category: Category, isoDate: string): boolean {
+  const effective = (category.elevation_changes ?? [])
+    .filter((c) => c.valid_from <= isoDate)
+    .sort((a, b) => a.valid_from.localeCompare(b.valid_from))
+  return effective.length > 0
+    ? effective[effective.length - 1].counts_elevation
+    : Boolean(category.base_counts_elevation)
+}
+
+/** MM of an entry as the backend computes it: (km + hm / 100) × factor on that date. */
 export function mmOn(category: Category, isoDate: string, km: number, hm: number): number {
-  const mitHm =
-    category.counts_elevation && category.elevation_from && isoDate >= category.elevation_from
-  return (km + (mitHm && hm > 0 ? hm / HM_PRO_KM : 0)) * factorOn(category, isoDate)
+  const bonus = hm > 0 && countsElevationOn(category, isoDate) ? hm / HM_PRO_KM : 0
+  return (km + bonus) * factorOn(category, isoDate)
 }

@@ -208,6 +208,12 @@ const datumKurz = (iso: string) => {
   return `${d}.${m}.${y}`
 }
 
+/** Start date of a not yet effective Höhenmeter change, if one is planned. */
+const geplanteHm = (c: Category): string | null => {
+  const letzte = c.elevation_changes?.at(-1)
+  return letzte && letzte.valid_from > new Date().toISOString().slice(0, 10) ? letzte.valid_from : null
+}
+
 function Kategorien() {
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -304,10 +310,13 @@ function Kategorien() {
             />
             <Button
               variant="ghost"
-              title="100 Höhenmeter zählen wie 1 km (z. B. für E-Bike abschalten)"
+              title="100 Höhenmeter zählen wie 1 km. Umschalten gilt ab heute, bereits erfasste Aktivitäten behalten ihre MM."
               onClick={() => patch.mutate({ id: c.id, counts_elevation: !c.counts_elevation })}
             >
               {c.counts_elevation ? 'Höhenmeter zählen' : 'Höhenmeter zählen nicht'}
+              {geplanteHm(c) && (
+                <span className="ml-1 text-xs text-ink-mute">ab {datumKurz(geplanteHm(c)!)}</span>
+              )}
             </Button>
             <Button
               variant="ghost"

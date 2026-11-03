@@ -5,8 +5,7 @@ from datetime import time as time_type
 
 from pydantic import BaseModel, Field, field_validator
 
-from .models import AddOn, Category, CategoryFactorChange, Season
-from .services.factors import HM_AB
+from .models import AddOn, Category, CategoryElevationChange, CategoryFactorChange, Season
 
 
 class Milestone(BaseModel):
@@ -47,6 +46,11 @@ class FactorChangeOut(BaseModel):
     valid_from: date_type
 
 
+class ElevationChangeOut(BaseModel):
+    counts_elevation: bool
+    valid_from: date_type
+
+
 class CategoryOut(BaseModel):
     id: int
     name: str
@@ -57,16 +61,21 @@ class CategoryOut(BaseModel):
     default_km: float
     is_active: bool
     strava_sport_types: list[str]
+    # Höhenmeter: Stand inkl. geplanter Änderung (Admin-Schalter), Ur-Wert
+    # vor der ersten Änderung und alle Änderungen (Vorschau je Datum)
     counts_elevation: bool
-    elevation_from: date_type  # ab hier zählen Höhenmeter (HM_AB)
+    base_counts_elevation: bool
+    elevation_changes: list[ElevationChangeOut] = []
     pending_changes: list[FactorChangeOut] = []
     history: list[FactorChangeOut] = []
 
     @classmethod
     def from_category(
-        cls, cat: Category, changes: list[CategoryFactorChange] | None = None
+        cls, cat: Category, changes: list[CategoryFactorChange] | None = None,
+        elevation_changes: list[CategoryElevationChange] | None = None,
     ) -> "CategoryOut":
         changes = sorted(changes or [], key=lambda c: c.valid_from)
+        hm = sorted(elevation_changes or [], key=lambda c: c.valid_from)
         heute = date_type.today()
         wirksam = [c for c in changes if c.valid_from <= heute]
         return cls(
@@ -79,8 +88,12 @@ class CategoryOut(BaseModel):
             default_km=cat.default_km,
             is_active=cat.is_active,
             strava_sport_types=json.loads(cat.strava_sport_types or "[]"),
-            counts_elevation=cat.counts_elevation,
-            elevation_from=HM_AB,
+            counts_elevation=hm[-1].counts_elevation if hm else cat.counts_elevation,
+            base_counts_elevation=cat.counts_elevation,
+            elevation_changes=[
+                ElevationChangeOut(counts_elevation=c.counts_elevation, valid_from=c.valid_from)
+                for c in hm
+            ],
             pending_changes=[
                 FactorChangeOut(id=c.id, factor=c.factor, valid_from=c.valid_from)
                 for c in changes

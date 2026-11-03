@@ -34,7 +34,8 @@ describe('mmOn', () => {
   const laufen: Category = {
     id: 2, name: 'Laufen', factor: 4, base_factor: 4, color: '#f00', icon: 'laufen',
     default_km: 5, is_active: true, strava_sport_types: [], history: [], pending_changes: [],
-    counts_elevation: true, elevation_from: '2026-11-09',
+    counts_elevation: true, base_counts_elevation: false,
+    elevation_changes: [{ counts_elevation: true, valid_from: '2026-11-09' }],
   }
 
   it('counts 100 hm as 1 km from the cutover on', () => {
@@ -46,7 +47,15 @@ describe('mmOn', () => {
     expect(mmOn(laufen, '2026-11-08', 10, 500)).toBe(40)
   })
 
-  it('ignores hm for categories that opt out', () => {
-    expect(mmOn({ ...laufen, counts_elevation: false }, '2026-11-09', 10, 500)).toBe(40)
+  it('ignores hm from a later switch-off on, but not before it', () => {
+    const aus = {
+      ...laufen,
+      elevation_changes: [
+        ...laufen.elevation_changes!,
+        { counts_elevation: false, valid_from: '2026-12-01' },
+      ],
+    }
+    expect(mmOn(aus, '2026-11-30', 10, 500)).toBe(60)
+    expect(mmOn(aus, '2026-12-01', 10, 500)).toBe(40)
   })
 })

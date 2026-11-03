@@ -38,7 +38,8 @@ class Category(SQLModel, table=True):
     default_km: float = 10.0
     is_active: bool = True
     strava_sport_types: str = "[]"  # JSON-Liste gemappter Strava-Sportarten, z.B. ["Run","TrailRun"]
-    counts_elevation: bool = True  # Höhenmeter zählen ab HM_AB (False z. B. für E-Bike)
+    # Zählt Höhenmeter vor der ersten CategoryElevationChange (Spec 2026-11-03)
+    counts_elevation: bool = False
 
 
 class CategoryFactorChange(SQLModel, table=True):
@@ -51,6 +52,19 @@ class CategoryFactorChange(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     category_id: int = Field(foreign_key="category.id", index=True)
     factor: float
+    valid_from: date_type
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class CategoryElevationChange(SQLModel, table=True):
+    """Höhenmeter zählen an/aus ab Stichtag — wie CategoryFactorChange nie
+    rückwirkend. Davor gilt Category.counts_elevation."""
+
+    __table_args__ = (UniqueConstraint("category_id", "valid_from"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    category_id: int = Field(foreign_key="category.id", index=True)
+    counts_elevation: bool
     valid_from: date_type
     created_at: datetime = Field(default_factory=utcnow)
 

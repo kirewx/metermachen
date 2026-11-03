@@ -22,7 +22,11 @@ export default function Regeln() {
   const { data: addons = [] } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
   const sidebetsAktiv = addons.some((a) => a.key === 'sidebets' && a.active)
   const aktive = categories.filter((c) => c.is_active)
-  const hmAb = aktive.find((c) => c.elevation_from)?.elevation_from
+  const hmAb = aktive
+    .flatMap((c) => c.elevation_changes ?? [])
+    .filter((e) => e.counts_elevation)
+    .map((e) => e.valid_from)
+    .sort()[0]
   const ohneHm = aktive.filter((c) => c.counts_elevation === false)
 
   return (

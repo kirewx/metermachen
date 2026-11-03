@@ -6,6 +6,7 @@ export type Me = {
   is_admin: boolean
 }
 export type FactorChange = { id: number; factor: number; valid_from: string }
+export type ElevationChange = { counts_elevation: boolean; valid_from: string }
 export type Category = {
   id: number
   name: string
@@ -16,9 +17,11 @@ export type Category = {
   default_km: number
   is_active: boolean
   strava_sport_types: string[]
-  /** Höhenmeter count as km (100 hm = 1 km) from elevation_from on; off e.g. for e-bikes. */
+  /** Höhenmeter count as km (100 hm = 1 km); dated like factors, never retroactive.
+   * counts_elevation includes a planned change (admin switch state). */
   counts_elevation?: boolean
-  elevation_from?: string
+  base_counts_elevation?: boolean
+  elevation_changes?: ElevationChange[]
   pending_changes: FactorChange[]
   history: FactorChange[]
 }
@@ -475,7 +478,12 @@ export const api = {
   }) => request<Category>('/api/categories', post(b)),
   patchCategory: (
     id: number,
-    b: Partial<Omit<Category, 'id' | 'base_factor' | 'elevation_from' | 'pending_changes' | 'history'>>,
+    b: Partial<
+      Omit<
+        Category,
+        'id' | 'base_factor' | 'base_counts_elevation' | 'elevation_changes' | 'pending_changes' | 'history'
+      >
+    >,
   ) => request<Category>(`/api/categories/${id}`, patch(b)),
   createFactorChange: (categoryId: number, b: { factor: number; valid_from: string }) =>
     request<FactorChange>(`/api/categories/${categoryId}/factor-changes`, post(b)),
