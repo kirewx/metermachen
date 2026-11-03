@@ -329,3 +329,92 @@ def test_sieger_endpoint_accepts_group_or_person(session, client):
     assert client.put(f"/api/challenges/{ch.id}/sieger", json={"group_id": 9}).status_code == 422
     assert client.put(f"/api/challenges/{ch.id}/sieger", json={}).status_code == 422
     assert client.put(f"/api/challenges/{ch.id}/sieger", json={"user_id": ben.id, "group_id": 1}).status_code == 422
+
+
+# --- Teamfarben (spec 2026-11-04) -------------------------------------------
+
+
+def _laufend(session, ch_id, status="laufend"):
+    ch = session.get(Challenge, ch_id)
+    ch.status = status
+    session.add(ch)
+    session.commit()
+
+
+def test_draw_gives_each_group_a_distinct_default_color(session, client):
+    setup(session, n_users=5)
+    login(client, username="admin")
+    out = client.post("/api/challenges", json=team_body(group_count=3)).json()
+    assert [g["color"] for g in sorted(out["groups"], key=lambda g: g["id"])] == [
+        "#60a5fa", "#f472b6", "#fb923c",
+    ]
+
+
+def test_admin_renames_and_recolors_group_after_start(session, client):
+    setup(session)
+    login(client, username="admin")
+    out = client.post("/api/challenges", json=team_body()).json()
+    ch_id = out["id"]
+    members_vorher = {g["id"]: g["members"] for g in out["groups"]}
+    _laufend(session, ch_id)
+
+    r = client.patch(f"/api/challenges/{ch_id}/groups/1", json={"name": "Die Blitze", "color": "#4ade80"})
+    assert r.status_code == 200, r.text
+    g1 = next(g for g in r.json()["groups"] if g["id"] == 1)
+    assert (g1["name"], g1["color"]) == ("Die Blitze", "#4ade80")
+    assert {g["id"]: g["members"] for g in r.json()["groups"]} == members_vorher
+    assert r.json()["kann_gruppen_umbenennen"] is True
+    assert r.json()["kann_gruppen_bearbeiten"] is False  # Mitglieder bleiben fest
+
+
+def test_group_patch_validates(session, client):
+    setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    assert client.patch(f"/api/challenges/{ch_id}/groups/1", json={"color": "#123456"}).status_code == 422
+    assert client.patch(f"/api/challenges/{ch_id}/groups/1", json={"name": "  "}).status_code == 422
+    assert client.patch(f"/api/challenges/{ch_id}/groups/9", json={"name": "X"}).status_code == 404
+    _laufend(session, ch_id, "abgebrochen")  # abgebrochene gibt es für die API nicht mehr
+    assert client.patch(f"/api/challenges/{ch_id}/groups/1", json={"name": "X"}).status_code == 404
+
+
+def test_group_patch_needs_admin(session, client):
+    admin, users = setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    login(client, username=users[0].username)
+    r = client.patch(f"/api/challenges/{ch_id}/groups/1", json={"name": "Meins"})
+    assert r.status_code == 403
+    assert client.get(f"/api/challenges/{ch_id}").json()["kann_gruppen_umbenennen"] is False
+
+
+def test_saving_members_keeps_colors_and_redraw_keeps_them_too(session, client):
+    setup(session)
+    login(client, username="admin")
+    out = client.post("/api/challenges", json=team_body()).json()
+    ch_id = out["id"]
+    client.patch(f"/api/challenges/{ch_id}/groups/2", json={"color": "#facc15"})
+    groups = [
+        {"id": g["id"], "name": g["name"], "member_ids": [m["user_id"] for m in g["members"]]}
+        for g in out["groups"]
+    ]
+    r = client.put(f"/api/challenges/{ch_id}/groups", json={"groups": groups})
+    assert r.status_code == 200, r.text
+    assert {g["id"]: g["color"] for g in r.json()["groups"]}[2] == "#facc15"
+    r = client.post(f"/api/challenges/{ch_id}/draw")
+    assert {g["id"]: g["color"] for g in r.json()["groups"]}[2] == "#facc15"
+
+
+def test_old_groups_without_color_get_default(session, client):
+    setup(session)
+    login(client, username="admin")
+    ch_id = client.post("/api/challenges", json=team_body()).json()["id"]
+    ch = session.get(Challenge, ch_id)
+    alt = json.loads(ch.groups_json)
+    for g in alt:
+        g.pop("color")
+    ch.groups_json = json.dumps(alt)
+    session.add(ch)
+    session.commit()
+    out = client.get(f"/api/challenges/{ch_id}").json()
+    assert {g["id"]: g["color"] for g in out["groups"]} == {1: "#60a5fa", 2: "#f472b6"}

@@ -39,6 +39,23 @@ def category_ids(ch: Challenge) -> list[int]:
     return json.loads(ch.category_ids_json or "[]")
 
 
+# Teamfarben (Spec 2026-11-04): Reihenfolge = Vorgabe beim Auslosen. Die
+# Hex-Werte stehen identisch in frontend/src/components/challenges/teamFarben.ts.
+TEAM_FARBEN: tuple[str, ...] = (
+    "#60a5fa", "#f472b6", "#fb923c", "#4ade80", "#a78bfa", "#facc15",
+)
+
+
+def default_color(group_id: int) -> str:
+    return TEAM_FARBEN[(group_id - 1) % len(TEAM_FARBEN)]
+
+
+def group_color(g: dict) -> str:
+    """Gespeicherte Farbe einer Gruppe; ältere Gruppen ohne Farbe bekommen
+    die Vorgabe nach ihrer id."""
+    return g.get("color") or default_color(g["id"])
+
+
 def groups(ch: Challenge) -> list[dict]:
     """[{"id": 1, "name": "Gruppe A", "member_ids": [3, 7]}] — empty until drawn.
     Returns a fresh copy parsed from JSON; write changes back with set_groups."""
@@ -297,6 +314,7 @@ def group_standings(ch: Challenge, eintraege: list[dict]) -> list[dict]:
             {
                 "id": g["id"],
                 "name": g["name"],
+                "color": group_color(g),
                 "member_ids": [m["user_id"] for m in members],
                 "size": len(members),
                 "sum": total,

@@ -1,6 +1,7 @@
 import type { UnitMode } from './unit'
 
-export type PeriodMode = 'month' | 'year'
+/** 'challenge' = the race of one challenge (Rennen view only, spec 2026-11-04). */
+export type PeriodMode = 'month' | 'year' | 'challenge'
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 

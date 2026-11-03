@@ -88,7 +88,7 @@ def draw(
     """Seeded random draw. Pots of group_count by seeding rank; inside a pot
     the assignment to groups is random; the partial last pot goes to random
     distinct groups, so sizes differ by at most one. Existing names are kept
-    by group id. Members of a previous draw are discarded; only the current
+    by group id, colours too. Members of a previous draw are discarded; only the current
     pool is assigned. Writes groups_json / groups_drawn_at on ch but does NOT
     commit — the caller decides (create wants to validate before commit)."""
     if rng is None:
@@ -99,9 +99,14 @@ def draw(
     order = [uid for uid, _ in seeding(session, ch, heute)]
     if len(order) < n:
         raise TooFewPeople("Weniger Personen als Gruppen")
-    names = {g["id"]: g["name"] for g in svc.groups(ch)}
+    alt = {g["id"]: g for g in svc.groups(ch)}
     result = [
-        {"id": i + 1, "name": names.get(i + 1, default_name(i)), "member_ids": []}
+        {
+            "id": i + 1,
+            "name": alt[i + 1]["name"] if i + 1 in alt else default_name(i),
+            "color": svc.group_color(alt[i + 1]) if i + 1 in alt else svc.default_color(i + 1),
+            "member_ids": [],
+        }
         for i in range(n)
     ]
     for start in range(0, len(order), n):
@@ -129,6 +134,7 @@ def validate_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[di
     if len(raw) != ch.group_count:
         raise InvalidGroups(f"Es müssen genau {ch.group_count} Gruppen sein")
     active = svc.active_ids(session)
+    alt = {g["id"]: g for g in svc.groups(ch)}
     seen_ids: set[int] = set()
     seen_users: set[int] = set()
     clean = []
@@ -149,7 +155,10 @@ def validate_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[di
             if uid not in active:
                 raise InvalidGroups("Unbekannte oder inaktive Person")
             seen_users.add(uid)
-        clean.append({"id": gid, "name": name, "member_ids": members})
+        # Ohne Farbe im Request bleibt die gespeicherte (der Editor kennt sie nicht).
+        color = g.get("color") or (svc.group_color(alt[gid]) if gid in alt else None)
+        color = _check_color(color or svc.default_color(gid))
+        clean.append({"id": gid, "name": name, "color": color, "member_ids": members})
     if seen_ids != set(range(1, ch.group_count + 1)):
         raise InvalidGroups(f"Gruppen-IDs müssen 1 bis {ch.group_count} sein")
     return clean
@@ -170,3 +179,37 @@ def save_groups(session: Session, ch: Challenge, raw: list[dict]) -> list[dict]:
     session.commit()
     session.refresh(ch)
     return clean
+
+
+def _check_color(color: str) -> str:
+    if color not in svc.TEAM_FARBEN:
+        raise InvalidGroups("Unbekannte Teamfarbe")
+    return color
+
+
+class GroupNotFound(LookupError):
+    """No group with that id in the challenge — 404."""
+
+
+def update_group(
+    session: Session, ch: Challenge, group_id: int,
+    name: str | None = None, color: str | None = None,
+) -> dict:
+    """Name und/oder Farbe einer Gruppe ändern — auch nach dem Start, die
+    Mitglieder bleiben unberührt. Commits."""
+    gruppen = svc.groups(ch)
+    g = next((g for g in gruppen if g["id"] == group_id), None)
+    if g is None:
+        raise GroupNotFound(group_id)
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise InvalidGroups("Jede Gruppe braucht einen Namen")
+        g["name"] = name
+    if color is not None:
+        g["color"] = _check_color(color)
+    svc.set_groups(ch, gruppen)
+    session.add(ch)
+    session.commit()
+    session.refresh(ch)
+    return g

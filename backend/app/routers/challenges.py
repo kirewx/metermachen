@@ -39,6 +39,7 @@ class StandingEntryOut(BaseModel):
 class GroupOut(BaseModel):
     id: int
     name: str
+    color: str
     size: int
     sum: float
     value: float  # per head
@@ -51,6 +52,12 @@ class GroupIn(BaseModel):
     id: int
     name: str
     member_ids: list[int]
+    color: str | None = None  # fehlt → gespeicherte Farbe bleibt
+
+
+class GroupPatchIn(BaseModel):
+    name: str | None = None
+    color: str | None = None
 
 
 class GroupsIn(BaseModel):
@@ -97,6 +104,7 @@ class ChallengeOut(BaseModel):
     meine_gruppe_id: int | None
     sieger_group_id: int | None
     kann_gruppen_bearbeiten: bool
+    kann_gruppen_umbenennen: bool  # Name/Farbe, auch nach dem Start
     created_at: datetime
     resolved_at: datetime | None
 
@@ -184,6 +192,7 @@ def _group_block(
             GroupOut(
                 id=g["id"],
                 name=g["name"],
+                color=g["color"],
                 size=g["size"],
                 sum=g["sum"],
                 value=g["value"],
@@ -307,6 +316,7 @@ def _challenge_out(
         kann_gruppen_bearbeiten=(
             me.is_admin and ch.team_mode and ch.status == "geplant"
         ),
+        kann_gruppen_umbenennen=_darf_gruppen_umbenennen(me, ch),
         created_at=ch.created_at,
         resolved_at=ch.resolved_at,
     )
@@ -583,6 +593,15 @@ def cancel_challenge(challenge_id: int, session: Session = Depends(get_session))
         session.commit()
 
 
+def _darf_gruppen_umbenennen(me: User, ch: Challenge) -> bool:
+    """Name und Farbe einer Gruppe: vorerst nur Admins, dafür in jedem Status
+    außer abgebrochen (später evtl. auch die Gruppenmitglieder)."""
+    return (
+        me.is_admin and ch.team_mode and ch.status != "abgebrochen"
+        and len(svc.groups(ch)) > 0
+    )
+
+
 def _nur_team_geplant(ch: Challenge) -> None:
     """Groups are rule data: only a planned group challenge may be reshuffled."""
     if not ch.team_mode:
@@ -626,6 +645,26 @@ def save_groups(
     _nur_team_geplant(ch)
     try:
         groups_svc.save_groups(session, ch, [g.model_dump() for g in data.groups])
+    except groups_svc.InvalidGroups as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return _challenge_out(session, ch, me, date_type.today())
+
+
+@router.patch("/{challenge_id}/groups/{group_id}", response_model=ChallengeOut)
+def update_group(
+    challenge_id: int,
+    group_id: int,
+    data: GroupPatchIn,
+    me: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    ch = _geladene_challenge(session, challenge_id)
+    if not _darf_gruppen_umbenennen(me, ch):
+        raise HTTPException(status_code=403, detail="Gruppe nicht änderbar")
+    try:
+        groups_svc.update_group(session, ch, group_id, name=data.name, color=data.color)
+    except groups_svc.GroupNotFound:
+        raise HTTPException(status_code=404, detail="Gruppe nicht gefunden")
     except groups_svc.InvalidGroups as e:
         raise HTTPException(status_code=422, detail=str(e))
     return _challenge_out(session, ch, me, date_type.today())

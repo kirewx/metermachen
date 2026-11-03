@@ -88,3 +88,30 @@ describe('PeriodControl', () => {
     expect(h.onYearChange).not.toHaveBeenCalled()
   })
 })
+
+describe('PeriodControl challenge mode', () => {
+  const challenges = [
+    { id: 3, label: 'November-Ziel' },
+    { id: 5, label: 'Dezember-Duell' },
+  ]
+
+  it('offers the Challenge pill only when there are started challenges', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: 'Challenge' })).toBeNull()
+  })
+
+  it('switches into challenge mode through the pill', () => {
+    const h = setup({ challenges })
+    fireEvent.click(screen.getByRole('button', { name: 'Challenge' }))
+    expect(h.onModeChange).toHaveBeenCalledWith('challenge')
+  })
+
+  it('steps through challenges instead of seasons', () => {
+    const onChallengeChange = vi.fn()
+    setup({ mode: 'challenge', challenges, challengeId: 5, onChallengeChange })
+    expect(screen.getByText('Dezember-Duell')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Nächste Challenge' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Vorherige Challenge' }))
+    expect(onChallengeChange).toHaveBeenCalledWith(3)
+  })
+})

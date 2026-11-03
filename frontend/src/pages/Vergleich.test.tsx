@@ -29,6 +29,7 @@ vi.mock('../api/client', () => ({
     comparison: vi.fn(),
     lastSeenComparison: vi.fn().mockResolvedValue(null),
     markComparisonSeen: vi.fn(),
+    challenges: vi.fn().mockResolvedValue([]),
   },
 }))
 vi.mock('../components/comparison/WarmupArchiv', () => ({
@@ -189,5 +190,44 @@ describe('Vergleich', () => {
     expect(screen.queryByRole('button', { name: 'Monat' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Zurück zum Vergleich' }))
     expect(screen.queryByText('Warmup-Inhalt')).toBeNull()
+  })
+})
+
+describe('Vergleich challenge mode', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.mocked(api.seasons).mockResolvedValue([
+      { id: 1, year: thisYear, goal_km: 1000, milestones: [], start_date: null, end_date: null },
+    ])
+    vi.mocked(api.comparison).mockImplementation((_y: number, m?: string) =>
+      Promise.resolve(comparison(m ?? null) as never),
+    )
+  })
+
+  const ch = (id: number, title: string, status: string, period_start: string) => ({
+    id, title, status, period_start, period_end: '2099-12-31', mode: 'rangliste', target: null,
+    top_n: 1, metric: 'mm', prize: null, standings: [], groups: [], team_mode: false,
+  })
+
+  it('offers the running challenge and shows its race without the MM/km switch', async () => {
+    vi.mocked(api.challenges).mockResolvedValue([
+      ch(1, 'Alt', 'beendet', '2026-07-01'),
+      ch(2, 'Läuft gerade', 'laufend', '2026-11-01'),
+      ch(3, 'Kommt noch', 'geplant', '2026-12-01'),
+    ] as never)
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Challenge' }))
+    expect(await screen.findByText('Läuft gerade →')).toBeInTheDocument()
+    expect(screen.queryByText('Kommt noch')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'km' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Vorherige Challenge' }))
+    expect(await screen.findByText('Alt →')).toBeInTheDocument()
+  })
+
+  it('hides the Challenge pill without started challenges', async () => {
+    vi.mocked(api.challenges).mockResolvedValue([ch(3, 'Kommt noch', 'geplant', '2026-12-01')] as never)
+    renderPage()
+    await screen.findByText(monthLabel(current))
+    expect(screen.queryByRole('button', { name: 'Challenge' })).toBeNull()
   })
 })

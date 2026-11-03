@@ -376,6 +376,8 @@ export type ChallengeStanding = {
 export type ChallengeGroup = {
   id: number
   name: string
+  /** Team colour (hex from TEAM_FARBEN); missing only in old fixtures. */
+  color?: string
   size: number
   sum: number
   value: number // per head
@@ -418,6 +420,8 @@ export type Challenge = {
   unassigned: ChallengeStanding[]
   meine_gruppe_id: number | null
   sieger_group_id: number | null
+  /** Name/colour of a group, also after the start (admins for now). */
+  kann_gruppen_umbenennen?: boolean
   kann_gruppen_bearbeiten: boolean
   created_at: string
   resolved_at: string | null
@@ -610,6 +614,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ groups }),
     }),
+  updateChallengeGroup: (id: number, groupId: number, b: { name?: string; color?: string }) =>
+    request<Challenge>(`/api/challenges/${id}/groups/${groupId}`, patch(b)),
   challengeSeeding: (id: number) =>
     request<SeedingEntry[]>(`/api/challenges/${id}/seeding`),
   feed: (year: number, before?: number) =>
