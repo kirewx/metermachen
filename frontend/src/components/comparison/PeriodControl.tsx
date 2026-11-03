@@ -18,6 +18,8 @@ type Props = {
   /** Started challenges in ascending order; the Challenge pill only shows when there are any. */
   challenges?: { id: number; label: string }[]
   challengeId?: number | null
+  /** Challenge mode is stored but the list is still on its way: wait, don't fall back. */
+  challengesLoading?: boolean
   onChallengeChange?: (id: number) => void
 }
 
@@ -41,9 +43,11 @@ export default function PeriodControl({
   onMonthChange,
   challenges = [],
   challengeId = null,
+  challengesLoading = false,
   onChallengeChange,
 }: Props) {
-  const challengeMode = showModeToggle && mode === 'challenge' && challenges.length > 0
+  const challengeMode =
+    showModeToggle && mode === 'challenge' && (challenges.length > 0 || challengesLoading)
   if (challengeMode) {
     const ci = challenges.findIndex((c) => c.id === challengeId)
     return (

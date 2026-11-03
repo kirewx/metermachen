@@ -224,6 +224,36 @@ describe('Vergleich challenge mode', () => {
     expect(await screen.findByText('Alt →')).toBeInTheDocument()
   })
 
+  it('waits for the list in a stored Challenge mode instead of loading the month race', async () => {
+    localStorage.setItem('mm_period_mode', 'challenge')
+    vi.mocked(api.comparison).mockClear()
+    let liefern: (v: unknown) => void = () => {}
+    vi.mocked(api.challenges).mockReturnValue(new Promise((r) => { liefern = r }) as never)
+    renderPage()
+    expect(await screen.findByText('Lädt…')).toBeInTheDocument()
+    expect(api.comparison).not.toHaveBeenCalledWith(thisYear, CURRENT_MONTH)
+    liefern([ch(2, 'Läuft gerade', 'laufend', '2026-11-01')])
+    expect(await screen.findByText('Läuft gerade →')).toBeInTheDocument()
+    expect(api.comparison).not.toHaveBeenCalledWith(thisYear, CURRENT_MONTH)
+  })
+
+  it('falls back to the month race once the list fails (add-on off)', async () => {
+    localStorage.setItem('mm_period_mode', 'challenge')
+    vi.mocked(api.comparison).mockClear()
+    vi.mocked(api.challenges).mockRejectedValue(new Error('404'))
+    renderPage()
+    await waitFor(() => expect(api.comparison).toHaveBeenCalledWith(thisYear, CURRENT_MONTH))
+    expect(screen.queryByText('Lädt…')).toBeNull()
+  })
+
+  it('does not load the challenge list outside the Rennen view', async () => {
+    localStorage.setItem('mm_vergleich_view', 'verlauf')
+    vi.mocked(api.challenges).mockClear()
+    renderPage()
+    await waitFor(() => expect(api.comparison).toHaveBeenCalled())
+    expect(api.challenges).not.toHaveBeenCalled()
+  })
+
   it('hides the Challenge pill without started challenges', async () => {
     vi.mocked(api.challenges).mockResolvedValue([ch(3, 'Kommt noch', 'geplant', '2026-12-01')] as never)
     renderPage()

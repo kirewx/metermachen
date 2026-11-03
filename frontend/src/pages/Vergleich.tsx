@@ -82,18 +82,26 @@ export default function Vergleich() {
   const [gewaehlt, setGewaehlt] = useState<number | null>(null)
   const [archiv, setArchiv] = useState(false)
   const [gespeicherterModus, setPeriod] = usePeriodMode()
-  // Challenge races only exist for the Rennen view and need a started challenge;
-  // the challenges add-on may be off, then the list just stays empty.
-  const { data: alleChallenges = [] } = useQuery({
+  // Challenge races only exist for the Rennen view and need a started challenge.
+  // The full list is expensive (live standings), so only Rennen loads it; with
+  // the challenges add-on off it fails and simply stays empty.
+  const challengeQuery = useQuery({
     queryKey: ['challenges'],
     queryFn: api.challenges,
     retry: false,
+    enabled: ansicht === 'rennen',
   })
-  const challenges = gestarteteChallenges(alleChallenges)
+  const challenges = gestarteteChallenges(challengeQuery.data ?? [])
   const [challengeId, setChallengeId] = useState<number | null>(null)
   const challengeMoeglich = ansicht === 'rennen' && challenges.length > 0
+  // A stored Challenge mode waits for the list instead of flashing the month race;
+  // it only falls back once the list has arrived without a started challenge or failed.
+  const challengesLaden =
+    gespeicherterModus === 'challenge' && ansicht === 'rennen' && challengeQuery.isPending
   const period =
-    gespeicherterModus === 'challenge' && !challengeMoeglich ? 'month' : gespeicherterModus
+    gespeicherterModus === 'challenge' && !challengeMoeglich && !challengesLaden
+      ? 'month'
+      : gespeicherterModus
   const gewaehlteChallenge =
     challenges.find((c) => c.id === challengeId) ?? standardChallenge(challenges)
   // The month the user stepped to; null means "the season's default month".
@@ -192,6 +200,7 @@ export default function Vergleich() {
             challengeMoeglich ? challenges.map((c) => ({ id: c.id, label: c.title })) : []
           }
           challengeId={gewaehlteChallenge?.id ?? null}
+          challengesLoading={challengesLaden}
           onChallengeChange={setChallengeId}
         />
         {/* Höhenmeter sind roh, Challenges haben ihre eigene Metrik — dort kein MM/km-Umschalter. */}
@@ -225,6 +234,7 @@ export default function Vergleich() {
       {wantsChallenge && gewaehlteChallenge && (
         <ChallengeRennen ch={gewaehlteChallenge} today={today} />
       )}
+      {challengesLaden && <p className="p-8 text-center text-sm text-ink-mute">Lädt…</p>}
       {!wantsChallenge && error && <p className="text-sm text-danger">{error.message}</p>}
       {!wantsChallenge && data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
       {data && ansicht === 'verlauf' && <JahresVerlauf data={data} mode={mode} />}
