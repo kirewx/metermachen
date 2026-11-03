@@ -33,6 +33,7 @@ from ..services.achievements import (
     STUFEN_ZIELE,
     TIERS,
     TOGETHER_DEFS,
+    TOGETHER_HIDDEN_DEFS,
     ZEIT_EMOJI,
     ZEIT_STUFEN,
     achievement_info,
@@ -41,6 +42,9 @@ from ..services.achievements import (
     ensure_monatssieger,
     fuehrungs_zeit,
     stufen_key,
+    together_counter,
+    together_progress,
+    together_stats,
     warmup_mm,
     zeit_key,
     zeit_pro_kategorie,
@@ -79,7 +83,8 @@ class AchievementOut(BaseModel):
     ladder: str | None = None  # "mm_club" | "zeit_<category_id>"
     ladder_title: str | None = None  # Kartentitel, z. B. "MM-Club", "Radfahren"
     stage: str | None = None  # Stufen-Pille, z. B. "5k", "100 h"
-    unit: str | None = None  # Einheit von parts: "MM" | "h"
+    unit: str | None = None  # Einheit von parts: "MM" | "h" | "Leute" | "Einheiten"
+    counter: str | None = None  # Zähler-Pille, z. B. "×3", "7 Leute"
 
 
 # (key, title, description, icon, {bucket: ziel_km})
@@ -295,9 +300,12 @@ def achievements_for(session: Session, user: User) -> list[AchievementOut]:
         )
 
     # Together-Achievements (Spec §3.3): nur bei aktivem Add-on `together`
-    if together.enabled(session):
+    together_on = together.enabled(session)
+    stats = together_stats(session, user.id) if together_on else None
+    if stats is not None:
         for key, title, description, icon in TOGETHER_DEFS:
             ul = own.get(key)
+            current, ziel, unit = together_progress(key, stats)
             out.append(
                 AchievementOut(
                     key=key,
@@ -305,11 +313,14 @@ def achievements_for(session: Session, user: User) -> list[AchievementOut]:
                     description=description,
                     icon=icon,
                     achieved=ul is not None,
-                    progress=1.0 if ul else 0.0,
-                    parts=[],
+                    progress=1.0 if ul else round(min(current / ziel, 1.0), 4),
+                    parts=[Part(label=title, current_km=min(current, ziel),
+                                target_km=ziel)],
                     unlocked_at=ul.unlocked_at if ul else None,
                     emoji=EMOJIS.get(key),
                     showcased=ul.showcased if ul else None,
+                    unit=unit,
+                    counter=together_counter(key, stats) if ul else None,
                 )
             )
 
@@ -431,7 +442,8 @@ def achievements_for(session: Session, user: User) -> list[AchievementOut]:
         ))
 
     # Hidden: maskiert, solange nicht freigeschaltet (Spec §2.4)
-    for key, title, description, icon in HIDDEN_DEFS:
+    hidden_defs = [*HIDDEN_DEFS, *(TOGETHER_HIDDEN_DEFS if stats is not None else [])]
+    for key, title, description, icon in hidden_defs:
         ul = own.get(key)
         if ul is None:
             out.append(AchievementOut(
@@ -444,6 +456,10 @@ def achievements_for(session: Session, user: User) -> list[AchievementOut]:
                 achieved=True, progress=1.0, parts=[], hidden=True,
                 unlocked_at=ul.unlocked_at, emoji=EMOJIS.get(key),
                 showcased=ul.showcased,
+                counter=(
+                    together_counter(key, stats)
+                    if stats is not None and key.startswith("together_") else None
+                ),
             ))
     return out
 
@@ -496,7 +512,8 @@ class HiddenAchievementAdminOut(BaseModel):
 )
 def hidden_achievements_admin(session: Session = Depends(get_session)):
     """Admin overview: every hidden definition and who unlocked it when."""
-    hidden_keys = [key for key, *_ in HIDDEN_DEFS]
+    defs = [*HIDDEN_DEFS, *(TOGETHER_HIDDEN_DEFS if together.enabled(session) else [])]
+    hidden_keys = [key for key, *_ in defs]
     rows = session.exec(
         select(AchievementUnlock, User)
         .join(User, AchievementUnlock.user_id == User.id)
@@ -514,7 +531,7 @@ def hidden_achievements_admin(session: Session = Depends(get_session)):
             key=key, title=title, description=description,
             emoji=EMOJIS.get(key), unlocks=by_key.get(key, []),
         )
-        for key, title, description, _icon in HIDDEN_DEFS
+        for key, title, description, _icon in defs
     ]
 
 

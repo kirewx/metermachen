@@ -1,10 +1,11 @@
 import type { Achievement } from '../../api/client'
 import { NO_RACE_KEYS } from './constants'
+import CounterPill from './CounterPill'
 import ShowcaseToggle from './ShowcaseToggle'
 
 type Props = { a: Achievement; onToggle?: (a: Achievement) => void }
 
-// Emoji achievements: first-to-gold races, warm-up specials, early bird.
+// Emoji achievements: first-to-gold races, warm-up specials, early bird, together.
 export default function OneTimeCard({ a, onToggle }: Props) {
   return (
     <div
@@ -17,6 +18,7 @@ export default function OneTimeCard({ a, onToggle }: Props) {
         <span className={`text-sm font-bold ${a.achieved ? 'text-accent' : 'text-ink'}`}>
           {a.title}
         </span>
+        {a.achieved && a.counter && <CounterPill text={a.counter} />}
       </div>
       <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
       {!a.achieved && a.parts.length > 0 && (
@@ -28,7 +30,7 @@ export default function OneTimeCard({ a, onToggle }: Props) {
             />
           </div>
           <p className="mt-1 font-mono text-[10px] tabular-nums text-ink-mute">
-            {Math.round(a.parts[0].current_km)}/{Math.round(a.parts[0].target_km)} MM
+            {Math.round(a.parts[0].current_km)}/{Math.round(a.parts[0].target_km)} {a.unit ?? 'MM'}
           </p>
         </>
       )}

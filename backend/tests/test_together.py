@@ -1332,3 +1332,69 @@ def test_delete_recomputes_manual_km_of_remaining(session, addon, season):
     assert together.participation_for(session, e.id).km_together == 3.0
     [ev] = together_events(session)
     assert _payload(ev)["km_together"] == 3.0
+
+
+# --- Merge: stärkere Teilnahme bleibt, Feed-Event wird übernommen ----------
+
+
+def _ts(session, created_at):
+    ts = TrainingSession(source="auto", km_together=5.0, created_at=created_at)
+    session.add(ts)
+    session.commit()
+    session.refresh(ts)
+    return ts
+
+
+def _p(session, ts, user, status, activity=None):
+    p = SessionParticipant(
+        session_id=ts.id, user_id=user.id, status=status, km_together=5.0,
+        activity_id=activity.id if activity else None,
+    )
+    session.add(p)
+    session.commit()
+    session.refresh(p)
+    return p
+
+
+def test_merge_keeps_confirmed_participation_over_older_stale_tag(session, addon):
+    a, b, c = make_user(session, "a"), make_user(session, "b"), make_user(session, "c")
+    act_b = run(session, b)
+    keep = _ts(session, T0)
+    _p(session, keep, a, "confirmed", run(session, a))
+    _p(session, keep, b, "declined")  # alter, abgelehnter Tag ohne Aktivität
+    drop = _ts(session, T0 + timedelta(hours=1))
+    _p(session, drop, b, "confirmed", act_b)
+    _p(session, drop, c, "confirmed", run(session, c))
+
+    together._merge(session, keep, drop)
+    session.commit()
+
+    rows = {p.user_id: p for p in parts(session)}
+    assert rows[b.id].status == "confirmed"
+    assert rows[b.id].activity_id == act_b.id
+    assert {p.session_id for p in rows.values()} == {keep.id}
+
+
+def test_merge_takes_over_feed_event_of_real_dropped_session(session, addon):
+    session.add(Season(year=2026, goal_km=1000.0, start_date=date(2026, 7, 20)))
+    session.commit()
+    a, b, c = make_user(session, "a"), make_user(session, "b"), make_user(session, "c")
+    keep = _ts(session, T0)
+    _p(session, keep, a, "suggested", run(session, a))
+    drop = _ts(session, T0 + timedelta(hours=1))
+    _p(session, drop, b, "confirmed", run(session, b))
+    _p(session, drop, c, "confirmed", run(session, c))
+    ev = FeedEvent(season_year=2026, type="together", payload_json="{}")
+    session.add(ev)
+    session.commit()
+    drop.feed_event_id = ev.id
+    session.add(drop)
+    session.add(FeedReaction(event_id=ev.id, user_id=a.id, emoji="🔥"))
+    session.commit()
+
+    together._merge(session, keep, drop)
+    session.commit()
+
+    assert keep.feed_event_id == ev.id
+    assert session.get(FeedEvent, ev.id) is not None
+    assert len(session.exec(select(FeedReaction)).all()) == 1

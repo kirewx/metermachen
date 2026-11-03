@@ -108,9 +108,21 @@ def _age_key(obj) -> tuple[datetime, int]:
     return _naive_utc(obj.created_at), obj.id
 
 
+def _merge_rank(p: SessionParticipant) -> tuple[int, datetime, int]:
+    """Welche von zwei Teilnahmen derselben Person beim Merge bleibt: erst
+    bestätigt mit Aktivität, dann irgendeine mit Aktivität, dann die ältere."""
+    if p.status == "confirmed" and p.activity_id is not None:
+        stufe = 0
+    elif p.activity_id is not None:
+        stufe = 1
+    else:
+        stufe = 2
+    return (stufe, *_age_key(p))
+
+
 def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> None:
     """Teilnahmen von `drop` nach `keep` umhängen und `drop` löschen. Hat der
-    Nutzer in beiden Sessions eine Teilnahme, wird die jüngere verworfen."""
+    Nutzer in beiden Sessions eine Teilnahme, bleibt die stärkere (_merge_rank)."""
     in_keep = {
         p.user_id: p for p in session.exec(
             select(SessionParticipant).where(SessionParticipant.session_id == keep.id)
@@ -121,7 +133,7 @@ def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> No
         select(SessionParticipant).where(SessionParticipant.session_id == drop.id)
     ).all():
         other = in_keep.get(p.user_id)
-        if other is not None and _age_key(other) <= _age_key(p):
+        if other is not None and _merge_rank(other) <= _merge_rank(p):
             session.delete(p)
             continue
         if other is not None:
@@ -132,6 +144,11 @@ def _merge(session: Session, keep: TrainingSession, drop: TrainingSession) -> No
         p.session_id = keep.id
         session.add(p)
     session.flush()
+    if keep.feed_event_id is None and drop.feed_event_id is not None:
+        # Event samt Reaktionen übernehmen statt löschen und neu anlegen
+        keep.feed_event_id, drop.feed_event_id = drop.feed_event_id, None
+        session.add_all([keep, drop])
+        session.flush()
     feed.remove_together_event(session, drop)
     session.delete(drop)
     session.flush()

@@ -90,6 +90,8 @@ def feed_unseen(
         select(FeedSeen).where(FeedSeen.user_id == me.id)
     ).first()
     stmt = select(FeedEvent)
+    if not together.enabled(session):  # wie feed_page: unsichtbare Events zählen nicht
+        stmt = stmt.where(FeedEvent.type != "together")
     newest = session.exec(
         stmt.order_by(FeedEvent.created_at.desc()).limit(1)  # type: ignore[attr-defined]
     ).first()

@@ -195,3 +195,76 @@ def test_together_achievements_in_api_when_addon_on(client, session, addon):
     assert first["emoji"] == "🤝"
     assert first["achieved"] is False
     assert "claimed_by" not in first or first["claimed_by"] is None
+
+
+# --- Zähler und Völkerwanderung -----------------------------------------
+
+
+def test_together_counters_in_api(client, session, addon):
+    erik = make_user(session)
+    leute = [make_user(session, f"p{i}") for i in range(5)]
+    # 2 Rudel-Einheiten (4 und 5 Leute) + 1 Zweier-Einheit
+    make_training_session(session, (erik, "confirmed"), *[(p, "confirmed") for p in leute[:3]])
+    make_training_session(session, (erik, "confirmed"), *[(p, "confirmed") for p in leute[:4]])
+    make_training_session(session, (erik, "confirmed"), (leute[4], "confirmed"))
+    login(client)
+    by_key = {a["key"]: a for a in client.get("/api/achievements").json()}
+
+    assert by_key["together_first"]["counter"] == "×3"
+    assert by_key["together_pack"]["achieved"] is True
+    assert by_key["together_pack"]["counter"] == "×2"
+    assert by_key["together_social_butterfly"]["counter"] == "5 Leute"
+    # nicht freigeschaltet: Fortschritt statt Zähler
+    dream = by_key["together_dream_team"]
+    assert dream["achieved"] is False
+    assert dream["counter"] is None
+    assert dream["unit"] == "Einheiten"
+    assert dream["parts"][0]["current_km"] == 2
+    assert dream["parts"][0]["target_km"] == 10
+
+
+def test_together_counter_hidden_for_single_unlock(client, session, addon):
+    erik, anna = make_user(session), make_user(session, "anna")
+    make_training_session(session, (erik, "confirmed"), (anna, "confirmed"))
+    login(client)
+    by_key = {a["key"]: a for a in client.get("/api/achievements").json()}
+    assert by_key["together_first"]["achieved"] is True
+    assert by_key["together_first"]["counter"] is None
+
+
+def test_together_horde_hidden_until_ten(client, session, addon):
+    erik = make_user(session)
+    leute = [make_user(session, f"p{i}") for i in range(11)]
+    make_training_session(session, (erik, "confirmed"), *[(p, "confirmed") for p in leute[:8]])
+    login(client)
+    by_key = {a["key"]: a for a in client.get("/api/achievements").json()}
+    horde = by_key["together_horde"]
+    assert horde["hidden"] is True
+    assert horde["achieved"] is False
+    assert horde["title"] == "???"
+
+    # 12 Leute (Erik + 11) -> freigeschaltet, Rekord zeigt das Maximum
+    make_training_session(session, (erik, "confirmed"), *[(p, "confirmed") for p in leute])
+    by_key = {a["key"]: a for a in client.get("/api/achievements").json()}
+    horde = by_key["together_horde"]
+    assert horde["achieved"] is True
+    assert horde["title"] == "Völkerwanderung"
+    assert horde["emoji"] == "🦬"
+    assert horde["counter"] == "Rekord: 12 Leute"
+
+
+def test_together_horde_ignores_unconfirmed(session, addon):
+    erik = make_user(session)
+    leute = [make_user(session, f"p{i}") for i in range(10)]
+    make_training_session(
+        session, (erik, "confirmed"),
+        *[(p, "confirmed") for p in leute[:8]], *[(p, "suggested") for p in leute[8:]],
+    )
+    check_unlocks(session, erik.id)
+    assert "together_horde" not in keys_of(session, erik)
+
+
+def test_together_horde_not_listed_without_addon(client, session):
+    make_user(session)
+    login(client)
+    assert "together_horde" not in {a["key"] for a in client.get("/api/achievements").json()}

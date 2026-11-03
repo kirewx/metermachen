@@ -164,8 +164,10 @@ export type Achievement = {
   ladder_title?: string | null
   /** Stage pill, e.g. "5k" or "100 h". */
   stage?: string | null
-  /** Unit of parts: "MM" | "h". */
+  /** Unit of parts: "MM" | "h" | "Leute" | "Einheiten". */
   unit?: string | null
+  /** Counter pill on unlocked achievements, e.g. "×3" or "Rekord: 12 Leute". */
+  counter?: string | null
 }
 export type HiddenUnlock = {
   user_id: number
@@ -301,6 +303,7 @@ export type FeedEvent = {
     | 'challenge_qualified'
     | 'challenge_end'
     | 'challenge_sieger'
+    | 'together'
   user_id: number | null
   display_name: string | null
   avatar: string | null
@@ -346,6 +349,10 @@ export type FeedEvent = {
     group_name?: string
     gruppe?: string | null
     group_count?: number | null
+    session_id?: number
+    participants?: { user_id: number; display_name: string }[]
+    km_together?: number
+    share?: number | null
   }
   reactions: FeedReaction[]
 }
