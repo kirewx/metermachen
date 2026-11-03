@@ -1,4 +1,5 @@
 import type { Achievement } from '../../api/client'
+import CounterPill from './CounterPill'
 import ShowcaseToggle from './ShowcaseToggle'
 
 type Props = { a: Achievement; onToggle?: (a: Achievement) => void }
@@ -10,6 +11,7 @@ export default function HiddenCard({ a, onToggle }: Props) {
       <div className="flex items-center gap-2">
         <span className="text-lg">{a.emoji}</span>
         <span className="text-sm font-bold text-accent">{a.title}</span>
+        {a.counter && <CounterPill text={a.counter} />}
       </div>
       <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
       {a.unlocked_at && (

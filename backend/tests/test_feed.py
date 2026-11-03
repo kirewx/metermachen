@@ -616,3 +616,17 @@ def test_feed_hides_together_events_while_addon_inactive(client, session):
     session.commit()
     assert "together" in types()
     assert "rank_change" in types()
+
+
+def test_feed_unseen_ignores_together_while_addon_inactive(client, session):
+    from tests.conftest import make_addon
+
+    _setup_saison(session)
+    make_user(session)
+    login(client)
+    client.post("/api/feed/seen")
+    session.add(FeedEvent(season_year=2026, type="together", payload_json="{}"))
+    session.commit()
+    assert client.get("/api/feed/unseen").json() == {"has_new": False}
+    make_addon(session, key="together", label="Zusammen", enabled=True)
+    assert client.get("/api/feed/unseen").json() == {"has_new": True}

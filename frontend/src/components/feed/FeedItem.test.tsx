@@ -46,3 +46,48 @@ describe('FeedItem group challenge texts', () => {
     expect(screen.getByText(/gewinnt/)).toHaveTextContent('Mia (Gruppe A) gewinnt Teams')
   })
 })
+
+describe('FeedItem together', () => {
+  it('names all participants, the sport and the shared km', () => {
+    render(
+      <FeedItem
+        ev={ev({
+          type: 'together',
+          payload: {
+            session_id: 3,
+            participants: [
+              { user_id: 1, display_name: 'Erik' },
+              { user_id: 2, display_name: 'Anna' },
+              { user_id: 3, display_name: 'Tom' },
+            ],
+            km_together: 8.24,
+            share: 0.9,
+            category: { name: 'Joggen', icon: 'laufen', color: '#e74c3c' },
+          },
+        })}
+      />,
+    )
+    expect(screen.getByText(/waren zusammen unterwegs/)).toHaveTextContent(
+      'Erik, Anna und Tom waren zusammen unterwegs · Joggen — 8,2 km gemeinsam',
+    )
+  })
+  it('renders without category and km', () => {
+    render(
+      <FeedItem
+        ev={ev({
+          type: 'together',
+          payload: {
+            participants: [
+              { user_id: 1, display_name: 'Erik' },
+              { user_id: 2, display_name: 'Anna' },
+            ],
+            km_together: 0,
+          },
+        })}
+      />,
+    )
+    expect(screen.getByText(/waren zusammen unterwegs/)).toHaveTextContent(
+      'Erik und Anna waren zusammen unterwegs',
+    )
+  })
+})

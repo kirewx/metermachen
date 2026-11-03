@@ -82,3 +82,14 @@ def test_hidden_admin_forbidden_for_members(client, session):
     make_user(session)
     login(client)
     assert client.get("/api/achievements/hidden").status_code == 403
+
+
+def test_hidden_admin_lists_together_horde_only_with_addon(client, session):
+    from tests.conftest import make_addon
+
+    make_user(session, username="chef", is_admin=True)
+    login(client, username="chef")
+    assert "together_horde" not in {h["key"] for h in client.get("/api/achievements/hidden").json()}
+    make_addon(session, key="together", label="Zusammen", enabled=True)
+    body = {h["key"]: h for h in client.get("/api/achievements/hidden").json()}
+    assert body["together_horde"]["title"] == "Völkerwanderung"

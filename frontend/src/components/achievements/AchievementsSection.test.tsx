@@ -142,3 +142,27 @@ describe('AchievementsSection', () => {
     expect(screen.getByText(/Noch keine Achievements/)).toBeInTheDocument()
   })
 })
+
+describe('together achievements', () => {
+  it('shows counter pills on unlocked ones and progress with unit on open ones', () => {
+    render(
+      <AchievementsSection
+        achievements={[
+          { ...base, key: 'together_pack', title: 'Rudel', description: 'Eine Einheit mit mindestens 4 Leuten.',
+            icon: 'medaille', achieved: true, progress: 1, parts: [{ label: 'Rudel', current_km: 4, target_km: 4 }],
+            emoji: '🐺', unit: 'Leute', counter: '×3' },
+          { ...base, key: 'together_dream_team', title: 'Dream Team', description: '10 gemeinsame Einheiten mit derselben Person.',
+            icon: 'medaille', achieved: false, progress: 0.6, parts: [{ label: 'Dream Team', current_km: 6, target_km: 10 }],
+            emoji: '💞', unit: 'Einheiten' },
+          { ...base, key: 'together_horde', title: 'Völkerwanderung', description: 'Eine Einheit mit mindestens 10 Leuten.',
+            icon: 'medaille', achieved: true, progress: 1, parts: [], hidden: true, emoji: '🦬',
+            counter: 'Rekord: 12 Leute' },
+        ]}
+      />,
+    )
+    expect(screen.getByText('×3')).toBeInTheDocument()
+    expect(screen.getByText('6/10 Einheiten')).toBeInTheDocument()
+    expect(screen.getByText('Rekord: 12 Leute')).toBeInTheDocument()
+    expect(screen.queryByText(/bekommt nur die erste Person/)).not.toBeInTheDocument()
+  })
+})

@@ -28,8 +28,14 @@ const TYP_FARBE: Record<string, string> = {
   challenge_sieger: '#fbbf24',
 }
 
+/** 8.24 → "8,2" */
+function km(value: number): string {
+  return value.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+}
+
 function borderColor(ev: FeedEvent): string {
-  if (ev.type === 'activity') return ev.payload.category?.color ?? '#8b8f98'
+  if (ev.type === 'activity' || ev.type === 'together')
+    return ev.payload.category?.color ?? '#8b8f98'
   return TYP_FARBE[ev.type] ?? '#8b8f98'
 }
 
@@ -68,6 +74,28 @@ export default function FeedItem({ ev }: { ev: FeedEvent }) {
             )}
           </p>
         </>
+      )}
+      {ev.type === 'together' && (
+        <div className="flex items-baseline gap-2 text-sm">
+          {ev.payload.category ? (
+            <Icon name={ev.payload.category.icon} size={16} className="shrink-0 self-center text-accent" />
+          ) : (
+            <span>👥</span>
+          )}
+          <span className="text-ink">
+            <b>{undListe(ev.payload.participants?.map((p) => p.display_name) ?? [])}</b>{' '}
+            waren zusammen unterwegs
+            {ev.payload.category && (
+              <span className="text-ink-mute"> · {ev.payload.category.name}</span>
+            )}
+            {ev.payload.km_together ? (
+              <>
+                {' '}—{' '}
+                <b className="text-accent">{km(ev.payload.km_together)} km</b> gemeinsam
+              </>
+            ) : null}
+          </span>
+        </div>
       )}
       {ev.type === 'rank_change' && (
         <div className="flex items-baseline gap-2 text-sm">

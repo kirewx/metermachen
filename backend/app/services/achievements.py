@@ -8,6 +8,7 @@ Einmal freigeschaltet bleibt freigeschaltet.
 import json
 import re
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import datetime, timezone
 from datetime import time as time_type
@@ -165,6 +166,17 @@ TOGETHER_DEFS: list[tuple[str, str, str, str]] = [
      "Mit 5 verschiedenen Leuten gemeinsam trainiert.", "medaille"),
 ]
 
+# Hidden, nur bei aktivem Add-on `together` (maskiert bis zum Unlock).
+TOGETHER_HIDDEN_DEFS: list[tuple[str, str, str, str]] = [
+    ("together_horde", "Völkerwanderung",
+     "Eine Einheit mit mindestens 10 Leuten.", "medaille"),
+]
+
+TOGETHER_PACK_MIN = 4  # Rudel
+TOGETHER_HORDE_MIN = 10  # Völkerwanderung
+TOGETHER_DREAM_TEAM_MIN = 10  # Sessions mit derselben Person
+TOGETHER_BUTTERFLY_MIN = 5  # verschiedene Personen
+
 # Special-Emojis (Spec §2.6). Stufen vergeben bewusst KEIN Emoji.
 EMOJIS: dict[str, str] = {
     "testphasen_sieger": "🏆",
@@ -202,6 +214,7 @@ EMOJIS: dict[str, str] = {
     "together_dream_team": "💞",
     "together_pack": "🐺",
     "together_social_butterfly": "🦋",
+    "together_horde": "🦬",
 }
 
 # MM-Club: Leiter über gewertete MM (Kategorie-Faktor, ohne Handicap), alle
@@ -235,7 +248,8 @@ def _showcase_info() -> dict[str, tuple[str, str, str]]:
     titel_desc = {
         key: (titel, desc)
         for key, titel, desc, _icon in
-        (*HIDDEN_DEFS, *EINMAL_DEFS, *TOGETHER_DEFS, FRUEHSTARTER_DEF, EARLY_BIRD_DEF)
+        (*HIDDEN_DEFS, *EINMAL_DEFS, *TOGETHER_DEFS, *TOGETHER_HIDDEN_DEFS,
+         FRUEHSTARTER_DEF, EARLY_BIRD_DEF)
     } | {key: (titel, desc) for key, _stufe, titel, desc, _ziel in MM_CLUB_DEFS}
     return {
         key: (emoji, *titel_desc[key])
@@ -508,54 +522,100 @@ def check_unlocks(session: Session, user_id: int) -> None:
             have.add("ueberholmanoever")
 
 
+@dataclass
+class TogetherStats:
+    """Kennzahlen über die echten Sessions (>= 2 bestätigte Teilnahmen) einer
+    Person mit eigener `confirmed`-Teilnahme."""
+
+    sessions: int = 0
+    pack_sessions: int = 0  # Sessions mit >= TOGETHER_PACK_MIN Leuten
+    max_group: int = 0  # größte Session (bestätigte Teilnahmen)
+    partner_sessions: dict[int, int] = field(default_factory=dict)
+
+    @property
+    def dream_teams(self) -> int:
+        return sum(
+            1 for n in self.partner_sessions.values() if n >= TOGETHER_DREAM_TEAM_MIN
+        )
+
+
+def together_stats(session: Session, user_id: int) -> TogetherStats:
+    own = select(SessionParticipant.session_id).where(
+        SessionParticipant.user_id == user_id,
+        SessionParticipant.status == "confirmed",
+    )
+    by_session: dict[int, list[int]] = defaultdict(list)
+    for p in session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.session_id.in_(own),  # type: ignore[union-attr]
+            SessionParticipant.status == "confirmed",
+        )
+    ).all():
+        by_session[p.session_id].append(p.user_id)
+
+    stats = TogetherStats()
+    partners: dict[int, int] = defaultdict(int)
+    for user_ids in by_session.values():
+        if len(user_ids) < 2:
+            continue
+        stats.sessions += 1
+        stats.max_group = max(stats.max_group, len(user_ids))
+        if len(user_ids) >= TOGETHER_PACK_MIN:
+            stats.pack_sessions += 1
+        for uid in user_ids:
+            if uid != user_id:
+                partners[uid] += 1
+    stats.partner_sessions = dict(partners)
+    return stats
+
+
+def together_progress(key: str, stats: TogetherStats) -> tuple[int, int, str]:
+    """(aktuell, ziel, einheit) für den Fortschrittsbalken eines
+    Together-Achievements."""
+    if key == "together_first":
+        return stats.sessions, 1, "Einheiten"
+    if key == "together_dream_team":
+        best = max(stats.partner_sessions.values(), default=0)
+        return best, TOGETHER_DREAM_TEAM_MIN, "Einheiten"
+    if key == "together_pack":
+        return stats.max_group, TOGETHER_PACK_MIN, "Leute"
+    if key == "together_social_butterfly":
+        return len(stats.partner_sessions), TOGETHER_BUTTERFLY_MIN, "Leute"
+    if key == "together_horde":
+        return stats.max_group, TOGETHER_HORDE_MIN, "Leute"
+    raise KeyError(key)
+
+
+def together_counter(key: str, stats: TogetherStats) -> str | None:
+    """Zähler-Pille für ein freigeschaltetes Together-Achievement — wie oft
+    bzw. wie viele, statt nur „einmal geschafft“. `None` = nichts anzeigen."""
+    if key == "together_first":
+        n = stats.sessions
+    elif key == "together_pack":
+        n = stats.pack_sessions
+    elif key == "together_dream_team":
+        n = stats.dream_teams
+    elif key == "together_social_butterfly":
+        return f"{len(stats.partner_sessions)} Leute"
+    elif key == "together_horde":
+        return f"Rekord: {stats.max_group} Leute"
+    else:
+        raise KeyError(key)
+    return f"×{n}" if n > 1 else None
+
+
 def _check_together(session: Session, user_id: int, have: set[str]) -> None:
     """Together-Achievements (Spec §3.3): gezählt über echte Sessions
     (>= 2 bestätigte Teilnahmen) mit eigener `confirmed`-Teilnahme, all-time,
     nie zurückgenommen. Wird nur aufgerufen, wenn das Add-on aktiv ist."""
-    mine = session.exec(
-        select(SessionParticipant).where(
-            SessionParticipant.user_id == user_id,
-            SessionParticipant.status == "confirmed",
-        )
-    ).all()
-    real: list[list[SessionParticipant]] = []
-    for p in mine:
-        confirmed = session.exec(
-            select(SessionParticipant).where(
-                SessionParticipant.session_id == p.session_id,
-                SessionParticipant.status == "confirmed",
-            )
-        ).all()
-        if len(confirmed) >= 2:
-            real.append(confirmed)
-
-    if "together_first" not in have and real:
-        if _unlock(session, user_id, "together_first"):
-            have.add("together_first")
-
-    if "together_pack" not in have:
-        if any(len(confirmed) >= 4 for confirmed in real) and _unlock(
-            session, user_id, "together_pack"
-        ):
-            have.add("together_pack")
-
-    partner_sessions: dict[int, int] = defaultdict(int)
-    for confirmed in real:
-        for p in confirmed:
-            if p.user_id != user_id:
-                partner_sessions[p.user_id] += 1
-
-    if "together_dream_team" not in have:
-        if any(n >= 10 for n in partner_sessions.values()) and _unlock(
-            session, user_id, "together_dream_team"
-        ):
-            have.add("together_dream_team")
-
-    if "together_social_butterfly" not in have:
-        if len(partner_sessions) >= 5 and _unlock(
-            session, user_id, "together_social_butterfly"
-        ):
-            have.add("together_social_butterfly")
+    stats = together_stats(session, user_id)
+    for key, *_ in (*TOGETHER_DEFS, *TOGETHER_HIDDEN_DEFS):
+        if key in have:
+            continue
+        current, ziel, _unit = together_progress(key, stats)
+        ctx = {"teilnehmer": stats.max_group} if key == "together_horde" else None
+        if current >= ziel and _unlock(session, user_id, key, ctx):
+            have.add(key)
 
 
 def zeit_pro_kategorie(acts: list[Activity]) -> dict[int, float]:
