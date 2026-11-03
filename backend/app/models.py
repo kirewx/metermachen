@@ -38,6 +38,7 @@ class Category(SQLModel, table=True):
     default_km: float = 10.0
     is_active: bool = True
     strava_sport_types: str = "[]"  # JSON-Liste gemappter Strava-Sportarten, z.B. ["Run","TrailRun"]
+    counts_elevation: bool = True  # Höhenmeter zählen ab HM_AB (False z. B. für E-Bike)
 
 
 class CategoryFactorChange(SQLModel, table=True):

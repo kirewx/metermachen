@@ -6,7 +6,7 @@ import Icon from '../ui/Icon'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Stepper from '../ui/Stepper'
-import { factorOn } from './factorOn'
+import { factorOn, mmOn } from './factorOn'
 
 const heute = () => new Date().toISOString().slice(0, 10)
 
@@ -91,10 +91,13 @@ export default function SchnellwahlCard({
       })
   }
 
-  // Preview with the factor valid on the chosen date, so backdated entries
-  // across a factor cutover show what the backend will actually save.
+  // Preview with the factor (and hm rule) valid on the chosen date, so backdated
+  // entries across a cutover show what the backend will actually save.
+  const hm = parseFloat(hoehenmeter.replace(',', '.'))
   const gewertet =
-    kategorie && Number.isFinite(km) ? (km * factorOn(kategorie, date)).toFixed(1) : '0.0'
+    kategorie && Number.isFinite(km)
+      ? mmOn(kategorie, date, km, Number.isFinite(hm) ? hm : 0).toFixed(1)
+      : '0.0'
   const datumText = date === heute() ? 'heute' : date
 
   return (

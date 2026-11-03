@@ -10,7 +10,7 @@ DEFAULT_CATEGORIES = [
     ("Joggen", 4.0, "#e74c3c", "laufen", 5.0),
     ("Laufen", 4.0, "#c0392b", "laufen", 5.0),
     ("Spazieren", 3.0, "#f1c40f", "gehen", 5.0),
-    ("Wandern", 3.0, "#27ae60", "wandern", 10.0),
+    ("Wandern", 2.5, "#27ae60", "wandern", 10.0),
     ("Schwimmen", 10.0, "#9b59b6", "schwimmen", 1.0),
     ("Radfahren", 1.0, "#3498db", "rad", 20.0),
     ("Tanzen", 3.0, "#e67e22", "tanzen", 5.0),

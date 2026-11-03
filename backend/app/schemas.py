@@ -6,6 +6,7 @@ from datetime import time as time_type
 from pydantic import BaseModel, Field, field_validator
 
 from .models import AddOn, Category, CategoryFactorChange, Season
+from .services.factors import HM_AB
 
 
 class Milestone(BaseModel):
@@ -21,6 +22,7 @@ class CategoryCreate(BaseModel):
     icon: str = "medaille"
     default_km: float = Field(default=10.0, gt=0)
     strava_sport_types: list[str] = []
+    counts_elevation: bool = True
 
 
 class CategoryPatch(BaseModel):
@@ -31,6 +33,7 @@ class CategoryPatch(BaseModel):
     default_km: float | None = Field(default=None, gt=0)
     is_active: bool | None = None
     strava_sport_types: list[str] | None = None
+    counts_elevation: bool | None = None
 
 
 class FactorChangeCreate(BaseModel):
@@ -54,6 +57,8 @@ class CategoryOut(BaseModel):
     default_km: float
     is_active: bool
     strava_sport_types: list[str]
+    counts_elevation: bool
+    elevation_from: date_type  # ab hier zählen Höhenmeter (HM_AB)
     pending_changes: list[FactorChangeOut] = []
     history: list[FactorChangeOut] = []
 
@@ -74,6 +79,8 @@ class CategoryOut(BaseModel):
             default_km=cat.default_km,
             is_active=cat.is_active,
             strava_sport_types=json.loads(cat.strava_sport_types or "[]"),
+            counts_elevation=cat.counts_elevation,
+            elevation_from=HM_AB,
             pending_changes=[
                 FactorChangeOut(id=c.id, factor=c.factor, valid_from=c.valid_from)
                 for c in changes

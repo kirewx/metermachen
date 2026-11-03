@@ -214,7 +214,7 @@ function Kategorien() {
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['categories'] })
   const patch = useMutation({
-    mutationFn: ({ id, ...b }: { id: number; factor?: number; default_km?: number; is_active?: boolean; strava_sport_types?: string[] }) =>
+    mutationFn: ({ id, ...b }: { id: number; factor?: number; default_km?: number; is_active?: boolean; counts_elevation?: boolean; strava_sport_types?: string[] }) =>
       api.patchCategory(id, b),
     onSuccess: refresh,
     onError: (e) => toast(e.message),
@@ -302,6 +302,13 @@ function Kategorien() {
                   patch.mutate({ id: c.id, default_km })
               }}
             />
+            <Button
+              variant="ghost"
+              title="100 Höhenmeter zählen wie 1 km (z. B. für E-Bike abschalten)"
+              onClick={() => patch.mutate({ id: c.id, counts_elevation: !c.counts_elevation })}
+            >
+              {c.counts_elevation ? 'Höhenmeter zählen' : 'Höhenmeter zählen nicht'}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => patch.mutate({ id: c.id, is_active: !c.is_active })}

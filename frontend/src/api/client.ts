@@ -16,6 +16,9 @@ export type Category = {
   default_km: number
   is_active: boolean
   strava_sport_types: string[]
+  /** Höhenmeter count as km (100 hm = 1 km) from elevation_from on; off e.g. for e-bikes. */
+  counts_elevation?: boolean
+  elevation_from?: string
   pending_changes: FactorChange[]
   history: FactorChange[]
 }
@@ -472,7 +475,7 @@ export const api = {
   }) => request<Category>('/api/categories', post(b)),
   patchCategory: (
     id: number,
-    b: Partial<Omit<Category, 'id' | 'base_factor' | 'pending_changes' | 'history'>>,
+    b: Partial<Omit<Category, 'id' | 'base_factor' | 'elevation_from' | 'pending_changes' | 'history'>>,
   ) => request<Category>(`/api/categories/${id}`, patch(b)),
   createFactorChange: (categoryId: number, b: { factor: number; valid_from: string }) =>
     request<FactorChange>(`/api/categories/${categoryId}/factor-changes`, post(b)),

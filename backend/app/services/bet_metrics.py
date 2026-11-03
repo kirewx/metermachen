@@ -1,6 +1,7 @@
 """KM-Metriken für Wetten.
 
-Wett-km = distance_km * Kategorie-Faktor, bewusst OHNE User.km_factor:
+Wett-km = MM laut FactorResolver (km inkl. Höhenmeter-Bonus × Kategorie-Faktor),
+bewusst OHNE User.km_factor:
 das Admin-Handicap gilt nur im Haupt-Ranking, Handicaps in Wetten sind
 Verhandlungssache der Wettpartner (Faktoren/Vorsprung in den Wett-Params).
 """

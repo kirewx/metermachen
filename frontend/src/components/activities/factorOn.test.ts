@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Category } from '../../api/client'
-import { factorOn } from './factorOn'
+import { factorOn, mmOn } from './factorOn'
 
 const swimming: Category = {
   id: 1, name: 'Schwimmen', factor: 25, base_factor: 30, color: '#0af', icon: 'schwimmen',
@@ -27,5 +27,26 @@ describe('factorOn', () => {
     expect(factorOn(swimming, '')).toBe(25)
     const plain = { ...swimming, history: undefined, pending_changes: undefined } as unknown as Category
     expect(factorOn(plain, '2026-08-31')).toBe(25)
+  })
+})
+
+describe('mmOn', () => {
+  const laufen: Category = {
+    id: 2, name: 'Laufen', factor: 4, base_factor: 4, color: '#f00', icon: 'laufen',
+    default_km: 5, is_active: true, strava_sport_types: [], history: [], pending_changes: [],
+    counts_elevation: true, elevation_from: '2026-11-09',
+  }
+
+  it('counts 100 hm as 1 km from the cutover on', () => {
+    expect(mmOn(laufen, '2026-11-09', 10, 500)).toBe(60)
+    expect(mmOn(laufen, '2026-11-09', 0, 100)).toBe(4)
+  })
+
+  it('ignores hm before the cutover', () => {
+    expect(mmOn(laufen, '2026-11-08', 10, 500)).toBe(40)
+  })
+
+  it('ignores hm for categories that opt out', () => {
+    expect(mmOn({ ...laufen, counts_elevation: false }, '2026-11-09', 10, 500)).toBe(40)
   })
 })

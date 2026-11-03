@@ -36,6 +36,39 @@ def _icon_for(value: str, fallback: str) -> str:
     return EMOJI_TO_ICON.get(value, fallback)
 
 
+# Einmalig beim Einführen der Höhenmeter-Wertung (Spec 2026-11-03)
+_EBIKE_SPORTS = ("EBikeRide", "EMountainBikeRide")
+_WANDERN_FAKTOR_MIT_HM = 2.5
+
+
+def _hoehenmeter_einfuehren(conn) -> None:
+    """E-Bike zählt keine Höhenmeter; Wandern bekommt ab HM_AB den neuen
+    Faktor, weil die Höhenmeter jetzt separat zählen. Läuft genau einmal
+    (beim Anlegen der Spalte), damit Admin-Änderungen danach bestehen bleiben."""
+    from .services.factors import HM_AB
+
+    for id_, name, raw, icon in conn.execute(
+        text("SELECT id, name, strava_sport_types, icon FROM category")
+    ).fetchall():
+        sports = json.loads(raw or "[]")
+        name_l = name.lower().replace("-", "")
+        if any(s in sports for s in _EBIKE_SPORTS) or "ebike" in name_l:
+            conn.execute(
+                text("UPDATE category SET counts_elevation = 0 WHERE id = :id"), {"id": id_}
+            )
+        elif ("Hike" in sports or icon == "wandern") and _table_exists(
+            conn, "categoryfactorchange"
+        ):
+            conn.execute(
+                text(
+                    "INSERT OR IGNORE INTO categoryfactorchange "
+                    "(category_id, factor, valid_from, created_at) "
+                    "VALUES (:id, :f, :d, CURRENT_TIMESTAMP)"
+                ),
+                {"id": id_, "f": _WANDERN_FAKTOR_MIT_HM, "d": HM_AB.isoformat()},
+            )
+
+
 def migrate(target=engine) -> None:
     """Schema-Anpassungen für Bestands-DBs (es gibt kein Alembic)."""
     with target.begin() as conn:
@@ -74,6 +107,11 @@ def migrate(target=engine) -> None:
                 conn.execute(text(
                     "ALTER TABLE category ADD COLUMN strava_sport_types TEXT NOT NULL DEFAULT '[]'"
                 ))
+            if "counts_elevation" not in cat_cols:
+                conn.execute(text(
+                    "ALTER TABLE category ADD COLUMN counts_elevation BOOLEAN NOT NULL DEFAULT 1"
+                ))
+                _hoehenmeter_einfuehren(conn)
 
         if _table_exists(conn, "season"):
             season_cols = _columns(conn, "season")
