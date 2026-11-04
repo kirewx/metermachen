@@ -795,6 +795,7 @@ def partner_stats(session: Session, user_id: int) -> list[dict]:
         {
             "user_id": uid,
             "display_name": users[uid].display_name if uid in users else "",
+            "avatar": users[uid].avatar if uid in users else "",
             "sessions": data["sessions"],
             "km_together": round(data["km_together"], 2),
         }

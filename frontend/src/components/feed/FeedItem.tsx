@@ -1,14 +1,9 @@
 import { useState } from 'react'
 import type { FeedEvent } from '../../api/client'
 import Icon from '../ui/Icon'
+import { undListe } from '../ui/undListe'
 import RecapCard from './RecapCard'
 import ReactionBar from './ReactionBar'
-
-/** ["Ben"] → "Ben"; ["Ben","Clara","David"] → "Ben, Clara und David" */
-function undListe(namen: string[]): string {
-  if (namen.length <= 1) return namen[0] ?? ''
-  return `${namen.slice(0, -1).join(', ')} und ${namen[namen.length - 1]}`
-}
 
 /** Winner label for challenge_sieger: "Mia (Gruppe A)", "Mia" or "Gruppe A". */
 function siegerName(ev: FeedEvent): string {

@@ -45,6 +45,7 @@ class MemberOut(BaseModel):
 class PartnerOut(BaseModel):
     user_id: int
     display_name: str
+    avatar: str = ""
     sessions: int
     km_together: float
 

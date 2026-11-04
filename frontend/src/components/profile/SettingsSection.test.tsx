@@ -11,10 +11,13 @@ const stravaStatus = vi.fn()
 const consentStrava = vi.fn()
 const disconnectStrava = vi.fn()
 const logout = vi.fn()
+const patchMe = vi.fn()
+const addons = vi.fn()
 const toastSpy = vi.fn()
 vi.mock('../../api/client', () => ({
   api: {
-    patchMe: vi.fn(),
+    patchMe: (b: unknown) => patchMe(b),
+    addons: () => addons(),
     achievements: vi.fn().mockResolvedValue([]),
     stravaStatus: () => stravaStatus(),
     consentStrava: () => consentStrava(),
@@ -46,6 +49,10 @@ beforeEach(() => {
   disconnectStrava.mockResolvedValue(undefined)
   logout.mockReset()
   logout.mockResolvedValue(undefined)
+  patchMe.mockReset()
+  patchMe.mockResolvedValue({ ...me, detect_together: false })
+  addons.mockReset()
+  addons.mockResolvedValue([])
 })
 
 describe('SettingsSection Strava section', () => {
@@ -140,5 +147,25 @@ describe('SettingsSection footer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Logout/ }))
     await waitFor(() => expect(logout).toHaveBeenCalled())
     await waitFor(() => expect(qc.getQueryData(['me'])).toBeNull())
+  })
+})
+
+describe('SettingsSection Zusammen-Erkennung', () => {
+  it('schaltet die Erkennung aus', async () => {
+    stravaStatus.mockResolvedValue({ enabled: false })
+    addons.mockResolvedValue([{ key: 'together', active: true }])
+    const { qc } = renderSection()
+    const schalter = await screen.findByRole('switch', { name: 'Gemeinsame Aktivitäten erkennen' })
+    expect(schalter).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(schalter)
+    await waitFor(() => expect(patchMe).toHaveBeenCalledWith({ detect_together: false }))
+    await waitFor(() => expect(qc.getQueryData<Me>(['me'])?.detect_together).toBe(false))
+  })
+
+  it('zeigt keinen Schalter ohne Add-on', async () => {
+    stravaStatus.mockResolvedValue({ enabled: false })
+    renderSection()
+    await waitFor(() => expect(addons).toHaveBeenCalled())
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
   })
 })

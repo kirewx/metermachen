@@ -21,6 +21,7 @@ export default function Regeln() {
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
   const { data: addons = [] } = useQuery({ queryKey: ['addons'], queryFn: api.addons })
   const sidebetsAktiv = addons.some((a) => a.key === 'sidebets' && a.active)
+  const togetherAktiv = addons.some((a) => a.key === 'together' && a.active)
   const aktive = categories.filter((c) => c.is_active)
   const hmAb = aktive
     .flatMap((c) => c.elevation_changes ?? [])
@@ -113,6 +114,38 @@ export default function Regeln() {
           <li>Im Zweifel klärt die Gruppe. Der Spaß steht über der Platzierung.</li>
         </ul>
       </Abschnitt>
+
+      {togetherAktiv && (
+        <Abschnitt titel="Zusammen trainieren">
+          <p>
+            Wart ihr gemeinsam unterwegs, erkennt MeterMachen das an Zeit und Route eurer
+            Strava-Aktivitäten. Überlappen sich die Routen zu mindestens{' '}
+            <strong className="text-ink">50 %</strong> auf mindestens{' '}
+            <strong className="text-ink">2 km</strong>, gilt die Einheit direkt als gemeinsam.
+            Ab 30 % Überlappung oder 2 km gemeinsamer Strecke bekommt ihr einen Vorschlag im
+            Feed, den beide bestätigen. Unbeantwortete Vorschläge verfallen nach 14 Tagen.
+          </p>
+          <p>
+            Ohne Strava kannst du im Formular unter „Mit wem?“ Leute taggen. Sie wählen dann
+            ihre eigene Aktivität dazu oder legen eine neue an.
+          </p>
+          <p>
+            Falsch erkannt? Tipp an der Aktivität auf die Avatare und dann auf{' '}
+            <strong className="text-ink">„War ich nicht dabei“</strong>. Mit diesen Leuten
+            wird die Aktivität nicht wieder vorgeschlagen, mit anderen schon. Vertan? „Doch
+            dabei“ macht es rückgängig.
+          </p>
+          <p>
+            Hast du dieselbe Einheit doppelt eingetragen (z. B. von Hand und über Strava) und
+            löschst die verknüpfte, verlässt du die gemeinsame Einheit. Lass dich dann einfach
+            neu taggen.
+          </p>
+          <p className="text-xs text-ink-mute">
+            Gemeinsames Training ändert nichts an MM oder Punkten. Es zählt nur für den Feed,
+            die Trainingspartner im Profil und eigene Achievements.
+          </p>
+        </Abschnitt>
+      )}
 
       {sidebetsAktiv && (
         <Abschnitt titel="Wetten (Kurzfassung)">

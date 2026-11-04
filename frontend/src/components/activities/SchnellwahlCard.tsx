@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Activity, ActivityInput, Category } from '../../api/client'
+import type { Activity, ActivityInput, Category, TogetherPartner } from '../../api/client'
+import PartnerPicker from '../together/PartnerPicker'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Icon from '../ui/Icon'
@@ -14,34 +15,51 @@ type Props = {
   categories: Category[]
   variant?: 'hero' | 'kompakt'
   initial?: Activity
+  /** Vorbelegung für einen neuen Eintrag (z. B. Werte eines Trainingspartners). */
+  vorlage?: Pick<Activity, 'category_id' | 'date' | 'distance_km' | 'duration_min'>
+  /** Gesetzt = „Mit wem?“ anzeigen (Add-on together aktiv). */
+  members?: TogetherPartner[]
   onSubmit: (input: ActivityInput) => void | Promise<unknown>
   onCancel?: () => void
+}
+
+/** Bisherige Partner einer Aktivität fürs Bearbeiten (nicht nach eigener Ablehnung). */
+function partnerVon(a: Activity | undefined): number[] {
+  const t = a?.together
+  if (!t || t.status === 'declined') return []
+  return [...t.partners, ...(t.pending ?? [])].map((p) => p.user_id)
 }
 
 export default function SchnellwahlCard({
   categories,
   variant = 'hero',
   initial,
+  vorlage,
+  members,
   onSubmit,
   onCancel,
 }: Props) {
-  const aktive = categories.filter((c) => c.is_active || c.id === initial?.category_id)
+  const basis = initial ?? vorlage
+  const aktive = categories.filter((c) => c.is_active || c.id === basis?.category_id)
   const gemerkt = Number(localStorage.getItem('schnellwahl-kategorie'))
   const [categoryId, setCategoryId] = useState(
-    initial?.category_id ??
+    basis?.category_id ??
       (aktive.some((c) => c.id === gemerkt) ? gemerkt : (aktive[0]?.id ?? 0)),
   )
   const kategorie = aktive.find((c) => c.id === categoryId)
   // String-State, damit Zwischenzustände wie "7," beim Tippen erhalten bleiben.
-  const [kmText, setKmText] = useState(String(initial?.distance_km ?? kategorie?.default_km ?? 10))
-  const [details, setDetails] = useState(Boolean(initial))
-  const [date, setDate] = useState(initial?.date ?? heute())
-  const [duration, setDuration] = useState(initial?.duration_min ? String(initial.duration_min) : '')
+  const [kmText, setKmText] = useState(String(basis?.distance_km ?? kategorie?.default_km ?? 10))
+  const [details, setDetails] = useState(Boolean(basis))
+  const [date, setDate] = useState(basis?.date ?? heute())
+  const [duration, setDuration] = useState(basis?.duration_min ? String(basis.duration_min) : '')
   const [startzeit, setStartzeit] = useState(initial?.start_time?.slice(0, 5) ?? '')
   const [hoehenmeter, setHoehenmeter] = useState(
     initial?.elevation_m != null ? String(initial.elevation_m) : '',
   )
   const [note, setNote] = useState(initial?.note ?? '')
+  const [partnerIds, setPartnerIds] = useState<number[]>(() => partnerVon(initial))
+  // Beim Bearbeiten nur mitschicken, wenn geändert — sonst bleibt die Session unberührt
+  const [partnerGeaendert, setPartnerGeaendert] = useState(false)
   const [pulsiert, setPulsiert] = useState(false)
   const [gesperrt, setGesperrt] = useState(false)
 
@@ -67,6 +85,9 @@ export default function SchnellwahlCard({
         elevation_m: hoehenmeter ? parseFloat(hoehenmeter.replace(',', '.')) : null,
         note: note || null,
         start_time: startzeit || null,
+        ...(members && (initial ? partnerGeaendert : partnerIds.length > 0)
+          ? { partner_ids: partnerIds }
+          : {}),
       }),
     )
       .then(() => {
@@ -83,6 +104,7 @@ export default function SchnellwahlCard({
           setHoehenmeter('')
           setNote('')
           setStartzeit('')
+          setPartnerIds([])
         }
       })
       .catch(() => {
@@ -181,6 +203,16 @@ export default function SchnellwahlCard({
               onChange={(e) => setHoehenmeter(e.target.value)}
             />
             <Input label="Notiz" value={note} onChange={(e) => setNote(e.target.value)} />
+            {members && (
+              <PartnerPicker
+                value={partnerIds}
+                members={members}
+                onChange={(ids) => {
+                  setPartnerIds(ids)
+                  setPartnerGeaendert(true)
+                }}
+              />
+            )}
           </div>
         )}
       </Card>

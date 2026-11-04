@@ -4,6 +4,7 @@ export type Me = {
   display_name: string
   avatar: string
   is_admin: boolean
+  detect_together?: boolean
 }
 export type FactorChange = { id: number; factor: number; valid_from: string }
 export type ElevationChange = { counts_elevation: boolean; valid_from: string }
@@ -47,7 +48,38 @@ export type Activity = {
   edited: boolean
   source: string
   strava_url: string | null
+  together?: TogetherInfo | null
 }
+export type TogetherPartner = { user_id: number; display_name: string; avatar: string }
+/** Together-Badge einer Aktivität; `pending` nur in der eigenen Liste. */
+export type TogetherInfo = {
+  session_id: number
+  participant_id: number
+  status: 'confirmed' | 'suggested' | 'declined'
+  partners: TogetherPartner[]
+  pending?: TogetherPartner[]
+  km_together: number
+}
+export type PartnerActivityBrief = {
+  category_id: number
+  category_name: string
+  date: string
+  duration_min: number | null
+  distance_km: number
+}
+/** Offener Vorschlag (`my_activity` gesetzt) oder Tag ohne eigene Aktivität. */
+export type Suggestion = {
+  participant_id: number
+  session_id: number
+  source: 'auto' | 'manual'
+  partners: TogetherPartner[]
+  km_together: number
+  share: number | null
+  my_activity: Activity | null
+  partner_activity: PartnerActivityBrief | null
+  candidates: Activity[]
+}
+export type PartnerStat = TogetherPartner & { sessions: number; km_together: number }
 export type ActivityInput = {
   category_id: number
   date: string
@@ -56,6 +88,7 @@ export type ActivityInput = {
   elevation_m?: number | null
   note?: string | null
   start_time?: string | null
+  partner_ids?: number[]
 }
 export type CategoryShare = {
   category_id: number
@@ -521,7 +554,13 @@ export const api = {
   deleteActivity: (id: number) => request<void>(`/api/activities/${id}`, { method: 'DELETE' }),
   createUser: (b: { username: string; password: string; display_name: string; avatar?: string }) =>
     request<Me>('/api/users', post(b)),
-  patchMe: (b: { username?: string; display_name?: string; avatar?: string; password?: string }) =>
+  patchMe: (b: {
+    username?: string
+    display_name?: string
+    avatar?: string
+    password?: string
+    detect_together?: boolean
+  }) =>
     request<Me>('/api/users/me', patch(b)),
   listUsers: () => request<AdminUser[]>('/api/users'),
   userActivities: (userId: number, year: number) =>
@@ -624,4 +663,14 @@ export const api = {
     request<FeedReaction[]>(`/api/feed/${eventId}/reactions`, post({ emoji })),
   feedUnseen: () => request<{ has_new: boolean }>('/api/feed/unseen'),
   markFeedSeen: () => request<void>('/api/feed/seen', { method: 'POST' }),
+  togetherSuggestions: () => request<Suggestion[]>('/api/together/suggestions'),
+  togetherConfirm: (participantId: number, activityId?: number) =>
+    request<void>(
+      `/api/together/participants/${participantId}/confirm`,
+      post(activityId != null ? { activity_id: activityId } : {}),
+    ),
+  togetherDecline: (participantId: number) =>
+    request<void>(`/api/together/participants/${participantId}/decline`, { method: 'POST' }),
+  togetherMembers: () => request<TogetherPartner[]>('/api/together/members'),
+  togetherPartners: (userId: number) => request<PartnerStat[]>(`/api/together/partners/${userId}`),
 }

@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import Regeln from './Regeln'
 
+const addons = vi.hoisted(() => vi.fn().mockResolvedValue([]))
+
 vi.mock('../api/client', () => ({
   api: {
     categories: vi.fn().mockResolvedValue([
@@ -11,7 +13,7 @@ vi.mock('../api/client', () => ({
       { id: 2, name: 'Laufen', factor: 4, base_factor: 4, color: '#f00', icon: 'laufen', default_km: 5, is_active: true, strava_sport_types: [],
         pending_changes: [], history: [] },
     ]),
-    addons: vi.fn().mockResolvedValue([]),
+    addons: () => addons(),
   },
 }))
 
@@ -35,5 +37,22 @@ describe('Regeln Faktor-Tabelle', () => {
     renderRegeln()
     expect(await screen.findByText('×4')).toBeInTheDocument()
     expect(screen.getAllByText(/^ab \d\d\./)).toHaveLength(1)
+  })
+})
+
+describe('Regeln Zusammen trainieren', () => {
+  it('erklärt Schwellen und Ablehnen nur bei aktivem Add-on', async () => {
+    addons.mockResolvedValueOnce([{ key: 'together', active: true }])
+    renderRegeln()
+    expect(await screen.findByText('Zusammen trainieren')).toBeInTheDocument()
+    expect(screen.getByText('50 %')).toBeInTheDocument()
+    expect(screen.getByText('2 km')).toBeInTheDocument()
+    expect(screen.getByText('„War ich nicht dabei“')).toBeInTheDocument()
+  })
+
+  it('fehlt ohne Add-on', async () => {
+    renderRegeln()
+    expect(await screen.findByText('×4')).toBeInTheDocument()
+    expect(screen.queryByText('Zusammen trainieren')).not.toBeInTheDocument()
   })
 })

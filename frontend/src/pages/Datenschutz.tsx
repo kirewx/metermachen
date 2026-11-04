@@ -43,6 +43,10 @@ export default function Datenschutz() {
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>Sportart, Distanz, Höhenmeter, Dauer, Datum und Titel der Aktivität</li>
+          <li>
+            Startzeit, Start- und Endpunkt sowie eine vereinfachte Route jeder Aktivität (auch
+            bei „Nur ich“), um gemeinsame Einheiten zu erkennen
+          </li>
           <li>deine Strava-Athleten-ID sowie die Zugriffs-/Erneuerungs-Token (Access/Refresh Token)</li>
         </ul>
         <p>
@@ -57,6 +61,19 @@ export default function Datenschutz() {
           dürfen. Wir geben deine Strava-Daten
           <span className="font-bold text-ink"> nicht an Dritte weiter</span> und nutzen
           sie insbesondere <span className="font-bold text-ink">nicht für KI-/Machine-Learning-Tools</span>.
+        </p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-ink">Gemeinsame Aktivitäten</h2>
+        <p>
+          Startzeit, Start- und Endpunkt und die vereinfachte Route vergleichen wir mit den
+          Aktivitäten der anderen Mitglieder, um gemeinsame Einheiten zu erkennen. Sie bleiben
+          gespeichert, bis du die Aktivität löschst oder Strava trennst. Andere sehen davon
+          nur, mit wem du unterwegs warst, die gemeinsamen km und den gemeinsamen Anteil der
+          Strecke, <span className="font-bold text-ink">nie deine Route</span>. In deinem
+          Profil kannst du die Erkennung ausschalten; dann wirst du weder erkannt noch
+          getaggt.
         </p>
       </section>
 
