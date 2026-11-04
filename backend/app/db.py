@@ -177,6 +177,20 @@ def migrate(target=engine) -> None:
             if "groups_drawn_at" not in ch_cols:
                 conn.execute(text("ALTER TABLE challenge ADD COLUMN groups_drawn_at DATETIME"))
 
+        if _table_exists(conn, "sessionparticipant"):
+            sp_cols = _columns(conn, "sessionparticipant")
+            if "declined_activity_id" not in sp_cols:
+                conn.execute(text(
+                    "ALTER TABLE sessionparticipant ADD COLUMN declined_activity_id "
+                    "INTEGER REFERENCES activity(id)"
+                ))
+            # Abgelehnte Teilnahmen geben ihre Aktivität frei (vorher blieb sie
+            # dauerhaft gesperrt)
+            conn.execute(text(
+                "UPDATE sessionparticipant SET declined_activity_id = activity_id, "
+                "activity_id = NULL WHERE status = 'declined' AND activity_id IS NOT NULL"
+            ))
+
         if _table_exists(conn, "stravaconnection"):
             sc_cols = _columns(conn, "stravaconnection")
             if "backfill_state" not in sc_cols:

@@ -354,24 +354,21 @@ def test_patch_with_addon_off_and_empty_list_keeps_tags(client, session):
     assert len(_parts(session)) == 2
 
 
-def test_patch_declined_own_participation_400_before_saving(client, session):
-    from app.models import Activity
-
+def test_patch_after_own_decline_tags_in_new_session(client, session):
     _, anna, tom, cat = _together_setup(session)
     login(client)
-    act_id = create_activity(client, cat.id, partner_ids=[anna.id], note="alt").json()["id"]
+    act_id = create_activity(client, cat.id, partner_ids=[anna.id]).json()["id"]
     own = next(p for p in _parts(session) if p.activity_id == act_id)
-    own.status = "declined"
-    session.add(own)
-    session.commit()
-    r = client.patch(
-        f"/api/activities/{act_id}", json={"note": "neu", "partner_ids": [anna.id, tom.id]}
-    )
-    assert r.status_code == 400
-    assert r.json()["detail"] == "Eigene Teilnahme ist abgelehnt"
+    assert client.post(f"/api/together/participants/{own.id}/decline").status_code == 204
+    r = client.patch(f"/api/activities/{act_id}", json={"partner_ids": [tom.id]})
+    assert r.status_code == 200, r.text
     session.expire_all()
-    assert session.get(Activity, act_id).note == "alt"
-    assert {p.user_id for p in _parts(session)} == {own.user_id, anna.id}
+    new_own = next(p for p in _parts(session) if p.activity_id == act_id)
+    assert new_own.status == "confirmed"
+    assert new_own.session_id != own.session_id
+    assert {p.user_id for p in _parts(session) if p.session_id == new_own.session_id} == {
+        own.user_id, tom.id,
+    }
 
 
 def _boom(*a, **kw):

@@ -318,6 +318,9 @@ class SessionParticipant(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     activity_id: int | None = Field(default=None, foreign_key="activity.id", unique=True)
     status: str  # "confirmed" | "suggested" | "declined"
+    # Bei `declined` wandert die Aktivität hierher und ist wieder frei für
+    # andere Sessions; die Zeile merkt sich nur die Ablehnung dieser Session.
+    declined_activity_id: int | None = Field(default=None, foreign_key="activity.id")
     km_together: float = 0
     created_at: datetime = Field(default_factory=utcnow)
     responded_at: datetime | None = None

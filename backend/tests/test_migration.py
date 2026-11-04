@@ -294,9 +294,31 @@ def test_init_erzeugt_trainingsession_und_sessionparticipant_tabellen(tmp_path):
         session_cols
     )
     assert {
-        "id", "session_id", "user_id", "activity_id", "status", "km_together",
-        "created_at", "responded_at",
+        "id", "session_id", "user_id", "activity_id", "declined_activity_id", "status",
+        "km_together", "created_at", "responded_at",
     } <= set(participant_cols)
+
+
+def test_migration_releases_activity_of_declined_participation(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE sessionparticipant (id INTEGER PRIMARY KEY, session_id INTEGER, "
+            "user_id INTEGER, activity_id INTEGER UNIQUE, status VARCHAR, "
+            "km_together FLOAT, created_at DATETIME, responded_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO sessionparticipant (session_id, user_id, activity_id, status, "
+            "km_together) VALUES (1, 1, 10, 'declined', 4.0), (1, 2, 20, 'confirmed', 4.0)"
+        ))
+    migrate(engine)
+    migrate(engine)  # idempotent
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT user_id, activity_id, declined_activity_id, status "
+            "FROM sessionparticipant ORDER BY user_id"
+        )).fetchall()
+    assert [tuple(r) for r in rows] == [(1, None, 10, "declined"), (2, 20, None, "confirmed")]
 
 
 def test_migrate_adds_group_columns_to_challenge():

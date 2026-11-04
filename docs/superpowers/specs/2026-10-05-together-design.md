@@ -154,15 +154,24 @@ bestätigte, ist die Session nicht mehr echt (Feed-Event entfernt).
 
 ### 2.3 Kein erneuter Vorschlag
 
-`declined` bleibt gespeichert. Das Matching überspringt jedes Aktivitätspaar,
-bei dem eine Seite für diese Session `declined` hat, auch nach Update-Webhooks.
+`declined` bleibt gespeichert. Die Aktivität wird dabei frei: sie wandert von
+`activity_id` nach `declined_activity_id`, sodass sie mit anderen Mitgliedern
+neu erkannt oder manuell getaggt werden kann. Das Matching überspringt jedes
+Aktivitätspaar, bei dem eine Seite eine Session der anderen Aktivität
+(verknüpft oder abgelehnt) `declined` hat, auch nach Update-Webhooks.
+Überlappt eine dritte Person mit beiden Seiten, werden die Sessions wie
+gewohnt zusammengeführt; die bestätigte Teilnahme gewinnt dann gegen die
+Ablehnung.
+
+„Doch dabei“: `confirm` auf eine abgelehnte Teilnahme hängt die gemerkte
+Aktivität wieder an, solange sie in keiner anderen Session ist (sonst 400).
 
 ### 2.4 Vorschlag
 
 Beide Teilnahmen `suggested`. Anzeige: „Warst du mit Anna unterwegs?
 (7,1 km gemeinsam)“ mit ✅ / ❌. Echt, sobald 2 bestätigt haben. Unbeantwortete
 Vorschläge laufen nach **14 Tagen** ab und gelten als `declined` (lazy beim
-Abruf der Vorschläge).
+Abruf der Vorschläge) — mit derselben Wirkung wie eine Ablehnung (2.3).
 
 ### 2.5 Manuelles Taggen
 
@@ -259,8 +268,10 @@ wird trotzdem geschrieben.
 - `GET /together/partners/{user_id}`: Partner-Statistik fürs Profil
 - `PATCH /users/me`: Feld `detect_together`
 - Aktivität anlegen/bearbeiten: optionales `partner_ids: list[int]`
-- `ActivityOut.together: {session_id, participant_id, partners,
-  km_together} | null` für Badge und Undo
+- `ActivityOut.together: {session_id, participant_id, status, partners,
+  km_together} | null` für Badge und Undo; in der eigenen Liste auch mit
+  `status: "declined"` (zuletzt abgelehnte Session einer freien Aktivität)
+  für „Doch dabei“
 
 Fehler: fremde Teilnahme → 404; fremde oder schon verknüpfte `activity_id`
 → 400; Partner mit `detect_together=False` → 400.
