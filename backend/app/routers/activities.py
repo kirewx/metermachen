@@ -76,7 +76,7 @@ def _build_together_map(
     by_session: dict[int, list[SessionParticipant]] = {}
     for p in all_parts:
         by_session.setdefault(p.session_id, []).append(p)
-    user_ids = {p.user_id for p in all_parts if p.status == "confirmed"}
+    user_ids = {p.user_id for p in all_parts if p.status != "declined"}
     users = (
         {u.id: u for u in session.exec(select(User).where(User.id.in_(user_ids))).all()}
         if user_ids
@@ -92,16 +92,23 @@ def _build_together_map(
             o.status == "confirmed" for o in members
         ) < 2:
             continue
-        partners = [
-            TogetherPartnerBrief(user_id=o.user_id, display_name=users[o.user_id].display_name)
-            for o in members
-            if o.status == "confirmed" and o.user_id != p.user_id and o.user_id in users
-        ]
+        def briefs(status: str) -> list[TogetherPartnerBrief]:
+            return [
+                TogetherPartnerBrief(
+                    user_id=o.user_id,
+                    display_name=users[o.user_id].display_name,
+                    avatar=users[o.user_id].avatar,
+                )
+                for o in members
+                if o.status == status and o.user_id != p.user_id and o.user_id in users
+            ]
+
         result[activity_id] = TogetherOut(
             session_id=p.session_id,
             participant_id=p.id,
             status=p.status,
-            partners=partners,
+            partners=briefs("confirmed"),
+            pending=briefs("suggested") if own else [],
             km_together=p.km_together,
         )
     return result

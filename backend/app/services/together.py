@@ -437,6 +437,7 @@ def partner_activity_brief(session: Session, participant: SessionParticipant) ->
     _, act = ref
     cat = session.get(Category, act.category_id)
     return {
+        "category_id": act.category_id,
         "category_name": cat.name if cat is not None else "",
         "date": act.date,
         "duration_min": act.duration_min,

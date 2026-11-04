@@ -223,6 +223,7 @@ class ActivityPatch(BaseModel):
 class TogetherPartnerBrief(BaseModel):
     user_id: int
     display_name: str
+    avatar: str = ""
 
 
 class TogetherOut(BaseModel):
@@ -234,10 +235,13 @@ class TogetherOut(BaseModel):
     participant_id: int
     status: str
     partners: list[TogetherPartnerBrief]
+    # Nur eigene Liste: andere, die noch nicht bestätigt haben
+    pending: list[TogetherPartnerBrief] = []
     km_together: float
 
 
 class PartnerActivityBrief(BaseModel):
+    category_id: int
     category_name: str
     date: date_type
     duration_min: int | None
