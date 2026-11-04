@@ -13,13 +13,17 @@ export default function OneTimeCard({ a, onToggle }: Props) {
         a.achieved ? 'border-accent shadow-glow' : 'border-line/40 opacity-60'
       }`}
     >
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{a.emoji}</span>
-        <span className={`text-sm font-bold ${a.achieved ? 'text-accent' : 'text-ink'}`}>
+      <div className="flex items-start gap-2">
+        <span className="shrink-0 text-lg leading-5">{a.emoji}</span>
+        <span
+          className={`min-w-0 text-sm leading-5 font-bold [overflow-wrap:anywhere] hyphens-auto ${
+            a.achieved ? 'text-accent' : 'text-ink'
+          }`}
+        >
           {a.title}
         </span>
-        {a.achieved && a.counter && <CounterPill text={a.counter} />}
       </div>
+      {a.achieved && a.counter && <CounterPill text={a.counter} />}
       <p className="mt-1 text-xs text-ink-mute">{a.description}</p>
       {!a.achieved && a.parts.length > 0 && (
         <>
