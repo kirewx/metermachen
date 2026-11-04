@@ -121,6 +121,13 @@ def parts(session):
     return session.exec(select(SessionParticipant)).all()
 
 
+def declined_of(session, act):
+    """Abgelehnte Teilnahme, die sich `act` merkt (die Aktivität ist frei)."""
+    return session.exec(
+        select(SessionParticipant).where(SessionParticipant.declined_activity_id == act.id)
+    ).one()
+
+
 # --- Tests -------------------------------------------------------------------
 
 
@@ -302,16 +309,29 @@ def test_declined_pair_not_resuggested(session, addon):
     e = run(session, erik)
     a = run(session, anna)
     together.match_activity(session, e)
-    p_anna = together.participation_for(session, a.id)
-    p_anna.status = "declined"
-    session.add(p_anna)
-    session.commit()
+    together.decline(session, together.participation_for(session, a.id))
 
     together.match_activity(session, e)
     together.match_activity(session, a)
     assert len(sessions(session)) == 1
-    assert together.participation_for(session, a.id).status == "declined"
+    assert together.participation_for(session, a.id) is None
+    assert declined_of(session, a).status == "declined"
     assert together.participation_for(session, e.id).status == "confirmed"
+
+
+def test_both_declined_pair_not_resuggested(session, addon):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    e = run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, e)
+    together.decline(session, together.participation_for(session, a.id))
+    together.decline(session, together.participation_for(session, e.id))
+
+    together.match_activity(session, e)
+    together.match_activity(session, a)
+    assert len(sessions(session)) == 1
+    assert together.participation_for(session, e.id) is None
+    assert together.participation_for(session, a.id) is None
 
 
 def test_participation_for(session, addon):
@@ -404,10 +424,7 @@ def test_matching_error_does_not_break_import(session, addon, monkeypatch):
 
 
 def _decline(session, act):
-    p = together.participation_for(session, act.id)
-    p.status = "declined"
-    session.add(p)
-    session.commit()
+    together.decline(session, together.participation_for(session, act.id))
 
 
 def _declined_setup(session):
@@ -430,23 +447,58 @@ def _record_notify(monkeypatch):
     return calls
 
 
-def test_declined_candidate_does_not_pull_in_new_partner(session, addon, monkeypatch):
+def _assert_declined_matched_new_partner(session, a, b, c):
+    """A ist aus der Session mit C frei und mit B neu erkannt; die Ablehnung
+    der Session mit C bleibt gespeichert."""
+    pa, pb = together.participation_for(session, a.id), together.participation_for(session, b.id)
+    assert pa.session_id == pb.session_id
+    assert {pa.status, pb.status} == {"confirmed"}
+    refused = declined_of(session, a).session_id
+    assert refused == together.participation_for(session, c.id).session_id
+    assert refused != pa.session_id
+    assert len(sessions(session)) == 2
+
+
+def test_declined_activity_matches_new_partner(session, addon, monkeypatch):
     a, b, c, anna = _declined_setup(session)
     calls = _record_notify(monkeypatch)
     together.match_activity(session, b)
-    assert together.participation_for(session, b.id) is None
-    assert len(sessions(session)) == 1
-    assert calls == []
+    _assert_declined_matched_new_partner(session, a, b, c)
+    assert {uid for uid, _ in calls} == {a.user_id, anna.id}
 
 
-def test_declined_own_activity_does_not_match_new_partner(session, addon, monkeypatch):
+def test_declined_own_activity_matches_new_partner(session, addon, monkeypatch):
     a, b, c, anna = _declined_setup(session)
-    calls = _record_notify(monkeypatch)
     together.match_activity(session, a)
-    assert together.participation_for(session, b.id) is None
-    assert together.participation_for(session, a.id).status == "declined"
-    assert len(sessions(session)) == 1
-    assert calls == []
+    _assert_declined_matched_new_partner(session, a, b, c)
+
+
+def test_new_partner_of_both_sides_merges_into_one_group(session, addon):
+    """B überlappt mit A und C: A wird mit B neu erkannt, B zieht C dazu —
+    die Sessions werden zusammengeführt, je Person bleibt eine Teilnahme
+    (die bestätigte mit Aktivität gewinnt gegen die Ablehnung)."""
+    erik, tom, anna = (make_user(session, n) for n in ("erik", "tom", "anna"))
+    a = run(session, erik, elapsed=7200)
+    c = run(session, tom, elapsed=7200)
+    together.match_activity(session, c)
+    _decline(session, a)
+    b = run(session, anna, start=T0 + timedelta(minutes=10), elapsed=3600)
+    together.match_activity(session, b)
+
+    [ts] = sessions(session)
+    assert {(p.user_id, p.status) for p in parts(session)} == {
+        (erik.id, "confirmed"), (tom.id, "confirmed"), (anna.id, "confirmed"),
+    }
+    assert {p.activity_id for p in parts(session)} == {a.id, b.id, c.id}
+
+
+def test_declined_activity_not_rematched_with_refused_session(session, addon):
+    a, b, c, anna = _declined_setup(session)
+    together.match_activity(session, a)  # Update-Webhook o. ä.
+    together.match_activity(session, c)
+    assert together.participation_for(session, a.id).session_id != (
+        together.participation_for(session, c.id).session_id
+    )
 
 
 def test_suggested_pair_does_not_raise_confirmed_km(session, addon):
@@ -689,10 +741,61 @@ def test_decline_removes_event(session, addon, season):
     [ts] = sessions(session)
     assert ts.feed_event_id is None
     assert together.is_real(session, ts) is False
-    p_anna = together.participation_for(session, a.id)
+    assert together.participation_for(session, a.id) is None
+    p_anna = declined_of(session, a)
     assert p_anna.status == "declined"
+    assert p_anna.activity_id is None
     assert p_anna.responded_at is not None
     assert len(parts(session)) == 2
+
+
+def test_undo_decline_restores_session(session, addon, season):
+    erik, anna = make_user(session, "erik"), make_user(session, "anna")
+    run(session, erik)
+    a = run(session, anna)
+    together.match_activity(session, a)
+    together.decline(session, together.participation_for(session, a.id))
+    assert together_events(session) == []
+
+    together.confirm(session, declined_of(session, a))
+    p_anna = together.participation_for(session, a.id)
+    assert p_anna.status == "confirmed"
+    assert p_anna.declined_activity_id is None
+    [ts] = sessions(session)
+    assert together.is_real(session, ts) is True
+    assert len(together_events(session)) == 1
+
+
+def _undo_400(session, act, activity_id, detail):
+    from fastapi import HTTPException
+
+    p = declined_of(session, act)
+    with pytest.raises(HTTPException) as exc:
+        together.confirm(session, p, activity_id=activity_id)
+    assert exc.value.status_code == 400
+    assert exc.value.detail == detail
+    session.rollback()
+    assert declined_of(session, act).status == "declined"
+
+
+def test_undo_decline_400_when_activity_linked_elsewhere(session, addon, season):
+    a, b, c, anna = _declined_setup(session)
+    together.match_activity(session, b)  # A ist jetzt mit B zusammen
+    _undo_400(session, a, None, "Aktivität gehört schon zu einer gemeinsamen Session")
+
+
+def test_undo_decline_400_for_other_activity(session, addon, season):
+    a, b, c, anna = _declined_setup(session)
+    _undo_400(session, a, c.id, "Teilnahme gehört zu einer anderen Aktivität")
+
+
+def test_remove_activity_clears_declined_reference(session, addon, season):
+    a, b, c, anna = _declined_setup(session)
+    p = declined_of(session, a)
+    activity_delete.delete_activity(session, a, ignore_strava=False)
+    session.refresh(p)
+    assert p.status == "declined"
+    assert p.declined_activity_id is None
 
 
 def _suggested_pair(session):
@@ -734,8 +837,12 @@ def test_suggestion_expires_after_14_days(session, addon, season):
     _age(session, pa, 13)
 
     together.expire_suggestions(session)
-    assert together.participation_for(session, e.id).status == "declined"
+    assert together.participation_for(session, e.id) is None
+    assert declined_of(session, e).status == "declined"
     assert together.participation_for(session, a.id).status == "suggested"
+
+    together.confirm(session, declined_of(session, e))  # auch nach Ablauf: „Doch dabei“
+    assert together.participation_for(session, e.id).status == "confirmed"
 
 
 def test_expire_suggestions_with_explicit_now(session, addon, season):
@@ -862,7 +969,7 @@ def test_backfilled_session_no_event_after_expiry(session, addon, season):
     t = _backfilled_real_with_suggested_tom(session)
     _age(session, together.participation_for(session, t.id), 15)
     together.expire_suggestions(session)
-    assert together.participation_for(session, t.id).status == "declined"
+    assert declined_of(session, t).status == "declined"
     assert together_events(session) == []
 
 

@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, or_, select
 
 from ..deps import addon_active
 from ..models import (
@@ -88,13 +88,41 @@ def _candidates(session: Session, act: Activity, track: ActivityTrack):
     ]
 
 
-def _pair_blocked(pa: SessionParticipant | None, pb: SessionParticipant | None) -> bool:
-    """Schon in derselben Session, oder eine Seite hat ihre Teilnahme
-    abgelehnt (Spec 2.3) — eine abgelehnte Aktivität zieht keine neuen
-    Partner in ihre Session und löst keine Zusammenführung aus."""
-    if any(p is not None and p.status == "declined" for p in (pa, pb)):
+def _sessions_of(session: Session, activity_id: int) -> set[int]:
+    """Sessions, in denen die Aktivität verknüpft ist oder abgelehnt wurde."""
+    return set(session.exec(
+        select(SessionParticipant.session_id).where(or_(
+            SessionParticipant.activity_id == activity_id,
+            SessionParticipant.declined_activity_id == activity_id,
+        ))
+    ).all())
+
+
+def _declined_any(session: Session, user_id: int, session_ids: set[int]) -> bool:
+    if not session_ids:
+        return False
+    return session.exec(
+        select(SessionParticipant.id).where(
+            SessionParticipant.user_id == user_id,
+            SessionParticipant.status == "declined",
+            SessionParticipant.session_id.in_(session_ids),
+        )
+    ).first() is not None
+
+
+def _pair_blocked(
+    session: Session, a: Activity, b: Activity,
+    pa: SessionParticipant | None, pb: SessionParticipant | None,
+) -> bool:
+    """Schon in derselben Session, oder eine Seite hat eine Session der
+    anderen Aktivität abgelehnt (Spec 2.3). Gesperrt ist nur dieses Paar —
+    mit anderen kann eine abgelehnte Aktivität neu erkannt werden."""
+    if pa is not None and pb is not None and pa.session_id == pb.session_id:
         return True
-    return pa is not None and pb is not None and pa.session_id == pb.session_id
+    return (
+        _declined_any(session, a.user_id, _sessions_of(session, b.id))
+        or _declined_any(session, b.user_id, _sessions_of(session, a.id))
+    )
 
 
 def _naive_utc(ts: datetime) -> datetime:
@@ -230,7 +258,7 @@ def match_activity(session: Session, act: Activity, *, emit_feed: bool = True) -
     pending: list[tuple[int, str, dict]] = []
     for track_b, act_b in _candidates(session, act, track):
         pa, pb = participation_for(session, act.id), participation_for(session, act_b.id)
-        if _pair_blocked(pa, pb):
+        if _pair_blocked(session, act, act_b, pa, pb):
             continue
         for p in (pa, pb):
             if p is not None and p.session_id not in was_real:
@@ -426,7 +454,17 @@ def confirm(
     """Eigene Teilnahme bestätigen. Eine Teilnahme ohne Aktivität (Tag) braucht
     eine `activity_id`: eigene Aktivität, ±1 Tag zur ältesten bestätigten
     Aktivität der Session, in keiner anderen Session. `km_together` = kürzere
-    der beiden Distanzen (Spec 2.5)."""
+    der beiden Distanzen (Spec 2.5). Eine abgelehnte Teilnahme bekommt ihre
+    Aktivität zurück („Doch dabei“), solange diese noch frei ist."""
+    if participant.declined_activity_id is not None:
+        if activity_id is not None and activity_id != participant.declined_activity_id:
+            raise _bad("Teilnahme gehört zu einer anderen Aktivität")
+        if participation_for(session, participant.declined_activity_id) is not None:
+            raise _bad("Aktivität gehört schon zu einer gemeinsamen Session")
+        participant.activity_id = participant.declined_activity_id
+        participant.declined_activity_id = None
+        _respond(session, participant, "confirmed")
+        return
     if participant.activity_id is not None:
         if activity_id is not None and activity_id != participant.activity_id:
             raise _bad("Teilnahme ist bereits mit einer Aktivität verknüpft")
@@ -456,12 +494,10 @@ def confirm(
 
 
 def check_partners(
-    session: Session, user_id: int, partner_ids: list[int] | None,
-    act: Activity | None = None,
+    session: Session, user_id: int, partner_ids: list[int] | None
 ) -> None:
     """Partnerliste prüfen, ohne etwas zu ändern: 404 bei Add-on aus, 400 bei
-    eigenem, unbekanntem, inaktivem oder Opt-out-Nutzer oder wenn die eigene
-    Teilnahme von `act` abgelehnt ist. Leer → nichts."""
+    eigenem, unbekanntem, inaktivem oder Opt-out-Nutzer. Leer → nichts."""
     if not partner_ids:
         return
     if not enabled(session):
@@ -470,10 +506,6 @@ def check_partners(
         u = session.get(User, pid)
         if pid == user_id or u is None or not u.is_active or not u.detect_together:
             raise _bad("Dieses Mitglied kann nicht getaggt werden")
-    if act is not None and act.id is not None:
-        own = participation_for(session, act.id)
-        if own is not None and own.status == "declined":
-            raise _bad("Eigene Teilnahme ist abgelehnt")
 
 
 def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> None:
@@ -482,7 +514,7 @@ def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> Non
     unverknüpfte Vorschläge werden gelöscht, bestätigte bleiben. Ohne Session
     entsteht eine `manual`-Session; bleibt sie ohne Partner, wird sie
     aufgelöst."""
-    check_partners(session, act.user_id, partner_ids, act)
+    check_partners(session, act.user_id, partner_ids)
     if not enabled(session):
         return  # Add-on aus: leere Liste ist wirkungslos
     wanted = set(partner_ids or [])
@@ -538,10 +570,22 @@ def tag_partners(session: Session, act: Activity, partner_ids: list[int]) -> Non
     _check_achievements(session, [ts])
 
 
+def _release(participant: SessionParticipant) -> None:
+    """Aktivität einer abgelehnten Teilnahme freigeben: sie kann wieder in
+    andere Sessions, die Zeile merkt sich die Ablehnung (Spec 2.3)."""
+    if participant.activity_id is not None:
+        participant.declined_activity_id = participant.activity_id
+        participant.activity_id = None
+
+
 def decline(session: Session, participant: SessionParticipant) -> None:
     """„War ich nicht dabei“: Teilnahme bleibt als `declined` gespeichert
-    (Spec 2.3), damit das Paar nicht erneut vorgeschlagen wird."""
-    _respond(session, participant, "declined")
+    (Spec 2.3), damit das Paar nicht erneut vorgeschlagen wird; die
+    Aktivität wird frei."""
+    ts = session.get(TrainingSession, participant.session_id)
+    was = ts is not None and is_real(session, ts)
+    _release(participant)
+    _respond(session, participant, "declined", was_real=was)
 
 
 def expire_suggestions(session: Session, now: datetime | None = None) -> None:
@@ -566,6 +610,7 @@ def expire_suggestions(session: Session, now: datetime | None = None) -> None:
             was_real[ts.id] = is_real(session, ts)
     for p in expired:
         p.status = "declined"
+        _release(p)
         session.add(p)
     session.flush()
     for ts in affected.values():
@@ -577,9 +622,19 @@ def expire_suggestions(session: Session, now: datetime | None = None) -> None:
 def remove_activity(session: Session, activity_id: int) -> None:
     """Teilnahme einer gelöschten Aktivität entfernen (Spec 2.6). Session
     ohne Teilnahmen wird samt Feed-Event gelöscht, sonst neu berechnet
-    (in `manual`-Sessions auch `km_together` der übrigen Teilnahmen)."""
+    (in `manual`-Sessions auch `km_together` der übrigen Teilnahmen).
+    Abgelehnte Teilnahmen verlieren nur den Verweis auf die Aktivität."""
+    for d in session.exec(
+        select(SessionParticipant).where(
+            SessionParticipant.declined_activity_id == activity_id
+        )
+    ).all():
+        d.declined_activity_id = None
+        session.add(d)
+    session.flush()
     p = participation_for(session, activity_id)
     if p is None:
+        session.commit()
         return
     ts = session.get(TrainingSession, p.session_id)
     was = ts is not None and is_real(session, ts)

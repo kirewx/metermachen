@@ -239,9 +239,12 @@ def _session_with(session, rows, source="auto"):
     session.add(ts)
     session.commit()
     for user, act, status in rows:
+        act_id = act.id if act is not None else None
+        declined = status == "declined"
         session.add(SessionParticipant(
             session_id=ts.id, user_id=user.id,
-            activity_id=act.id if act is not None else None,
+            activity_id=None if declined else act_id,
+            declined_activity_id=act_id if declined else None,
             status=status, km_together=4.0,
         ))
     session.commit()
@@ -268,16 +271,45 @@ def test_badge_null_when_addon_off(client, session):
     assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
 
 
-def test_badge_null_when_own_declined(client, session):
+def test_badge_own_declined_offers_undo(client, session):
     _addon(session)
     erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
     today = date.today()
     e, a, t = (manual(session, u, day=today) for u in (erik, anna, tom))
-    _session_with(session, [
+    ts = _session_with(session, [
         (erik, e, "declined"), (anna, a, "confirmed"), (tom, t, "confirmed"),
     ])
+    p_erik = session.exec(
+        select(SessionParticipant).where(SessionParticipant.user_id == erik.id)
+    ).one()
     login(client, "erik")
-    assert _badge(client, f"/api/activities?year={today.year}", e.id) is None
+    own = _badge(client, f"/api/activities?year={today.year}", e.id)
+    assert own["status"] == "declined"
+    assert own["session_id"] == ts.id
+    assert own["participant_id"] == p_erik.id
+    assert {p["user_id"] for p in own["partners"]} == {anna.id, tom.id}
+    # fremdes Profil: nichts
+    login(client, "anna")
+    assert _badge(client, f"/api/users/{erik.id}/activities?year={today.year}", e.id) is None
+
+    login(client, "erik")
+    r = client.post(f"/api/together/participants/{p_erik.id}/confirm", json={})
+    assert r.status_code == 204
+    own = _badge(client, f"/api/activities?year={today.year}", e.id)
+    assert own["status"] == "confirmed"
+
+
+def test_badge_own_declined_hidden_when_activity_linked_elsewhere(client, session):
+    _addon(session)
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    today = date.today()
+    e, a, t = (manual(session, u, day=today) for u in (erik, anna, tom))
+    _session_with(session, [(erik, e, "declined"), (anna, a, "confirmed")])
+    ts2 = _session_with(session, [(erik, e, "confirmed"), (tom, t, "confirmed")])
+    login(client, "erik")
+    own = _badge(client, f"/api/activities?year={today.year}", e.id)
+    assert own["session_id"] == ts2.id
+    assert own["status"] == "confirmed"
 
 
 def test_badge_other_profile_hides_suggested(client, session):

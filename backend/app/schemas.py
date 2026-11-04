@@ -227,7 +227,8 @@ class TogetherPartnerBrief(BaseModel):
 
 class TogetherOut(BaseModel):
     """Together-Badge einer Aktivität (Spec 4.3): nur gefüllt, wenn das
-    Add-on aktiv ist und die eigene Teilnahme nicht `declined` ist."""
+    Add-on aktiv ist. `status == "declined"` nur in der eigenen Liste — dann
+    bietet das Badge „Doch dabei“ an (confirm auf `participant_id`)."""
 
     session_id: int
     participant_id: int

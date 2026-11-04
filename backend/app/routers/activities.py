@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, or_, select
 
 from ..deps import get_current_user, get_session
 from ..models import Activity, Category, SessionParticipant, User
@@ -46,21 +46,27 @@ def _build_together_map(
     session: Session, activities: list[Activity], *, own: bool
 ) -> dict[int, TogetherOut]:
     """Badge-Daten für mehrere Aktivitäten in wenigen Abfragen (kein N+1 je
-    Aktivität): nur, wenn das Add-on aktiv ist und die Teilnahme des
-    Besitzers nicht `declined` ist; `partners` = andere `confirmed`.
-    Eigene Listen (`own`): `confirmed`/`suggested`, aber nur, solange noch
-    ein anderer nicht abgelehnter Teilnehmer da ist. Fremde Profile: nur
-    `confirmed` in echten Sessions (≥ 2 bestätigt)."""
+    Aktivität): nur, wenn das Add-on aktiv ist; `partners` = andere
+    `confirmed`. Eigene Listen (`own`): `confirmed`/`suggested` und — für
+    „Doch dabei“ — die zuletzt abgelehnte Session einer sonst freien
+    Aktivität, aber nur, solange noch ein anderer nicht abgelehnter
+    Teilnehmer da ist. Fremde Profile: nur `confirmed` in echten Sessions
+    (≥ 2 bestätigt)."""
     ids = [a.id for a in activities if a.id is not None]
     if not ids or not together.enabled(session):
         return {}
-    mine = {
-        p.activity_id: p
-        for p in session.exec(
-            select(SessionParticipant).where(SessionParticipant.activity_id.in_(ids))
-        ).all()
-        if p.status != "declined"
-    }
+    parts = session.exec(
+        select(SessionParticipant).where(or_(
+            SessionParticipant.activity_id.in_(ids),
+            SessionParticipant.declined_activity_id.in_(ids),
+        ))
+    ).all()
+    linked = {p.activity_id: p for p in parts if p.activity_id is not None}
+    mine = dict(linked)
+    if own:
+        for p in sorted(parts, key=lambda p: p.id):  # jüngste Ablehnung gewinnt
+            if p.declined_activity_id is not None and p.declined_activity_id not in linked:
+                mine[p.declined_activity_id] = p
     if not mine:
         return {}
     session_ids = {p.session_id for p in mine.values()}
@@ -214,7 +220,7 @@ def patch_activity(
     }
     if "category_id" in changes:
         _validate_category(session, changes["category_id"])
-    together.check_partners(session, user.id, data.partner_ids, act)
+    together.check_partners(session, user.id, data.partner_ids)
     for key, value in changes.items():
         setattr(act, key, value)
     if changes:  # nur Partner taggen ist keine Bearbeitung (Strava-Sync bleibt aktiv)
