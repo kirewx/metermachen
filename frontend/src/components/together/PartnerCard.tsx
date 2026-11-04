@@ -59,7 +59,7 @@ export default function PartnerCard({ userId }: { userId: number }) {
                 style={{ width: `${(p.sessions / max) * 100}%` }}
               />
             </span>
-            <span className="w-20 text-right font-mono text-xs text-ink-mute">
+            <span className="w-24 shrink-0 whitespace-nowrap text-right font-mono text-xs text-ink-mute">
               <b className={i === 0 ? 'text-accent' : 'text-ink'}>{p.sessions}×</b> ·{' '}
               {km(p.km_together)} km
             </span>

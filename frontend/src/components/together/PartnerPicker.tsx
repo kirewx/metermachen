@@ -17,11 +17,15 @@ export default function PartnerPicker({ value, onChange, members }: Props) {
   const gewaehlt = value
     .map((uid) => members.find((m) => m.user_id === uid))
     .filter((m): m is TogetherPartner => !!m)
-  const treffer = members.filter(
-    (m) =>
-      !value.includes(m.user_id) &&
-      m.display_name.toLowerCase().includes(suche.trim().toLowerCase()),
-  )
+  const q = suche.trim().toLowerCase()
+  // Namen, die mit der Eingabe beginnen, zuerst
+  const treffer = members
+    .filter((m) => !value.includes(m.user_id) && m.display_name.toLowerCase().includes(q))
+    .sort(
+      (a, b) =>
+        Number(!a.display_name.toLowerCase().startsWith(q)) -
+        Number(!b.display_name.toLowerCase().startsWith(q)),
+    )
 
   function waehle(uid: number) {
     onChange([...value, uid])

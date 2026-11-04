@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import PartnerPicker from './PartnerPicker'
 
 const members = [
+  { user_id: 5, display_name: 'Marjon', avatar: 'icon:laufen' },
   { user_id: 2, display_name: 'Anna', avatar: 'icon:laufen' },
   { user_id: 3, display_name: 'Jonas', avatar: 'icon:rad' },
   { user_id: 4, display_name: 'Johanna', avatar: 'icon:rad' },
@@ -36,12 +37,22 @@ describe('PartnerPicker', () => {
     expect(input).toHaveValue('')
   })
 
+  it('lists names starting with the query first', () => {
+    render(<Wrapper onChange={vi.fn()} />)
+    const input = screen.getByLabelText('Mit wem? (optional)')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'jo' } })
+    const namen = screen.getAllByRole('listitem').map((li) => li.textContent)
+    expect(namen).toEqual(['Jonas', 'Johanna', 'Marjon'])
+  })
+
   it('selects the first hit with Enter and hides chosen ones', () => {
     const onChange = vi.fn()
     render(<Wrapper onChange={onChange} start={[2]} />)
     const input = screen.getByLabelText('Mit wem? (optional)')
     fireEvent.focus(input)
     expect(screen.queryByRole('button', { name: /^Anna$/ })).not.toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'jo' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onChange).toHaveBeenLastCalledWith([2, 3])
   })
