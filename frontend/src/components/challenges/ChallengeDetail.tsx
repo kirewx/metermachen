@@ -169,10 +169,10 @@ export default function ChallengeDetail() {
               >
                 🎡 Glücksrad drehen
               </button>
-              <div className="flex items-end gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <Select
                   label="Sieger"
-                  className="flex-1"
+                  className="min-w-0 flex-1 basis-40"
                   value={wahl}
                   onChange={(e) => setWahl(e.target.value)}
                 >
