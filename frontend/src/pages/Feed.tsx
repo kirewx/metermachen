@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { api } from '../api/client'
 import type { FeedEvent } from '../api/client'
 import FeedItem from '../components/feed/FeedItem'
+import SuggestionCards from '../components/together/SuggestionCards'
 import { aktiveSeason } from '../components/ui/season'
 
 function tagLabel(iso: string): string {
@@ -40,6 +41,7 @@ export default function Feed() {
   if (error) return <p className="text-sm text-danger">{error.message}</p>
   return (
     <div className="mx-auto max-w-xl space-y-2.5">
+      <SuggestionCards />
       {events.map((ev) => {
         const tag = tagLabel(ev.created_at)
         const trenner = tag !== letzterTag

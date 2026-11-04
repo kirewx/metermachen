@@ -36,9 +36,16 @@ class SuggestionOut(BaseModel):
     candidates: list[ActivityOut]
 
 
+class MemberOut(BaseModel):
+    user_id: int
+    display_name: str
+    avatar: str
+
+
 class PartnerOut(BaseModel):
     user_id: int
     display_name: str
+    avatar: str = ""
     sessions: int
     km_together: float
 
@@ -70,7 +77,11 @@ def _other_partners(
         ).all()
     }
     return [
-        TogetherPartnerBrief(user_id=p.user_id, display_name=users[p.user_id].display_name)
+        TogetherPartnerBrief(
+            user_id=p.user_id,
+            display_name=users[p.user_id].display_name,
+            avatar=users[p.user_id].avatar,
+        )
         for p in rows
         if p.user_id in users
     ]
@@ -140,6 +151,20 @@ def decline_participant(
 ) -> None:
     p = _own_participant(session, user, participant_id)
     together.decline(session, p)
+
+
+@router.get("/members", response_model=list[MemberOut])
+def members(
+    user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> list[MemberOut]:
+    """Wer sich taggen lässt (Spec 2.5): aktive Nutzer mit `detect_together`
+    außer einem selbst, für die Partnerwahl im Aktivitätsformular."""
+    rows = session.exec(
+        select(User)
+        .where(User.is_active, User.detect_together, User.id != user.id)
+        .order_by(User.display_name, User.id)
+    ).all()
+    return [MemberOut(user_id=u.id, display_name=u.display_name, avatar=u.avatar) for u in rows]
 
 
 @router.get("/partners/{user_id}", response_model=list[PartnerOut])

@@ -8,6 +8,7 @@ import Card from '../ui/Card'
 import Icon from '../ui/Icon'
 import Input from '../ui/Input'
 import SectionTitle from '../ui/SectionTitle'
+import { useTogetherAktiv } from '../together/together'
 import StravaConnectButton from '../ui/StravaConnectButton'
 import { useToast } from '../ui/Toast'
 
@@ -85,6 +86,14 @@ export default function SettingsSection({ me }: { me: Me }) {
     },
     onError: (e) => toast(e.message),
   })
+
+  const together = useTogetherAktiv()
+  const erkennung = useMutation({
+    mutationFn: (an: boolean) => api.patchMe({ detect_together: an }),
+    onSuccess: (neu) => queryClient.setQueryData(['me'], neu),
+    onError: (e) => toast(e.message),
+  })
+  const erkennungAn = me.detect_together ?? true
 
   const logout = useMutation({
     mutationFn: () => api.logout(),
@@ -174,6 +183,34 @@ export default function SettingsSection({ me }: { me: Me }) {
               Datenschutz
             </a>
           </p>
+        )}
+        {together && (
+          <div className="flex items-start gap-3 border-t border-line/40 pt-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink">Gemeinsame Aktivitäten erkennen</p>
+              <p className="mt-0.5 text-[11px] text-ink-mute">
+                Vergleicht Zeit und Route deiner Strava-Aktivitäten mit anderen. Andere sehen nur
+                Partner und km, nie deine Route. Aus: Du wirst weder erkannt noch getaggt.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={erkennungAn}
+              aria-label="Gemeinsame Aktivitäten erkennen"
+              disabled={erkennung.isPending}
+              onClick={() => erkennung.mutate(!erkennungAn)}
+              className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full border transition ${
+                erkennungAn ? 'border-accent bg-accent/25' : 'border-line bg-transparent'
+              }`}
+            >
+              <span
+                className={`absolute top-[3px] h-5 w-5 rounded-full transition-all ${
+                  erkennungAn ? 'left-[23px] bg-accent shadow-glow-strong' : 'left-[3px] bg-ink-mute'
+                }`}
+              />
+            </button>
+          </div>
         )}
         <Button
           className="w-full"

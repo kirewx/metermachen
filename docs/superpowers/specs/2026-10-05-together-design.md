@@ -278,19 +278,36 @@ Fehler: fremde Teilnahme → 404; fremde oder schon verknüpfte `activity_id`
 
 ### 4.4 Frontend (`components/together/`)
 
-- `SuggestionsBanner` (Feed): „N offene Zusammen-Vorschläge – ansehen“
-- `SuggestionList` (eigenes Profil): Vorschläge ✅/❌, Tags mit Verknüpfen /
-  Neu anlegen / Ablehnen
-- `PartnerCard` (Profil)
-- `TogetherBadge` (Aktivitätszeile): „👥 mit Anna · 8,2 km zusammen“ und
-  „War ich nicht dabei“ für die eigene Aktivität
-- `PartnerPicker` (Aktivitätsformular): „Mit wem?“
+Entwürfe und Auswahl vom 04.11.2026 (Design-Canvas „Together Entwürfe“):
+
+- `SuggestionCards` (oben im Feed, statt Banner + Liste im Profil): je
+  Vorschlag „Warst du mit Anna unterwegs?“ mit Datum, Kategorie, km und
+  Anteil, „Ja, zusammen“ / „War ich nicht dabei“; je Tag „Tom sagt, ihr wart
+  zusammen unterwegs“ mit Radioliste der Kandidaten, „Verknüpfen“,
+  „＋ Neu anlegen“ (MyMeters `?verknuepfen=<participant_id>`: Formular mit
+  `partner_activity` vorausgefüllt, nach dem Speichern `confirm` mit der neuen
+  Aktivität) und „War ich nicht dabei“. Nichts, wenn keine offen sind.
+- `TogetherBadge` (Aktivitätszeile in MyMeters und im Profil): Avatar-Stapel
+  (offene Partner gestrichelt, abgelehnt ausgegraut); Tippen klappt ein Panel
+  mit Partnern, Status und gemeinsamen km auf. Eigene Aktivität: „War ich
+  nicht dabei“, bei `suggested` zusätzlich „Bestätigen“, bei `declined` „Doch
+  dabei“. Profilliste: nur bestätigte echte Sessions, ohne Buttons.
+- `PartnerPicker` (Details im Aktivitätsformular): Suchfeld mit gewählten
+  Personen als Chips; Quelle `GET /together/members` (aktive Nutzer mit
+  `detect_together` außer einem selbst). Beim Bearbeiten wird
+  `partner_ids` nur gesendet, wenn die Auswahl geändert wurde.
+- `PartnerCard` (Profil): häufigster Partner groß hervorgehoben, darunter
+  die Rangliste mit Balken, Platz 1 dezent getönt. Nichts ohne Partner.
+- Einstellungen: Schalter „Gemeinsame Aktivitäten erkennen“
+  (`PATCH /users/me` `detect_together`).
 - Feed-Renderer für Typ `together`
-- `Regeln.tsx`: Abschnitt zur Erkennung und den Schwellen
+- `Regeln.tsx`: Abschnitt zur Erkennung, den Schwellen, Ablehnen/„Doch
+  dabei“ und doppelt eingetragenen Aktivitäten
 - `Datenschutz.tsx`: Start-/Endpunkt und vereinfachte Route jeder
   Strava-Aktivität (auch „Nur ich“) werden gespeichert, bis die Aktivität
   gelöscht oder Strava getrennt wird; Together zeigt nur Partner, km und
   Anteil, nie Routen; Opt-out im Profil.
+- Alles nur bei aktivem Add-on.
 
 ### 4.5 Tests (TDD)
 

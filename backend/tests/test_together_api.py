@@ -25,6 +25,23 @@ def test_together_endpoints_404_when_addon_off(client, session):
     assert client.post("/api/together/participants/1/confirm", json={}).status_code == 404
     assert client.post("/api/together/participants/1/decline").status_code == 404
     assert client.get("/api/together/partners/1").status_code == 404
+    assert client.get("/api/together/members").status_code == 404
+
+
+def test_members_lists_taggable_users_without_self(client, session):
+    _addon(session)
+    erik, anna, tom, kai, ina = (
+        make_user(session, n) for n in ("erik", "anna", "tom", "kai", "ina")
+    )
+    kai.detect_together = False
+    ina.is_active = False
+    session.add_all([kai, ina])
+    session.commit()
+    login(client, "erik")
+    r = client.get("/api/together/members")
+    assert r.status_code == 200
+    assert [m["user_id"] for m in r.json()] == [anna.id, tom.id]
+    assert set(r.json()[0]) == {"user_id", "display_name", "avatar"}
 
 
 # --- Vorschläge -------------------------------------------------------------
@@ -42,11 +59,12 @@ def test_suggestions_lists_tag_with_candidates(client, session):
     assert r.status_code == 200
     [sug] = r.json()
     assert sug["source"] == "manual"
-    assert sug["partners"] == [{"user_id": erik.id, "display_name": "Erik"}]
+    assert sug["partners"] == [{"user_id": erik.id, "display_name": "Erik", "avatar": erik.avatar}]
     assert sug["my_activity"] is None
     assert [c["id"] for c in sug["candidates"]] == [own_candidate.id]
     cat = session.get(Category, e.category_id)
     assert sug["partner_activity"] == {
+        "category_id": cat.id,
         "category_name": cat.name,
         "date": str(e.date),
         "duration_min": e.duration_min,
@@ -229,7 +247,7 @@ def test_activity_list_includes_together_partners(client, session):
     assert r.status_code == 200
     [out] = [x for x in r.json() if x["id"] == e.id]
     assert out["together"]["status"] == "confirmed"
-    assert out["together"]["partners"] == [{"user_id": anna.id, "display_name": "Anna"}]
+    assert out["together"]["partners"] == [{"user_id": anna.id, "display_name": "Anna", "avatar": anna.avatar}]
     assert out["together"]["km_together"] == pytest.approx(4.0)
 
 
@@ -312,6 +330,23 @@ def test_badge_own_declined_hidden_when_activity_linked_elsewhere(client, sessio
     assert own["status"] == "confirmed"
 
 
+def test_badge_own_list_lists_pending_partners(client, session):
+    _addon(session)
+    erik, anna, tom = (make_user(session, n) for n in ("erik", "anna", "tom"))
+    today = date.today()
+    e, a, t = (manual(session, u, day=today) for u in (erik, anna, tom))
+    _session_with(session, [
+        (erik, e, "suggested"), (anna, a, "suggested"), (tom, t, "confirmed"),
+    ])
+    login(client, "erik")
+    own = _badge(client, f"/api/activities?year={today.year}", e.id)
+    assert [p["user_id"] for p in own["partners"]] == [tom.id]
+    assert [p["user_id"] for p in own["pending"]] == [anna.id]
+    login(client, "anna")
+    url = f"/api/users/{tom.id}/activities?year={today.year}"
+    assert _badge(client, url, t.id) is None  # nicht echt: nur 1 bestätigt
+
+
 def test_badge_other_profile_hides_suggested(client, session):
     _addon(session)
     erik, anna = make_user(session, "erik"), make_user(session, "anna")
@@ -338,7 +373,7 @@ def test_badge_other_profile_shows_real_confirmed(client, session):
     login(client, "tom")
     out = _badge(client, f"/api/users/{erik.id}/activities?year={today.year}", e.id)
     assert out["session_id"] == ts.id
-    assert out["partners"] == [{"user_id": anna.id, "display_name": "Anna"}]
+    assert out["partners"] == [{"user_id": anna.id, "display_name": "Anna", "avatar": anna.avatar}]
 
 
 def test_badge_other_profile_hides_confirmed_but_not_real(client, session):

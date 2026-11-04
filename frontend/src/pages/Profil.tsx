@@ -9,6 +9,7 @@ import SettingsSection from '../components/profile/SettingsSection'
 import { profilAchsen } from '../components/profile/achsen'
 import Spinnennetz from '../components/profile/Spinnennetz'
 import { bestimmeTyp } from '../components/profile/typ'
+import PartnerCard from '../components/together/PartnerCard'
 import AuszeichnungsBadges from '../components/ui/AuszeichnungsBadges'
 import Avatar from '../components/ui/Avatar'
 import Card from '../components/ui/Card'
@@ -150,6 +151,8 @@ export default function Profil() {
           MM je Eintrag · längste Aktivität {Math.round(laengste)} MM
         </p>
       </Card>
+
+      <PartnerCard userId={user.user_id} />
 
       <Card>
         <SectionTitle>Sportarten</SectionTitle>

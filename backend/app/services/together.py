@@ -437,6 +437,7 @@ def partner_activity_brief(session: Session, participant: SessionParticipant) ->
     _, act = ref
     cat = session.get(Category, act.category_id)
     return {
+        "category_id": act.category_id,
         "category_name": cat.name if cat is not None else "",
         "date": act.date,
         "duration_min": act.duration_min,
@@ -794,6 +795,7 @@ def partner_stats(session: Session, user_id: int) -> list[dict]:
         {
             "user_id": uid,
             "display_name": users[uid].display_name if uid in users else "",
+            "avatar": users[uid].avatar if uid in users else "",
             "sessions": data["sessions"],
             "km_together": round(data["km_together"], 2),
         }
