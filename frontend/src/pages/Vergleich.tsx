@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import type { Challenge } from '../api/client'
+import ChallengeRennen from '../components/comparison/ChallengeRennen'
 import Hoehenmeter from '../components/comparison/Hoehenmeter'
 import JahresVerlauf from '../components/comparison/JahresVerlauf'
 import { CURRENT_MONTH, defaultMonth } from '../components/comparison/period'
@@ -35,6 +37,18 @@ function useStoredView() {
 /** Views that can be shown per month; the others always cover the whole season. */
 const MONTH_VIEWS: readonly Ansicht[] = ['rennen', 'verlauf', 'sportmix']
 
+/** Challenges with a race to show: running or finished, oldest first. */
+function gestarteteChallenges(alle: Challenge[]): Challenge[] {
+  return alle
+    .filter((c) => c.status === 'laufend' || c.status === 'beendet')
+    .sort((a, b) => a.period_start.localeCompare(b.period_start) || a.id - b.id)
+}
+
+/** Default pick: the most recent running challenge, else the last finished one. */
+function standardChallenge(liste: Challenge[]): Challenge | null {
+  return [...liste].reverse().find((c) => c.status === 'laufend') ?? liste.at(-1) ?? null
+}
+
 /** Wertet den `?strava=`-Param nach dem OAuth-Rücksprung aus: Toast + Param entfernen. */
 function useStravaRedirectHinweis() {
   const [params, setParams] = useSearchParams()
@@ -67,7 +81,29 @@ export default function Vergleich() {
   const { data: seasons = [] } = useQuery({ queryKey: ['seasons'], queryFn: api.seasons })
   const [gewaehlt, setGewaehlt] = useState<number | null>(null)
   const [archiv, setArchiv] = useState(false)
-  const [period, setPeriod] = usePeriodMode()
+  const [gespeicherterModus, setPeriod] = usePeriodMode()
+  // Challenge races only exist for the Rennen view and need a started challenge.
+  // The full list is expensive (live standings), so only Rennen loads it; with
+  // the challenges add-on off it fails and simply stays empty.
+  const challengeQuery = useQuery({
+    queryKey: ['challenges'],
+    queryFn: api.challenges,
+    retry: false,
+    enabled: ansicht === 'rennen',
+  })
+  const challenges = gestarteteChallenges(challengeQuery.data ?? [])
+  const [challengeId, setChallengeId] = useState<number | null>(null)
+  const challengeMoeglich = ansicht === 'rennen' && challenges.length > 0
+  // A stored Challenge mode waits for the list instead of flashing the month race;
+  // it only falls back once the list has arrived without a started challenge or failed.
+  const challengesLaden =
+    gespeicherterModus === 'challenge' && ansicht === 'rennen' && challengeQuery.isPending
+  const period =
+    gespeicherterModus === 'challenge' && !challengeMoeglich && !challengesLaden
+      ? 'month'
+      : gespeicherterModus
+  const gewaehlteChallenge =
+    challenges.find((c) => c.id === challengeId) ?? standardChallenge(challenges)
   // The month the user stepped to; null means "the season's default month".
   const [month, setMonth] = useState<string | null>(null)
   const [today] = useState(() => new Date())
@@ -78,9 +114,11 @@ export default function Vergleich() {
   const wantsMonth = period === 'month' && monthViews
   // One request per mode. Every response carries the month axis, and without a
   // stepped month the server picks the season's default one.
+  const wantsChallenge = period === 'challenge'
   const seasonQuery = useQuery({
     queryKey: ['comparison', year],
     queryFn: () => api.comparison(year),
+    // Also in challenge mode: the month axis keeps the Monat pill usable.
     enabled: !archiv && !wantsMonth,
   })
   const requestedMonth = month ?? CURRENT_MONTH
@@ -140,7 +178,7 @@ export default function Vergleich() {
       <div className="flex flex-wrap items-center gap-2">
         <PeriodControl
           // A season without months can only be shown as a whole.
-          mode={!loading && months.length === 0 ? 'year' : period}
+          mode={wantsChallenge ? 'challenge' : !loading && months.length === 0 ? 'year' : period}
           showModeToggle={monthViews}
           years={years}
           year={year}
@@ -158,9 +196,15 @@ export default function Vergleich() {
             setMonth(null)
           }}
           onMonthChange={setMonth}
+          challenges={
+            challengeMoeglich ? challenges.map((c) => ({ id: c.id, label: c.title })) : []
+          }
+          challengeId={gewaehlteChallenge?.id ?? null}
+          challengesLoading={challengesLaden}
+          onChallengeChange={setChallengeId}
         />
-        {/* Höhenmeter sind roh — MM/km-Umschalter hat dort keine Bedeutung. */}
-        {ansicht !== 'hoehenmeter' && (
+        {/* Höhenmeter sind roh, Challenges haben ihre eigene Metrik — dort kein MM/km-Umschalter. */}
+        {ansicht !== 'hoehenmeter' && !wantsChallenge && (
           <div className="ml-auto flex overflow-hidden rounded-full border border-line text-xs">
             <button
               type="button"
@@ -187,8 +231,12 @@ export default function Vergleich() {
           </div>
         )}
       </div>
-      {error && <p className="text-sm text-danger">{error.message}</p>}
-      {data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
+      {wantsChallenge && gewaehlteChallenge && (
+        <ChallengeRennen ch={gewaehlteChallenge} today={today} />
+      )}
+      {challengesLaden && <p className="p-8 text-center text-sm text-ink-mute">Lädt…</p>}
+      {!wantsChallenge && error && <p className="text-sm text-danger">{error.message}</p>}
+      {!wantsChallenge && data && ansicht === 'rennen' && <RaceBahnen data={data} mode={mode} />}
       {data && ansicht === 'verlauf' && <JahresVerlauf data={data} mode={mode} />}
       {data && ansicht === 'sportmix' && <SportMix data={data} mode={mode} />}
       {data && ansicht === 'hoehenmeter' && <Hoehenmeter data={data} />}
