@@ -72,16 +72,26 @@ export default function MyMeters() {
     queryClient.invalidateQueries({ queryKey: ['achievements'] })
   }
   const save = useMutation({
-    mutationFn: async (input: ActivityInput) => {
-      if (editing) return api.patchActivity(editing.id, input)
+    // Ergebnis: Fehlermeldung, falls nur das Verknüpfen scheiterte
+    mutationFn: async (input: ActivityInput): Promise<string | null> => {
+      if (editing) {
+        await api.patchActivity(editing.id, input)
+        return null
+      }
       const neu = await api.createActivity(input)
-      if (vorlage && tag) await api.togetherConfirm(tag.participant_id, neu.id)
-      return neu
+      if (!vorlage || !tag) return null
+      // Die Aktivität ist schon angelegt: ein Fehler beim Verknüpfen darf das
+      // Formular nicht offen lassen, sonst legt ein zweiter Klick sie doppelt an
+      return api
+        .togetherConfirm(tag.participant_id, neu.id)
+        .then(() => null)
+        .catch((e: Error) => e.message)
     },
-    onSuccess: () => {
+    onSuccess: (verknuepfFehler) => {
       if (editing) toast('Eintrag aktualisiert', 'ok')
       if (vorlage) {
-        toast('Eingetragen und verknüpft', 'ok')
+        if (verknuepfFehler) toast(`Eingetragen, aber nicht verknüpft: ${verknuepfFehler}`)
+        else toast('Eingetragen und verknüpft', 'ok')
         verknuepfenBeenden()
       }
       setEditing(null)
@@ -113,7 +123,9 @@ export default function MyMeters() {
         categories={categories}
         initial={editing ?? undefined}
         vorlage={vorlage}
-        members={together ? (members ?? []) : undefined}
+        // Im Verknüpfen-Modus kein „Mit wem?“: partner_ids legten eine eigene
+        // Session an, und das Verknüpfen schlüge fehl
+        members={together && !vorlage ? (members ?? []) : undefined}
         onSubmit={(input) => save.mutateAsync(input)}
         onCancel={editing ? () => setEditing(null) : vorlage ? verknuepfenBeenden : undefined}
       />
